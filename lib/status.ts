@@ -4,7 +4,7 @@
 //   special_requests_status_check       new | priced | ordered | completed | cancelled
 //   debt_ledger_tx_type_check           debit | payment
 //   marketer_commissions_status_check   held | available | paid
-//   users_role_check                    workshop | marketer | admin
+//   users_role_check                    workshop | marketer | admin | worker
 //   users_tier_check                    Bronze | Silver | Gold
 // Keep them in this one file; supabase/admin_full_setup.sql re-creates the same constraints.
 
@@ -100,7 +100,7 @@ export const TIER_LABEL: Record<Tier, string> = {
   Gold: "ذهبية",
 };
 
-export const ROLE_LABEL = { workshop: "ورشة", marketer: "مسوّق", admin: "إدارة" } as const;
+export const ROLE_LABEL = { workshop: "ورشة", marketer: "مسوّق", admin: "إدارة", worker: "موظف" } as const;
 
 // Admin reply to a special request is stored inside special_requests.notes (no extra column) after this marker.
 export const ADMIN_NOTE_MARKER = "[ملاحظة الإدارة]";

@@ -97,7 +97,7 @@ function OrderDrawer({ id, onClose, onChanged, isWorker }: { id: string | null; 
             <p className="text-white">{o.customer_name} <small className="text-white/55">({ROLE_LABEL[o.user_role]})</small></p>
             <p className="text-white/80" dir="ltr" style={{ textAlign: "right" }}>{o.customer_phone}</p>
             {d.customer && <p className="text-white/65">{[d.customer.city, d.customer.license && `ترخيص ${d.customer.license}`].filter(Boolean).join(" · ") || "—"}</p>}
-            {d.customer?.role === "workshop" && <p className="text-white/65">الدين الحالي {money(d.customer.debt_balance)} من سقف {money(d.customer.debt_limit)}</p>}
+            {!isWorker && d.customer?.role === "workshop" && <p className="text-white/65">الدين الحالي {money(d.customer.debt_balance)} من سقف {money(d.customer.debt_limit)}</p>}
             <p className="text-xs text-white/45">أُنشئ: {fmtDateTime(o.created_at)}</p>
           </section>
 
@@ -221,7 +221,7 @@ function OrdersInner() {
                   <td className="px-2 font-semibold text-white">{money(o.total_amount)}</td>
                   <td className="px-2"><Badge tone={ORDER_TONE[o.status]}>{ORDER_STATUS_LABEL[o.status]}</Badge></td>
                   <td className="px-4 text-end" onClick={(e) => e.stopPropagation()}>
-                    <div className="inline-flex"><OrderActions order={o} onDone={reload} compact /></div>
+                    <div className="inline-flex"><OrderActions order={o} onDone={reload} compact allowCancel={!isWorker} /></div>
                   </td>
                 </tr>
               ))}

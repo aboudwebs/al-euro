@@ -1,13 +1,4 @@
-// Values written to the text status columns. They mirror the LIVE database CHECK constraints exactly:
-//   orders_status_check                 pending | approved | shipped | delivered | cancelled
-//   orders_pay_method_check             sham | cod | debt
-//   special_requests_status_check       new | priced | ordered | completed | cancelled
-//   debt_ledger_tx_type_check           debit | payment
-//   marketer_commissions_status_check   held | available | paid
-//   users_role_check                    workshop | marketer | admin | worker
-//   users_tier_check                    Bronze | Silver | Gold
-// Keep them in this one file; supabase/admin_full_setup.sql re-creates the same constraints.
-
+// Values written to the text status columns. They mirror the LIVE database CHECK constraints.
 export const ORDER_STATUS = {
   pending: "pending",
   approved: "approved",
@@ -18,7 +9,6 @@ export const ORDER_STATUS = {
 export type OrderStatus = (typeof ORDER_STATUS)[keyof typeof ORDER_STATUS];
 export const ORDER_STATUSES = Object.values(ORDER_STATUS) as OrderStatus[];
 
-/** Allowed one-click transitions for admins (delivered / cancelled are final). */
 export const ORDER_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   pending: ["approved", "cancelled"],
   approved: ["shipped", "cancelled"],
@@ -54,7 +44,13 @@ export type CommissionStatus = (typeof COMMISSION_STATUS)[keyof typeof COMMISSIO
 export const LEDGER_TX = { debit: "debit", payment: "payment" } as const;
 export type LedgerTx = (typeof LEDGER_TX)[keyof typeof LEDGER_TX];
 
-export const TIER = { Bronze: "Bronze", Silver: "Silver", Gold: "Gold" } as const;
+export const TIER = {
+  Bronze: "Bronze",
+  Silver: "Silver",
+  Gold: "Gold",
+  Platinum: "Platinum",
+  VIP: "VIP",
+} as const;
 export type Tier = (typeof TIER)[keyof typeof TIER];
 export const TIERS_LIST = Object.values(TIER) as Tier[];
 
@@ -98,11 +94,12 @@ export const TIER_LABEL: Record<Tier, string> = {
   Bronze: "برونزية",
   Silver: "فضية",
   Gold: "ذهبية",
+  Platinum: "بلاتينية",
+  VIP: "النخبة VIP",
 };
 
 export const ROLE_LABEL = { workshop: "ورشة", marketer: "مسوّق", admin: "إدارة", worker: "موظف" } as const;
 
-// Admin reply to a special request is stored inside special_requests.notes (no extra column) after this marker.
 export const ADMIN_NOTE_MARKER = "[ملاحظة الإدارة]";
 export function splitRequestNotes(notes: string | null | undefined): { customer: string; admin: string } {
   const text = notes ?? "";

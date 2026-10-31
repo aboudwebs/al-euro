@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AlertTriangle, ExternalLink, Loader2, RotateCcw, X, ZoomIn, ZoomOut } from "lucide-react";
 
 /* ------------------------------------------------------------------ fetch helpers */
@@ -193,19 +194,22 @@ function useEscape(active: boolean, onClose: () => void) {
 }
 
 export function Modal({ open, onClose, title, children, footer, wide }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode; footer?: React.ReactNode; wide?: boolean }) {
+  const [mounted, setMounted] = useState(false);
   useEscape(open, onClose);
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={title} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className={`menu-surface flex max-h-full w-full flex-col rounded-3xl text-white shadow-2xl ${wide ? "max-w-2xl" : "max-w-md"}`}>
-        <div className="flex items-center justify-between gap-3 border-b border-white/10 px-5 py-4">
-          <h3 className="text-lg font-semibold">{title}</h3>
-          <button type="button" aria-label="إغلاق" onClick={onClose} className="rounded-full p-1.5 text-white/65 hover:text-white"><X size={18} /></button>
+  useEffect(() => { setMounted(true); }, []);
+  if (!open || !mounted) return null;
+  return createPortal(
+    <div className="fixed inset-0 z-[300] flex items-center justify-center overflow-y-auto bg-black/75 p-3 backdrop-blur-md sm:p-6" role="dialog" aria-modal="true" aria-label={title} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className={`menu-surface my-auto flex max-h-[min(90dvh,820px)] w-full flex-col overflow-hidden rounded-3xl text-white shadow-2xl ring-1 ring-white/10 ${wide ? "max-w-2xl" : "max-w-xl"}`}>
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-5 py-4 sm:px-6">
+          <h3 className="text-lg font-bold sm:text-xl">{title}</h3>
+          <button type="button" aria-label="إغلاق" onClick={onClose} className="rounded-full bg-white/[0.08] p-2 text-white/70 transition hover:bg-white/[0.15] hover:text-white"><X size={19} /></button>
         </div>
-        <div className="overflow-y-auto p-5">{children}</div>
-        {footer && <div className="flex flex-wrap justify-end gap-2 border-t border-white/10 px-5 py-4">{footer}</div>}
+        <div className="min-h-0 overflow-y-auto p-5 sm:p-6">{children}</div>
+        {footer && <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-white/10 px-5 py-4 sm:flex-row sm:justify-end sm:px-6">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -301,6 +305,7 @@ export function ConfirmModal({
       open={open}
       onClose={busy ? () => undefined : onClose}
       title={title}
+      wide
       footer={
         <>
           <button type="button" className="btn2" disabled={busy} onClick={onClose}>تراجع</button>
@@ -315,7 +320,7 @@ export function ConfirmModal({
         </>
       }
     >
-      {message && <div className="mb-3 text-sm leading-relaxed text-white/80">{message}</div>}
+      {message && <div className="mb-5 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-base leading-8 text-white/85 sm:p-5">{message}</div>}
       {reasonLabel && (
         <label className="block space-y-2 text-sm text-white/65">
           {reasonLabel}

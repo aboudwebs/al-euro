@@ -44,7 +44,7 @@ export default function PrintOrder() {
               <div className="muted" style={{ fontSize: 12 }}>قطع غيار ألمانية وأوروبية</div>
             </div>
             <div style={{ textAlign: "left" }} dir="ltr">
-              <div style={{ fontSize: 20, fontWeight: 800 }} dir="rtl">{mode === "invoice" ? "فاتورة" : "قائمة تجهيز"} #{o.order_number}</div>
+              <div style={{ fontSize: 20, fontWeight: 800 }} dir="rtl">{mode === "invoice" ? "فاتورة" : `قائمة تجهيز #${o.order_number}`}</div>
               <div className="muted" style={{ fontSize: 12 }} dir="rtl">{fmtDateTime(o.created_at)}</div>
             </div>
           </header>

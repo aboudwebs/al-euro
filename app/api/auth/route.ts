@@ -92,7 +92,7 @@ export async function POST(req: Request) {
     const { mode = "login", role, name, phone, password, license, city, spec, refCode, refSignature, client, otpCode, otpToken } = body ?? {};
     const isMobileClient = client === "mobile";
 
-    const allowedRoles = mode === "login" ? (isMobileClient ? ["workshop", "marketer"] : ["workshop", "marketer", "admin"]) : ["workshop", "marketer"];
+    const allowedRoles = mode === "login" ? (isMobileClient ? ["workshop", "marketer"] : ["workshop", "marketer", "admin", "worker"]) : ["workshop", "marketer"];
 
     if (mode === "send-otp") {
       if (!phone || String(phone).trim().length < 8) {

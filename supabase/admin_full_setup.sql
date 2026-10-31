@@ -100,7 +100,7 @@ begin
   for c in
     select * from (values
       ('users',                'users_role_check',                  $d$check (role in ('workshop','marketer','admin','worker'))$d$),
-      ('users',                'users_tier_check',                  $d$check (tier in ('Bronze','Silver','Gold'))$d$),
+      ('users',                'users_tier_check',                  $d$check (tier in ('Bronze','Silver','Gold','Platinum','VIP'))$d$),
       ('orders',               'orders_pay_method_check',           $d$check (pay_method in ('sham','cod','debt'))$d$),
       ('orders',               'orders_status_check',               $d$check (status in ('pending','approved','shipped','delivered','cancelled'))$d$),
       ('orders',               'orders_user_role_check',            $d$check (user_role in ('workshop','marketer'))$d$),

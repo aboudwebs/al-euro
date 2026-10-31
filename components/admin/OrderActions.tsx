@@ -10,16 +10,17 @@ type Props = {
   cancelLabel?: string;
   approveLabel?: string;
   compact?: boolean;
+  allowCancel?: boolean;
 };
 
 const NEXT_LABEL: Partial<Record<OrderStatus, string>> = { approved: "موافقة على الطلب", shipped: "تأكيد الشحن", delivered: "تأكيد التسليم" };
 const NEXT_ICON: Partial<Record<OrderStatus, typeof Check>> = { approved: Check, shipped: Truck, delivered: PackageCheck };
 
 /** One-click status buttons for an order. Side effects run server-side in a single SQL transaction. */
-export default function OrderActions({ order, onDone, cancelLabel = "إلغاء الطلب", approveLabel, compact }: Props) {
+export default function OrderActions({ order, onDone, cancelLabel = "إلغاء الطلب", approveLabel, compact, allowCancel = true }: Props) {
   const [target, setTarget] = useState<OrderStatus | null>(null);
   const [busy, setBusy] = useState(false);
-  const options = ORDER_TRANSITIONS[order.status] ?? [];
+  const options = (ORDER_TRANSITIONS[order.status] ?? []).filter((s) => allowCancel || s !== "cancelled");
   if (!options.length) return null;
 
   async function run(status: OrderStatus, reason: string) {

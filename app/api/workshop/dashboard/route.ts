@@ -13,7 +13,7 @@ export async function GET() {
 
     const db = getSupabaseAdmin();
     const [{ data: user, error: userError }, { data: orders, error: ordersError }, { data: ledger, error: ledgerError }] = await Promise.all([
-      db.from("users").select("id,name,tier,debt_limit,debt_balance,cashback_balance").eq("id", session.id).eq("role", "workshop").maybeSingle(),
+      db.from("users").select("id,name,tier,debt_limit,debt_balance,cashback_balance,loyalty_season_spend,loyalty_season_started_at").eq("id", session.id).eq("role", "workshop").maybeSingle(),
       db.from("orders").select("id,order_number,total_amount,pay_method,status,created_at,items").eq("user_id", session.id).order("created_at", { ascending: false }).limit(100),
       db.from("debt_ledger").select("id,order_id,tx_type,amount,balance_after,note,created_at").eq("workshop_id", session.id).order("created_at", { ascending: false }).limit(100)
     ]);

@@ -32,7 +32,7 @@ function Timeline({ status }: { status: OrderStatus }) {
   );
 }
 
-export function addressLines(a: DeliveryAddress | null | undefined): string[] {
+function addressLines(a: DeliveryAddress | null | undefined): string[] {
   if (!a) return [];
   return [a.label, [a.governorate, a.area].filter(Boolean).join(" - "), a.street, a.details, a.phone && `هاتف: ${a.phone}`].filter((x): x is string => !!x);
 }

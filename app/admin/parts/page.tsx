@@ -140,6 +140,16 @@ function PartRow({ p, onEdit, onChanged, onZoom }: { p: AdminPart; onEdit: () =>
     onChanged();
   }
 
+  async function remove() {
+    if (!confirm(`إزالة «${p.name}» من كتالوج العملاء؟ سيبقى سجلها محفوظاً ضمن الطلبات السابقة.`)) return;
+    setBusy(true);
+    const r = await api(`/api/admin/parts/${p.id}`, { method: "DELETE" });
+    setBusy(false);
+    if (!r.ok) return toast(r.error, "err");
+    toast("تمت إزالة القطعة من الكتالوج");
+    onChanged();
+  }
+
   return (
     <tr className={`border-b border-white/[0.07] last:border-0 ${p.is_active ? "" : "opacity-60"}`}>
       <td className="px-4 py-2.5"><Thumb src={p.image_url} alt={p.name} onOpen={onZoom} className="h-12 w-12" /></td>
@@ -160,9 +170,7 @@ function PartRow({ p, onEdit, onChanged, onZoom }: { p: AdminPart; onEdit: () =>
         <div className="inline-flex gap-1.5">
           {dirty && <button type="button" className="btn !py-1.5" disabled={busy} onClick={() => patch({ price: Number(price), stock: Number(stock) }, "تم تحديث السعر والكمية")}><Save size={14} />حفظ</button>}
           <button type="button" className="btn2 !py-1.5" onClick={onEdit} aria-label={`تعديل ${p.name}`}><Pencil size={14} /></button>
-          {p.is_active && <button type="button" className="btn2 !py-1.5 !text-[#FF6961]" disabled={busy} onClick={() => {
-            if (confirm(`إزالة «${p.name}» من كتالوج العملاء؟ سيبقى سجلها محفوظاً ضمن الطلبات السابقة.`)) patch({}, "تمت إزالة القطعة من الكتالوج").then(() => {});
-          }} aria-label={`حذف ${p.name} من الكتالوج`}><Trash2 size={14} /></button>}
+          {p.is_active && <button type="button" className="btn2 !py-1.5 !text-[#FF6961]" disabled={busy} onClick={remove} aria-label={`حذف ${p.name} من الكتالوج`}><Trash2 size={14} /></button>}
         </div>
       </td>
     </tr>

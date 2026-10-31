@@ -21,6 +21,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     return fail("الحالة المطلوبة غير صالحة");
   }
   const note = typeof body?.note === "string" ? body.note.trim().slice(0, 500) : "";
+  if (guard.admin.role === "worker" && status === ORDER_STATUS.cancelled) {
+    return fail("لا تملك صلاحية إلغاء الطلبات", 403);
+  }
   if (status === ORDER_STATUS.cancelled && note.length < 3) return fail("يرجى كتابة سبب الإلغاء/الرفض ليظهر للعميل");
 
   const db = getSupabaseAdmin();

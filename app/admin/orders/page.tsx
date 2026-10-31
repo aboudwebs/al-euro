@@ -69,7 +69,7 @@ function DeliveryBox({ order, onSaved }: { order: AdminOrder; onSaved: () => voi
   );
 }
 
-function OrderDrawer({ id, onClose, onChanged }: { id: string | null; onClose: () => void; onChanged: () => void }) {
+function OrderDrawer({ id, onClose, onChanged, isWorker }: { id: string | null; onClose: () => void; onChanged: () => void; isWorker: boolean }) {
   const { data, error, loading, reload } = useApi<Detail>(id ? `/api/admin/orders/${id}` : null);
   const [zoom, setZoom] = useState<string | null>(null);
   const d = id && data?.order.id === id ? data : null; // ignore a previously opened order while the new one loads
@@ -141,7 +141,7 @@ function OrderDrawer({ id, onClose, onChanged }: { id: string | null; onClose: (
           {d.commission && <p className="text-sm text-white/80">عمولة المسوّق: <b className="text-white">{money(d.commission.commission_amount)}</b> <Badge tone="mute">{COMMISSION_STATUS_LABEL[d.commission.status]}</Badge></p>}
 
           <div className="space-y-3 border-t border-white/10 pt-4">
-            <OrderActions order={o} onDone={done} />
+            <OrderActions order={o} onDone={done} allowCancel={!isWorker} />
             <Link href={`/admin/orders/${o.id}/print`} target="_blank" className="btn2 w-full"><Printer size={16} />طباعة الفاتورة / قائمة التجهيز</Link>
           </div>
         </div>
@@ -159,6 +159,10 @@ function OrdersInner() {
   const [q, setQ] = useState("");
   const [dq, setDq] = useState("");
   const [open, setOpen] = useState<string | null>(null);
+  const [isWorker, setIsWorker] = useState(false);
+  useEffect(() => {
+    fetch("/api/auth", { cache: "no-store" }).then((r) => r.json()).then((d) => setIsWorker(d?.user?.role === "worker")).catch(() => setIsWorker(false));
+  }, []);
   useEffect(() => { const t = setTimeout(() => setDq(q.trim()), 300); return () => clearTimeout(t); }, [q]);
 
   const params = new URLSearchParams();
@@ -225,7 +229,7 @@ function OrdersInner() {
           </table>
         </div>
       )}
-      <OrderDrawer id={open} onClose={() => setOpen(null)} onChanged={reload} />
+      <OrderDrawer id={open} onClose={() => setOpen(null)} onChanged={reload} isWorker={isWorker} />
     </>
   );
 }

@@ -28,3 +28,21 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (!data) return fail("القطعة غير موجودة", 404);
   return ok({ part: data });
 }
+
+
+/** Archive a part from the customer catalogue without destroying order history. */
+export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+  const guard = await requireStaffAccess("parts");
+  if (!guard.ok) return guard.response;
+  if (!SAFE_ID.test(params.id)) return fail("معرّف القطعة غير صالح");
+
+  const { data, error } = await getSupabaseAdmin()
+    .from("parts")
+    .update({ is_active: false })
+    .eq("id", params.id)
+    .select("id")
+    .maybeSingle();
+  if (error) return dbFail("parts archive", error, "تعذر حذف القطعة من الكتالوج");
+  if (!data) return fail("القطعة غير موجودة", 404);
+  return ok({ archived: true });
+}

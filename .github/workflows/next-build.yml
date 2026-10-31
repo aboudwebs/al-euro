@@ -1,0 +1,26 @@
+name: Next.js build check
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, "audit/**"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        run: npm install
+      - name: Build Next.js app
+        run: npm run build
+        env:
+          AUTH_SECRET: ci-only-build-secret-not-for-production
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ci-only-placeholder-key

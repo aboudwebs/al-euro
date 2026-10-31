@@ -1,0 +1,335 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==========================================================================
+   EURO CARS theme system
+   --------------------------------------------------------------------------
+   Two themes share one set of tokens:
+     :root      -> light theme (default values)
+     html.dark  -> dark theme (the original liquid-glass identity)
+   next-themes toggles the `dark` class on <html>.
+
+   Tailwind's `white` colour is mapped to --c-white (see tailwind.config.ts), so the
+   existing `text-white/60`, `border-white/10`, `bg-white/[0.08]` utilities are white in
+   the dark theme and ink-coloured in the light theme automatically. Anything that must
+   stay white on a coloured fill uses `text-snow` / `bg-snow`.
+   ========================================================================== */
+
+@layer base {
+  :root {
+    color-scheme: light;
+    --c-white: 15 23 42;            /* "white" utilities resolve to ink in light */
+
+    --bg: #eef3f9;
+    --text: #0f172a;
+    --muted: #475569;
+    --placeholder: #64748b;
+
+    --surface-top: #ffffff;
+    --surface-bottom: #f8fafc;
+    --surface: #ffffff;
+    --line: #d5deea;
+    --line-strong: #b8c4d6;
+    --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.06), 0 12px 28px -8px rgba(15, 23, 42, 0.14);
+
+    --field-bg: #ffffff;
+    --field-line: #c5d0df;
+    --field-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.06);
+    --track: rgba(15, 23, 42, 0.06);
+    --menu-bg: #ffffff;
+    --bar-bg: rgba(255, 255, 255, 0.86);
+    --bar-line: #d5deea;
+    --bar-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+
+    --btn2-bg: #ffffff;
+    --btn2-bg-hover: #f1f5f9;
+
+    --glass-1: rgba(15, 23, 42, 0.03);
+    --glass-2: rgba(15, 23, 42, 0.06);
+
+    --accent: #007aff;
+    --accent-text: #0a63d1;
+    --ok-text: #15803d;
+    --warn-text: #b45309;
+    --err-text: #b91c1c;
+    --orb-opacity: 0.55;
+  }
+
+  html.dark {
+    color-scheme: dark;
+    --c-white: 255 255 255;
+
+    --bg: #06080e;
+    --text: #ffffff;
+    --muted: rgba(255, 255, 255, 0.6);
+    --placeholder: rgba(255, 255, 255, 0.4);
+
+    --surface-top: rgba(255, 255, 255, 0.1);
+    --surface-bottom: rgba(255, 255, 255, 0.03);
+    --surface: rgba(255, 255, 255, 0.06);
+    --line: rgba(255, 255, 255, 0.15);
+    --line-strong: rgba(255, 255, 255, 0.25);
+    --shadow-card: 0 12px 36px rgba(0, 0, 0, 0.45), inset 0 1.5px 0 0 rgba(255, 255, 255, 0.28);
+
+    --field-bg: rgba(0, 0, 0, 0.35);
+    --field-line: rgba(255, 255, 255, 0.1);
+    --field-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    --track: rgba(0, 0, 0, 0.4);
+    --menu-bg: #0b0f1a;
+    --bar-bg: rgba(6, 8, 14, 0.65);
+    --bar-line: rgba(255, 255, 255, 0.12);
+    --bar-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+
+    --btn2-bg: rgba(255, 255, 255, 0.08);
+    --btn2-bg-hover: rgba(255, 255, 255, 0.14);
+
+    --glass-1: rgba(255, 255, 255, 0.02);
+    --glass-2: rgba(255, 255, 255, 0.05);
+
+    --accent: #0a84ff;
+    --accent-text: #0a84ff;
+    --ok-text: #30d158;
+    --warn-text: #ff9f0a;
+    --err-text: #ff6961;
+    --orb-opacity: 1;
+  }
+
+  body {
+    background-color: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Soft colour wash behind the light theme only (the dark theme uses the ambient orbs). */
+  html:not(.dark) body {
+    background-image:
+      radial-gradient(at 15% 10%, rgba(0, 122, 255, 0.1) 0px, transparent 55%),
+      radial-gradient(at 85% 85%, rgba(94, 92, 230, 0.08) 0px, transparent 55%);
+    background-attachment: fixed;
+  }
+
+  ::selection { background: rgba(10, 132, 255, 0.3); }
+
+  a:focus-visible,
+  button:focus-visible,
+  summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--placeholder);
+    opacity: 1;
+  }
+
+  select option {
+    background-color: var(--menu-bg);
+    color: var(--text);
+  }
+}
+
+/* ==========================================================================
+   Shared components (single source of truth for surfaces, buttons and fields)
+   ========================================================================== */
+@layer components {
+  .app-canvas {
+    background-color: var(--bg);
+    color: var(--text);
+  }
+
+  /* Primary surface */
+  .card {
+    border: 1px solid var(--line);
+    border-radius: 24px;
+    padding: 1rem;
+    background-color: var(--surface-bottom);
+    background-image: linear-gradient(180deg, var(--surface-top), var(--surface-bottom));
+    box-shadow: var(--shadow-card);
+    -webkit-backdrop-filter: blur(40px) saturate(1.6);
+    backdrop-filter: blur(40px) saturate(1.6);
+    transition: background-color 0.3s, border-color 0.3s, box-shadow 0.3s;
+  }
+
+  /* Header / bottom navigation bar */
+  .glass-bar {
+    background-color: var(--bar-bg);
+    border-color: var(--bar-line);
+    box-shadow: var(--bar-shadow);
+    -webkit-backdrop-filter: blur(48px) saturate(1.5);
+    backdrop-filter: blur(48px) saturate(1.5);
+  }
+
+  /* Dropdowns / suggestion lists */
+  .menu-surface {
+    background-color: var(--menu-bg);
+    border: 1px solid var(--line);
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+  }
+  html.dark .menu-surface {
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  }
+
+  /* Text inputs, selects, textareas (.input is the class the login page uses) */
+  .inp,
+  .input {
+    width: 100%;
+    border: 1px solid var(--field-line);
+    border-radius: 16px;
+    background-color: var(--field-bg);
+    color: var(--text);
+    padding: 0.625rem 0.75rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    outline: none;
+    box-shadow: var(--field-shadow);
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .inp:focus,
+  .input:focus {
+    border-color: var(--accent);
+    box-shadow: var(--field-shadow), 0 0 0 3px rgba(10, 132, 255, 0.25);
+  }
+  .inp:disabled,
+  .input:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  /* Primary pill button */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 9999px;
+    padding: 0.625rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.25rem;
+    color: #ffffff;
+    background-image: linear-gradient(180deg, #3a9bfd, #007aff);
+    box-shadow: 0 6px 22px rgba(0, 122, 255, 0.4), inset 0 1.5px 1px rgba(255, 255, 255, 0.48);
+    transition: filter 0.2s, transform 0.2s, opacity 0.2s;
+  }
+  .btn:hover:not(:disabled) { filter: brightness(1.1); }
+  .btn:active:not(:disabled) { transform: scale(0.97); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* Secondary pill button */
+  .btn2 {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border: 1px solid var(--line);
+    border-radius: 9999px;
+    padding: 0.625rem 1rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    color: var(--text);
+    background-color: var(--btn2-bg);
+    transition: background-color 0.2s, transform 0.2s;
+  }
+  .btn2:hover:not(:disabled) { background-color: var(--btn2-bg-hover); }
+  .btn2:active:not(:disabled) { transform: scale(0.97); }
+
+  .developer-credit {
+    color: var(--muted);
+    text-decoration: none;
+  }
+  .developer-credit:hover { color: var(--accent-text); }
+}
+
+/* ==========================================================================
+   Light-theme adjustments for the glass utilities used across the pages.
+   Each selector is an exact utility class (never a substring of unrelated
+   classes) and only changes colour/shadow values - not layout.
+   `--tw-shadow` is overridden instead of `box-shadow` so Tailwind focus rings keep working.
+   ========================================================================== */
+
+/* Glass cards: opaque, clearly separated from the page background. */
+html:not(.dark) [class*="from-white/"] {
+  background-image: linear-gradient(180deg, var(--surface-top), var(--surface-bottom));
+  border-color: var(--line);
+  --tw-shadow: var(--shadow-card);
+  --tw-shadow-colored: var(--shadow-card);
+}
+
+/* Inset fields and segmented-control tracks. */
+html:not(.dark) .bg-black\/35,
+html:not(.dark) .bg-black\/30 {
+  background-color: var(--field-bg);
+  border-color: var(--field-line);
+  --tw-shadow: var(--field-shadow);
+  --tw-shadow-colored: var(--field-shadow);
+}
+html:not(.dark) .bg-black\/40 {
+  background-color: var(--track);
+  border-color: var(--line);
+  --tw-shadow: 0 0 #0000;
+  --tw-shadow-colored: 0 0 #0000;
+}
+
+/* Selected segment / active navigation item: white "thumb" like an iOS segmented control. */
+html:not(.dark) .bg-white\/\[0\.15\] {
+  background-color: #ffffff;
+  border-color: var(--line-strong);
+  --tw-shadow: 0 1px 3px rgba(15, 23, 42, 0.14), 0 1px 1px rgba(15, 23, 42, 0.06);
+  --tw-shadow-colored: 0 1px 3px rgba(15, 23, 42, 0.14), 0 1px 1px rgba(15, 23, 42, 0.06);
+}
+
+/* Secondary pills (header chips, +/- buttons, upload buttons). */
+html:not(.dark) .bg-white\/\[0\.08\] {
+  background-color: var(--btn2-bg);
+  border-color: var(--line);
+  --tw-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --tw-shadow-colored: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+html:not(.dark) .hover\:bg-white\/\[0\.14\]:hover { background-color: var(--btn2-bg-hover); }
+
+/* Accent / status colours need a darker shade to stay readable on light surfaces. */
+html:not(.dark) .text-\[\#0A84FF\] { color: var(--accent-text); }
+html:not(.dark) .text-\[\#30D158\] { color: var(--ok-text); }
+html:not(.dark) .text-\[\#FF9F0A\] { color: var(--warn-text); }
+html:not(.dark) .text-\[\#FF453A\],
+html:not(.dark) .text-\[\#FF6961\],
+html:not(.dark) .text-\[\#FF8A80\] { color: var(--err-text); }
+
+/* Decorative background orbs are toned down on the light theme. */
+.ambient-orb { opacity: var(--orb-opacity); }
+
+/* Native date/number steppers etc. follow the active theme (set by color-scheme above). */
+
+/* Desktop sidebar: the active item uses the same white "thumb" (the utility carries the md: prefix). */
+@media (min-width: 768px) {
+  html:not(.dark) .md\:bg-white\/\[0\.15\] {
+    background-color: #ffffff;
+    border-color: var(--line-strong);
+    --tw-shadow: 0 1px 3px rgba(15, 23, 42, 0.14), 0 1px 1px rgba(15, 23, 42, 0.06);
+    --tw-shadow-colored: 0 1px 3px rgba(15, 23, 42, 0.14), 0 1px 1px rgba(15, 23, 42, 0.06);
+  }
+}
+
+/* ==========================================================================
+   Printable invoice / packing slip (/admin/orders/[id]/print)
+   Fixed colours on purpose: the paper must never inherit the dark theme.
+   ========================================================================== */
+.invoice-sheet {
+  background: #ffffff;
+  color: #111827;
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+}
+.invoice-sheet table { width: 100%; border-collapse: collapse; }
+.invoice-sheet th { background: #f1f5f9; font-weight: 700; }
+.invoice-sheet th, .invoice-sheet td { border: 1px solid #cbd5e1; padding: 8px 10px; text-align: start; font-size: 13px; }
+.invoice-sheet .muted { color: #475569; }
+.invoice-sheet .gold { color: #8a6a1f; }
+
+@media print {
+  @page { size: A4; margin: 12mm; }
+  html, body { background: #ffffff !important; background-image: none !important; }
+  .no-print { display: none !important; }
+  .invoice-sheet { box-shadow: none; border-radius: 0; padding: 0; }
+  .invoice-sheet th { background: #f1f5f9 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

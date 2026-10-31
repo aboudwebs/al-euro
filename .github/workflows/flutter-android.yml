@@ -1,0 +1,50 @@
+name: Build EURO CARS Flutter Android
+on:
+  workflow_dispatch:
+  push:
+    branches: [feat/flutter-native-app]
+    paths:
+      - 'flutter_app/**'
+      - '.github/workflows/flutter-android.yml'
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate Android platform project
+        working-directory: flutter_app
+        run: flutter create --platforms=android --org com.eurocars .
+      - name: Resolve packages
+        working-directory: flutter_app
+        run: flutter pub get
+      - name: Analyze Dart
+        working-directory: flutter_app
+        run: flutter analyze --no-pub
+      - name: Run tests
+        working-directory: flutter_app
+        run: flutter test --no-pub
+      - name: Build APK for ARM32 and ARM64
+        working-directory: flutter_app
+        run: flutter build apk --release --target-platform android-arm,android-arm64
+      - name: Verify APK archive and Android signature
+        run: |
+          APK=flutter_app/build/app/outputs/flutter-apk/app-release.apk
+          test -s "$APK"
+          unzip -t "$APK"
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)"
+          test -x "$APKSIGNER"
+          "$APKSIGNER" verify --verbose "$APK"
+          unzip -Z1 "$APK" | grep -q 'lib/arm64-v8a/'
+          unzip -Z1 "$APK" | grep -q 'lib/armeabi-v7a/'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: euro-cars-flutter-apk
+          path: flutter_app/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 14

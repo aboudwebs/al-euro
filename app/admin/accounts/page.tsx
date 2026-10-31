@@ -4,22 +4,20 @@ import { useSearchParams } from "next/navigation";
 import { Check, Pause, Save, Search } from "lucide-react";
 import { api, Badge, Empty, ErrorBox, fmtDate, money, PageHead, Spinner, Tabs, toast, useApi } from "@/components/admin/kit";
 import type { AdminAccount } from "@/lib/admin-types";
-import { ROLE_LABEL, TIER_LABEL, TIERS_LIST, type Tier } from "@/lib/status";
+import { ROLE_LABEL, TIER_LABEL, type Tier } from "@/lib/status";
 
 type Role = "all" | "workshop" | "marketer";
 type State = "all" | "active" | "inactive";
 
 function AccountCard({ a, onChanged }: { a: AdminAccount; onChanged: () => void }) {
-  const [tier, setTier] = useState<Tier>((a.tier as Tier) || "Bronze");
   const [limit, setLimit] = useState(String(Number(a.debt_limit) || 0));
   const [busy, setBusy] = useState(false);
   const isWorkshop = a.role === "workshop";
-  const dirty = isWorkshop && (tier !== ((a.tier as Tier) || "Bronze") || Number(limit) !== (Number(a.debt_limit) || 0));
+  const dirty = isWorkshop && Number(limit) !== (Number(a.debt_limit) || 0);
 
   useEffect(() => {
-    setTier((a.tier as Tier) || "Bronze");
     setLimit(String(Number(a.debt_limit) || 0));
-  }, [a.tier, a.debt_limit]);
+  }, [a.debt_limit]);
 
   async function patch(body: Record<string, unknown>, okMsg: string) {
     setBusy(true);
@@ -29,6 +27,8 @@ function AccountCard({ a, onChanged }: { a: AdminAccount; onChanged: () => void 
     toast(okMsg);
     onChanged();
   }
+
+  const tier = (a.tier as Tier) || "Bronze";
 
   return (
     <article className="card space-y-3">
@@ -54,19 +54,16 @@ function AccountCard({ a, onChanged }: { a: AdminAccount; onChanged: () => void 
       </dl>
 
       {isWorkshop && (
-        <div className="grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-black/30 p-3">
-          <label className="space-y-1 text-xs text-white/65">
-            الفئة
-            <select className="inp" value={tier} onChange={(e) => setTier(e.target.value as Tier)}>
-              {TIERS_LIST.map((t) => <option key={t} value={t}>{TIER_LABEL[t]} ({t})</option>)}
-            </select>
-          </label>
-          <label className="space-y-1 text-xs text-white/65">
+        <div className="grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-black/30 p-3 text-sm">
+          <div><p className="text-xs text-white/45">مرتبة الولاء الحالية</p><p className="font-semibold text-white">{TIER_LABEL[tier]}</p></div>
+          <div><p className="text-xs text-white/45">رصيد الكاش باك المتاح</p><p className="font-semibold text-white">{money(a.cashback_balance)}</p></div>
+          <div className="col-span-2"><p className="text-xs text-white/45">مشتريات دورة الـ90 يوم</p><p className="font-semibold text-white">{money(a.loyalty_season_spend)}</p></div>
+          <label className="col-span-2 space-y-1 text-xs text-white/65">
             سقف الدين ($)
             <input className="inp" type="number" min={0} step="1" inputMode="decimal" dir="ltr" value={limit} onChange={(e) => setLimit(e.target.value)} />
           </label>
-          <button type="button" disabled={!dirty || busy} className="btn col-span-2" onClick={() => patch({ tier, debt_limit: Number(limit) }, "تم حفظ الفئة وسقف الدين")}>
-            <Save size={15} />حفظ الفئة والسقف
+          <button type="button" disabled={!dirty || busy} className="btn col-span-2" onClick={() => patch({ debt_limit: Number(limit) }, "تم حفظ سقف الدين")}>
+            <Save size={15} />حفظ سقف الدين
           </button>
         </div>
       )}
@@ -103,7 +100,7 @@ function AccountsInner() {
 
   return (
     <>
-      <PageHead title="الشركات والورشات" sub="التحقق من التسجيلات، تفعيل أو تعليق الحسابات، وضبط سقف الدين والفئة" />
+      <PageHead title="الشركات والورشات" sub="التحقق من التسجيلات، تفعيل أو تعليق الحسابات، ومتابعة الولاء والكاش باك وسقف الدين" />
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Tabs<Role> value={role} onChange={setRole} items={[{ value: "all", label: "الكل" }, { value: "workshop", label: "ورشات" }, { value: "marketer", label: "مسوّقون" }]} />
         <Tabs<State> value={state} onChange={setState} items={[{ value: "all", label: "كل الحالات" }, { value: "inactive", label: "بانتظار التفعيل" }, { value: "active", label: "مفعّلة" }]} />

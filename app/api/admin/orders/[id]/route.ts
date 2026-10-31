@@ -25,7 +25,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 
   const { receipt_url, ...rest } = order;
   return ok({
-    order: { ...rest, ...(isWorker ? {} : { receipt_signed_url: receipt_url ? signed[receipt_url] ?? null : null }) },
+    order: { ...rest, receipt_signed_url: receipt_url ? signed[receipt_url] ?? null : null },
     customer: customer ? (isWorker
       ? { id: customer.id, name: customer.name, phone: customer.phone, role: customer.role, city: customer.city, license: customer.license }
       : customer) : null,

@@ -124,7 +124,7 @@ export async function POST(req: Request) {
 
     const db = getSupabaseAdmin();
     const cleanPhone = String(role === "worker" ? body.identifier : phone).trim();
-    if (role === "worker" && !/^\\d{8,10}$/.test(cleanPhone)) {
+    if (role === "worker" && !/^[0-9]{8,10}$/.test(cleanPhone)) {
       return json({ error: "معرّف الموظف يجب أن يتكون من 8 إلى 10 أرقام" }, 400);
     }
     const passHash = hashPassword(String(password));

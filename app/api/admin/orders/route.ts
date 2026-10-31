@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/admin-guard";
+import { requireStaffAccess } from "@/lib/admin-guard";
 import { clampLimit, cleanSearch, dbFail, ok } from "@/lib/admin-api";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { ORDER_STATUSES, PAY_METHOD } from "@/lib/status";
@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 /** ?status=  ?pay=sham|cod|debt  ?q=order-number-or-name-or-phone  ?limit= */
 export async function GET(req: Request) {
-  const guard = await requireAdmin();
+  const guard = await requireStaffAccess("orders");
   if (!guard.ok) return guard.response;
 
   const url = new URL(req.url);

@@ -198,35 +198,49 @@ function OrdersInner() {
       {data && !list.length && <Empty>لا توجد طلبات مطابقة.</Empty>}
 
       {list.length > 0 && (
-        <div className="card overflow-x-auto !p-0">
-          <table className="w-full min-w-[720px] text-sm">
-            <thead>
-              <tr className="border-b border-white/10 text-xs text-white/45">
-                <th className="px-4 py-3 text-start font-normal">#</th>
-                <th className="px-2 text-start font-normal">العميل</th>
-                <th className="px-2 text-start font-normal">التاريخ</th>
-                <th className="px-2 text-start font-normal">الدفع</th>
-                <th className="px-2 text-start font-normal">المبلغ</th>
-                <th className="px-2 text-start font-normal">الحالة</th>
-                <th className="px-4 text-end font-normal">إجراء</th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.map((o) => (
-                <tr key={o.id} className="cursor-pointer border-b border-white/[0.07] last:border-0 hover:bg-white/[0.04]" onClick={() => setOpen(o.id)}>
-                  <td className="px-4 py-3 font-semibold text-white">{o.order_number ?? "—"}</td>
-                  <td className="px-2 text-white">{o.customer_name}<small className="block text-white/45" dir="ltr" style={{ textAlign: "right" }}>{o.customer_phone}</small></td>
-                  <td className="px-2 text-white/70">{fmtDateTime(o.created_at)}</td>
-                  <td className="px-2 text-white/80">{PAY_METHOD_LABEL[o.pay_method]}</td>
-                  <td className="px-2 font-semibold text-white">{money(o.total_amount)}</td>
-                  <td className="px-2"><Badge tone={ORDER_TONE[o.status]}>{ORDER_STATUS_LABEL[o.status]}</Badge></td>
-                  <td className="px-4 text-end" onClick={(e) => e.stopPropagation()}>
-                    <div className="inline-flex"><OrderActions order={o} onDone={reload} compact allowCancel={!isWorker} /></div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="grid gap-3">
+          {list.map((o) => (
+            <article
+              key={o.id}
+              className="card cursor-pointer !p-4 transition hover:border-[#0A84FF]/40 sm:!p-5"
+              onClick={() => setOpen(o.id)}
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="mb-1 flex flex-wrap items-center gap-2">
+                    <span className="text-base font-bold text-white">طلب #{o.order_number ?? "—"}</span>
+                    <Badge tone={ORDER_TONE[o.status]}>{ORDER_STATUS_LABEL[o.status]}</Badge>
+                  </div>
+                  <p className="font-semibold text-white">{o.customer_name}</p>
+                  <p className="mt-0.5 text-sm text-white/55" dir="ltr" style={{ textAlign: "right" }}>{o.customer_phone}</p>
+                </div>
+                <div className="text-start sm:text-end">
+                  <b className="text-xl font-bold text-gold">{money(o.total_amount)}</b>
+                  <p className="mt-1 text-xs text-white/50">{fmtDateTime(o.created_at)}</p>
+                </div>
+              </div>
+
+              <div className="my-4 grid grid-cols-2 gap-2 rounded-2xl border border-white/[0.08] bg-black/[0.12] p-3 text-sm sm:grid-cols-3">
+                <div>
+                  <p className="text-xs text-white/45">طريقة الدفع</p>
+                  <p className="mt-1 font-medium text-white/85">{PAY_METHOD_LABEL[o.pay_method]}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-white/45">حالة الطلب</p>
+                  <p className="mt-1 font-medium text-white/85">{ORDER_STATUS_LABEL[o.status]}</p>
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <p className="text-xs text-white/45">رقم الطلب</p>
+                  <p className="mt-1 font-medium text-white/85">#{o.order_number ?? "—"}</p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3" onClick={(e) => e.stopPropagation()}>
+                <button type="button" className="btn2 !px-4 !py-2" onClick={() => setOpen(o.id)}>عرض التفاصيل</button>
+                <OrderActions order={o} onDone={reload} allowCancel={!isWorker} />
+              </div>
+            </article>
+          ))}
         </div>
       )}
       <OrderDrawer id={open} onClose={() => setOpen(null)} onChanged={reload} isWorker={isWorker} />

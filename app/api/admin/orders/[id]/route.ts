@@ -10,6 +10,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   if (!guard.ok) return guard.response;
   if (!isUuid(params.id)) return fail("معرّف الطلب غير صالح");
 
+  const isWorker = guard.admin.role === "worker";
   const db = getSupabaseAdmin();
   const { data: order, error } = await db.from("orders").select("*").eq("id", params.id).maybeSingle();
   if (error) return dbFail("order detail", error, "تعذر تحميل الطلب");
@@ -24,9 +25,11 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 
   const { receipt_url, ...rest } = order;
   return ok({
-    order: { ...rest, receipt_signed_url: receipt_url ? signed[receipt_url] ?? null : null },
-    customer: customer ?? null,
-    ledger: ledger ?? [],
-    commission: commission ?? null,
+    order: { ...rest, ...(isWorker ? {} : { receipt_signed_url: receipt_url ? signed[receipt_url] ?? null : null }) },
+    customer: customer ? (isWorker
+      ? { id: customer.id, name: customer.name, phone: customer.phone, role: customer.role, city: customer.city, license: customer.license }
+      : customer) : null,
+    ledger: isWorker ? [] : ledger ?? [],
+    commission: isWorker ? null : commission ?? null,
   });
 }

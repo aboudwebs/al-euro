@@ -6,9 +6,8 @@ export const dynamic = "force-dynamic";
 
 // password_hash is never selected.
 const FIELDS =
-  "id, role, name, phone, license, city, specs, tier, debt_limit, debt_balance, cashback_balance, my_ref_code, referred_by_code, is_active, created_at";
+  "id, role, name, phone, license, city, specs, tier, debt_limit, debt_balance, cashback_balance, loyalty_season_spend, loyalty_season_started_at, my_ref_code, referred_by_code, is_active, created_at";
 
-/** Workshops and marketers. ?role=workshop|marketer  ?status=active|inactive  ?q=name-or-phone */
 export async function GET(req: Request) {
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
@@ -26,7 +25,6 @@ export async function GET(req: Request) {
   const { data, error } = await query.order("is_active", { ascending: true }).order("created_at", { ascending: false }).limit(clampLimit(url.searchParams.get("limit")));
   if (error) return dbFail("accounts list", error, "تعذر تحميل الحسابات");
 
-  // Resolve "referred by" codes to marketer names.
   const codes = Array.from(new Set((data ?? []).map((u) => u.referred_by_code).filter(Boolean)));
   const marketers: Record<string, string> = {};
   if (codes.length) {

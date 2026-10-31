@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/admin-guard";
+import { requireStaffAccess } from "@/lib/admin-guard";
 import { fail, ok } from "@/lib/admin-api";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { storeImage } from "@/lib/uploads";
@@ -9,7 +9,7 @@ const BUCKET = "parts-images"; // public bucket: the customer catalogue shows th
 
 /** multipart/form-data { image } -> { url } (public URL to save in parts.image_url) */
 export async function POST(req: Request) {
-  const guard = await requireAdmin();
+  const guard = await requireStaffAccess("parts");
   if (!guard.ok) return guard.response;
 
   let form: FormData;

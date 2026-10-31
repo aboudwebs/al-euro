@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 
 const SECRET = process.env.AUTH_SECRET;
 
-type Role = "workshop" | "marketer" | "admin";
+type Role = "workshop" | "marketer" | "admin" | "worker";
 type Session = { role: Role; name: string; phone: string; iat: number };
 
 function base64UrlToUint8Array(value: string): Uint8Array {
@@ -38,7 +38,7 @@ async function verifySession(token?: string): Promise<Session | null> {
     const payload = JSON.parse(payloadText) as Partial<Session>;
     const now = Date.now();
     if (
-      (payload.role !== "workshop" && payload.role !== "marketer" && payload.role !== "admin") ||
+      (payload.role !== "workshop" && payload.role !== "marketer" && payload.role !== "admin" && payload.role !== "worker") ||
       typeof payload.name !== "string" ||
       typeof payload.phone !== "string" ||
       typeof payload.iat !== "number" ||
@@ -61,27 +61,35 @@ export async function middleware(req: NextRequest) {
   const session = await verifySession(req.cookies.get("euro_session")?.value);
 
   // Password recovery must work without an existing admin session.
-  if (
-    isUnder(pathname, "/admin/reset-password") ||
-    isUnder(pathname, "/api/password-reset/admin") ||
-    isUnder(pathname, "/api/admin/reset-password")
-  ) return NextResponse.next();
+  if (isUnder(pathname, "/admin/reset-password")) {
+    if (session?.role === "worker") return NextResponse.redirect(new URL("/admin/orders", req.url));
+    return NextResponse.next();
+  }
+  if (isUnder(pathname, "/api/password-reset/admin") || isUnder(pathname, "/api/admin/reset-password")) return NextResponse.next();
 
   // API authorization is also enforced inside every admin route.
   if (isUnder(pathname, "/api/admin")) {
     if (!session) return NextResponse.json({ error: "يرجى تسجيل الدخول" }, { status: 401 });
-    if (session.role !== "admin") return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
+    if (session.role !== "admin") {
+      const workerAllowed = session.role === "worker" &&
+        (isUnder(pathname, "/api/admin/orders") || isUnder(pathname, "/api/admin/parts"));
+      if (!workerAllowed) return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
+    }
     return NextResponse.next();
   }
 
   if (isUnder(pathname, "/admin")) {
     if (pathname === "/admin/login") {
-      return session?.role === "admin"
-        ? NextResponse.redirect(new URL("/admin", req.url))
-        : NextResponse.next();
+      if (session?.role === "admin") return NextResponse.redirect(new URL("/admin", req.url));
+      if (session?.role === "worker") return NextResponse.redirect(new URL("/admin/orders", req.url));
+      return NextResponse.next();
     }
     if (!session) return NextResponse.redirect(new URL("/admin/login", req.url));
-    if (session.role !== "admin") {
+    if (session.role === "worker") {
+      if (pathname === "/admin" || !(isUnder(pathname, "/admin/orders") || isUnder(pathname, "/admin/parts"))) {
+        return NextResponse.redirect(new URL("/admin/orders", req.url));
+      }
+    } else if (session.role !== "admin") {
       return NextResponse.redirect(new URL("/admin/login", req.url));
     }
   }

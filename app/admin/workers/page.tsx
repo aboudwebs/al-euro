@@ -8,8 +8,7 @@ type Worker = { id: string; name: string; phone: string; is_active: boolean; cre
 export default function WorkersPage() {
   const { data, error, loading, reload } = useApi<{ workers: Worker[] }>("/api/admin/workers");
   const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [password, setPassword] = useState("");
+    const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const workers = data?.workers ?? [];
 
@@ -17,11 +16,10 @@ export default function WorkersPage() {
     e.preventDefault();
     if (busy) return;
     setBusy(true);
-    const r = await api("/api/admin/workers", { method: "POST", body: { name, phone, password } });
+    const r = await api("/api/admin/workers", { method: "POST", body: { name, password } });
     setBusy(false);
     if (!r.ok) return toast(r.error, "err");
     setName("");
-    setPhone("");
     setPassword("");
     toast("تم إنشاء حساب الموظف");
     reload();
@@ -49,8 +47,8 @@ export default function WorkersPage() {
           <input className="inp" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} required placeholder="الاسم الكامل" />
         </label>
         <label className="space-y-1 text-xs text-white/65">
-          رقم الهاتف
-          <input className="inp" dir="ltr" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={20} required placeholder="09xxxxxxxx" />
+          معرّف الموظف
+          <div className="inp flex items-center text-white/55" dir="rtl">يُولّد تلقائياً عند إنشاء الحساب</div>
         </label>
         <label className="space-y-1 text-xs text-white/65">
           كلمة المرور
@@ -70,7 +68,7 @@ export default function WorkersPage() {
           <article key={worker.id} className="card flex items-center justify-between gap-3">
             <div className="min-w-0">
               <h3 className="truncate font-semibold text-white">{worker.name}</h3>
-              <p className="mt-1 text-sm text-white/60" dir="ltr" style={{ textAlign: "right" }}>{worker.phone}</p>
+              <p className="mt-1 text-sm text-white/60" dir="ltr" style={{ textAlign: "right" }}>ID: {worker.phone}</p>
               <div className="mt-2"><Badge tone={worker.is_active ? "ok" : "warn"}>{worker.is_active ? "نشط" : "موقوف"}</Badge></div>
             </div>
             <button type="button" className={worker.is_active ? "btn2 !text-[#FF6961]" : "btn"} onClick={() => toggle(worker)}>

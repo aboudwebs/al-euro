@@ -8,7 +8,7 @@ type GuardResult =
   | { ok: true; admin: AdminContext }
   | { ok: false; response: NextResponse };
 
-function deny(error: string, status: number): GuardResult {
+function deny(error: string, status: number): { ok: false; response: NextResponse } {
   return { ok: false, response: NextResponse.json({ error }, { status, headers: { "Cache-Control": "no-store" } }) };
 }
 

@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/admin-guard";
+import { requireStaffAccess } from "@/lib/admin-guard";
 import { clampLimit, cleanSearch, dbFail, fail, ok, readJson } from "@/lib/admin-api";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import crypto from "crypto";
@@ -12,7 +12,7 @@ const FIELDS_WITH_CATEGORY = `${FIELDS}, category`;
 
 /** ?q=  ?branch=  ?active=1|0  ?low=1 (stock <= 5) */
 export async function GET(req: Request) {
-  const guard = await requireAdmin();
+  const guard = await requireStaffAccess("parts");
   if (!guard.ok) return guard.response;
 
   const url = new URL(req.url);

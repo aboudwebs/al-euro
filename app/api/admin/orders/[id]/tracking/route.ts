@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/admin-guard";
+import { requireStaffAccess } from "@/lib/admin-guard";
 import { dbFail, fail, isUuid, ok, readJson } from "@/lib/admin-api";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { ORDER_STATUS } from "@/lib/status";
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
  * Needs the orders.tracking_number column from supabase/updates_2026_10.sql.
  */
 export async function POST(req: Request, { params }: { params: { id: string } }) {
-  const guard = await requireAdmin();
+  const guard = await requireStaffAccess("orders");
   if (!guard.ok) return guard.response;
   if (!isUuid(params.id)) return fail("معرّف الطلب غير صالح");
 

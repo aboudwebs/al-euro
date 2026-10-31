@@ -79,6 +79,9 @@ export async function GET() {
       return json({ user: null });
     }
 
+    if (user.role === "worker") {
+      return json({ user: { id: user.id, role: user.role, name: user.name, phone: user.phone, is_active: user.is_active, created_at: user.created_at } });
+    }
     return json({ user });
   } catch (err) {
     console.error("[api/auth] GET:", err);
@@ -157,8 +160,11 @@ export async function POST(req: Request) {
       });
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { password_hash: _omit, ...publicUser } = existingUser;
+      const safeUser = existingUser.role === "worker"
+        ? { id: existingUser.id, role: existingUser.role, name: existingUser.name, phone: existingUser.phone, is_active: existingUser.is_active, created_at: existingUser.created_at }
+        : publicUser;
       const accessToken = isMobileClient ? signSession({ id: String(existingUser.id), role: existingUser.role, name: existingUser.name, phone: existingUser.phone, my_ref_code: existingUser.my_ref_code, iat: Date.now() }) : undefined;
-      return json({ ok: true, user: publicUser, ...(accessToken ? { accessToken } : {}) });
+      return json({ ok: true, user: safeUser, ...(accessToken ? { accessToken } : {}) });
     }
 
     if (!otpCode || !otpToken) {

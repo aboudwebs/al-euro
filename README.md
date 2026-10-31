@@ -14,7 +14,7 @@ Next.js 14 (App Router) · TypeScript · Tailwind · Supabase. Arabic RTL, dark/
 | Route | Purpose |
 | --- | --- |
 | `/admin` | KPIs, branch stock breakdown, low-stock alerts |
-| `/admin/accounts` | Activate / suspend workshops & marketers, tier (Bronze/Silver/Gold), debt limit |
+| `/admin/accounts` | Activate / suspend workshops & marketers, automatically calculated loyalty tier (Bronze/Silver/Gold/Platinum/VIP), cashback balance and debt limit |
 | `/admin/payments` | Sham Cash receipt queue (zoomable receipt, approve / reject with reason) |
 | `/admin/orders` | Filterable orders, detail drawer, one-click status, `/admin/orders/[id]/print` invoice & packing slip |
 | `/admin/requests` | VIN / special requests: quote, reply, status |

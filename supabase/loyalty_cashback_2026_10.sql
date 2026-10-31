@@ -142,7 +142,10 @@ begin
         else 'Bronze'
       end;
       v_cashback := round(v_total * v_rate, 2);
-      v_cashback_status := case when o.pay_method = 'debt' then 'held' else 'available' end;
+      v_cashback_status := case
+        when o.pay_method = 'debt' and coalesce(u.debt_balance, 0) > 0 then 'held'
+        else 'available'
+      end;
 
       update public.users
          set loyalty_season_started_at = v_season_start,
@@ -170,7 +173,7 @@ begin
               (marketer_id, workshop_id, order_id, order_amount, commission_amount, status)
             values
               (m.id, u.id, o.id, v_total, v_comm,
-               case when o.pay_method = 'debt' then 'held' else 'available' end);
+               case when o.pay_method = 'debt' and coalesce(u.debt_balance, 0) > 0 then 'held' else 'available' end);
           end if;
         end if;
       end if;

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { ShieldCheck } from "lucide-react";
 
 export default function AdminLogin() {
+  const [role, setRole] = useState<"admin" | "worker">("admin");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -17,14 +18,14 @@ export default function AdminLogin() {
       const res = await fetch("/api/auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: "login", role: "admin", phone: phone.trim(), password }),
+        body: JSON.stringify({ mode: "login", role, phone: phone.trim(), password }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.ok) {
         setError(data?.error || "تعذر تسجيل الدخول");
         return;
       }
-      window.location.href = "/admin";
+      window.location.href = role === "worker" ? "/admin/orders" : "/admin";
     } catch {
       setError("تعذر الاتصال بالخادم. حاول مجدداً.");
     } finally {
@@ -37,8 +38,12 @@ export default function AdminLogin() {
       <form onSubmit={submit} className="card w-full max-w-sm space-y-4 p-6">
         <div className="text-center">
           <ShieldCheck className="mx-auto mb-2 text-[#0A84FF]" size={36} />
-          <h1 className="text-xl font-semibold tracking-tight text-white">دخول الإدارة</h1>
+          <h1 className="text-xl font-semibold tracking-tight text-white">{role === "worker" ? "دخول الموظفين" : "دخول الإدارة"}</h1>
           <p className="mt-1 text-sm text-white/65">لوحة تحكم اليورو</p>
+          <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl bg-black/20 p-1">
+            <button type="button" onClick={() => setRole("admin")} className={`rounded-lg px-3 py-2 text-sm ${role === "admin" ? "bg-white/15 text-white" : "text-white/55"}`}>مدير</button>
+            <button type="button" onClick={() => setRole("worker")} className={`rounded-lg px-3 py-2 text-sm ${role === "worker" ? "bg-white/15 text-white" : "text-white/55"}`}>موظف</button>
+          </div>
         </div>
         <input className="inp" dir="ltr" inputMode="tel" autoComplete="username" placeholder="رقم الموبايل" value={phone} onChange={(e) => setPhone(e.target.value)} required />
         <input className="inp" type="password" autoComplete="current-password" placeholder="كلمة المرور" value={password} onChange={(e) => setPassword(e.target.value)} required />

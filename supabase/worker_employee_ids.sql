@@ -8,7 +8,7 @@ declare
 begin
   for worker_row in
     select id from public.users
-    where role = 'worker' and (phone is null or phone !~ '^\\d{8,10}$')
+    where role = 'worker' and (phone is null or phone !~ '^[0-9]{8,10}$')
   loop
     loop
       new_id := (floor(100000000 + random() * 900000000))::bigint::text;

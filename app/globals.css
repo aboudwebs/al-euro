@@ -333,3 +333,62 @@ html:not(.dark) .text-\[\#FF8A80\] { color: var(--err-text); }
   .invoice-sheet { box-shadow: none; border-radius: 0; padding: 0; }
   .invoice-sheet th { background: #f1f5f9 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+
+/* Mobile invoice layout: keep every column and long value inside the paper. */
+@media (max-width: 640px) {
+  .invoice-sheet {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    padding: 14px 10px;
+    border-radius: 12px;
+  }
+  .invoice-sheet header {
+    gap: 8px !important;
+    margin-bottom: 14px !important;
+  }
+  .invoice-sheet header > div:first-child > div:first-child {
+    font-size: 23px !important;
+  }
+  .invoice-sheet header > div:last-child > div:first-child {
+    font-size: 16px !important;
+  }
+  .invoice-sheet section {
+    min-width: 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+    font-size: 11px !important;
+    overflow-wrap: anywhere;
+  }
+  .invoice-sheet table {
+    width: 100%;
+    table-layout: fixed;
+    font-size: 10px;
+  }
+  .invoice-sheet th,
+  .invoice-sheet td {
+    box-sizing: border-box;
+    padding: 5px 3px;
+    font-size: 9px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  .invoice-sheet th:first-child,
+  .invoice-sheet td:first-child { width: 22px !important; }
+  .invoice-sheet th:nth-child(2),
+  .invoice-sheet td:nth-child(2) { width: 25%; }
+  .invoice-sheet th:nth-child(3),
+  .invoice-sheet td:nth-child(3) { width: 20%; }
+  .invoice-sheet th:nth-child(4),
+  .invoice-sheet td:nth-child(4) { width: 36px !important; }
+  .invoice-sheet tfoot td { font-size: 9px; }
+  .invoice-sheet footer {
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 18px !important;
+    overflow-wrap: anywhere;
+  }
+}

@@ -1,7 +1,7 @@
 "use client";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ImagePlus, Pencil, Plus, Save, Search } from "lucide-react";
+import { ImagePlus, Pencil, Plus, Save, Search, Trash2 } from "lucide-react";
 import { Toggle } from "@/components/ui";
 import { BRANDS } from "@/lib/data";
 import { LOW_STOCK_THRESHOLD } from "@/lib/status";
@@ -160,6 +160,9 @@ function PartRow({ p, onEdit, onChanged, onZoom }: { p: AdminPart; onEdit: () =>
         <div className="inline-flex gap-1.5">
           {dirty && <button type="button" className="btn !py-1.5" disabled={busy} onClick={() => patch({ price: Number(price), stock: Number(stock) }, "تم تحديث السعر والكمية")}><Save size={14} />حفظ</button>}
           <button type="button" className="btn2 !py-1.5" onClick={onEdit} aria-label={`تعديل ${p.name}`}><Pencil size={14} /></button>
+          {p.is_active && <button type="button" className="btn2 !py-1.5 !text-[#FF6961]" disabled={busy} onClick={() => {
+            if (confirm(`إزالة «${p.name}» من كتالوج العملاء؟ سيبقى سجلها محفوظاً ضمن الطلبات السابقة.`)) patch({}, "تمت إزالة القطعة من الكتالوج").then(() => {});
+          }} aria-label={`حذف ${p.name} من الكتالوج`}><Trash2 size={14} /></button>}
         </div>
       </td>
     </tr>

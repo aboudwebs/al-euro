@@ -44,7 +44,6 @@ export async function POST(req: Request) {
     city: null,
     license: null,
     specs: [],
-    tier: null,
     debt_limit: 0,
     debt_balance: 0,
     cashback_balance: 0,

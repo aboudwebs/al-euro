@@ -159,7 +159,7 @@ function OrdersInner() {
   const [q, setQ] = useState("");
   const [dq, setDq] = useState("");
   const [open, setOpen] = useState<string | null>(null);
-  const [isWorker, setIsWorker] = useState(false);
+  const [isWorker, setIsWorker] = useState(true);
   useEffect(() => {
     fetch("/api/auth", { cache: "no-store" }).then((r) => r.json()).then((d) => setIsWorker(d?.user?.role === "worker")).catch(() => setIsWorker(false));
   }, []);

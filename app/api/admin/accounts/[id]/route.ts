@@ -1,11 +1,10 @@
 import { requireAdmin } from "@/lib/admin-guard";
 import { dbFail, fail, isUuid, ok, readJson } from "@/lib/admin-api";
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { TIERS_LIST } from "@/lib/status";
 
 export const dynamic = "force-dynamic";
 
-/** Body: { is_active?: boolean, debt_limit?: number, tier?: "Bronze"|"Silver"|"Gold" }  (limit and tier: workshops only) */
+/** Workshop tiers are calculated by delivered purchases; admins can change activation and debt limit only. */
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
@@ -15,7 +14,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (!body) return fail("بيانات غير صالحة");
 
   const db = getSupabaseAdmin();
-  const { data: target, error: findError } = await db.from("users").select("id, role, debt_balance").eq("id", params.id).maybeSingle();
+  const { data: target, error: findError } = await db.from("users").select("id, role").eq("id", params.id).maybeSingle();
   if (findError) return dbFail("account lookup", findError);
   if (!target) return fail("الحساب غير موجود", 404);
   if (target.role !== "workshop" && target.role !== "marketer") return fail("لا يمكن تعديل حسابات الإدارة من هنا", 403);
@@ -31,11 +30,6 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     const limit = Number(body.debt_limit);
     if (!Number.isFinite(limit) || limit < 0 || limit > 1_000_000_000) return fail("سقف الدين غير صالح");
     updates.debt_limit = Math.round(limit * 100) / 100;
-  }
-  if ("tier" in body) {
-    if (target.role !== "workshop") return fail("الفئة خاصة بالورشات فقط");
-    if (typeof body.tier !== "string" || !(TIERS_LIST as string[]).includes(body.tier)) return fail("الفئة غير صالحة");
-    updates.tier = body.tier;
   }
   if (!Object.keys(updates).length) return fail("لا توجد تغييرات للحفظ");
 

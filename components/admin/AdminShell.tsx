@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
-import { BookOpen, Banknote, Boxes, LayoutDashboard, LogOut, Moon, PackageSearch, Percent, ShoppingBag, Sun, Users, type LucideIcon } from "lucide-react";
+import { BookOpen, Banknote, Boxes, LayoutDashboard, LogOut, Moon, PackageSearch, Percent, ShoppingBag, Sun, Users, UserCog, type LucideIcon } from "lucide-react";
 import { api, Toaster } from "./kit";
 import type { Overview } from "@/lib/admin-types";
 
@@ -18,25 +18,38 @@ const NAV: Item[] = [
   { href: "/admin/ledger", label: "دفتر الدين", Icon: BookOpen },
   { href: "/admin/parts", label: "قطع الغيار", Icon: Boxes },
   { href: "/admin/commissions", label: "عمولات المسوّقين", Icon: Percent },
+  { href: "/admin/workers", label: "حسابات الموظفين", Icon: UserCog },
 ];
 
 export default function AdminShell({ children }: { children: React.ReactNode }) {
   const path = usePathname() || "";
   const { theme, setTheme } = useTheme();
   const [overview, setOverview] = useState<Overview | null>(null);
+  const [role, setRole] = useState<"admin" | "worker" | null>(null);
   const bare = path === "/admin/login" || path === "/admin/reset-password" || path.endsWith("/print");
-
-  const refresh = useCallback(async () => {
-    const r = await api<{ overview: Overview }>("/api/admin/overview");
-    if (r.ok && r.data?.overview) setOverview(r.data.overview);
-  }, []);
 
   useEffect(() => {
     if (bare) return;
+    let alive = true;
+    fetch("/api/auth", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => { if (alive) setRole(d?.user?.role === "worker" ? "worker" : d?.user?.role === "admin" ? "admin" : null); })
+      .catch(() => { if (alive) setRole(null); });
+    return () => { alive = false; };
+  }, [bare]);
+
+  const refresh = useCallback(async () => {
+    if (role !== "admin") return;
+    const r = await api<{ overview: Overview }>("/api/admin/overview");
+    if (r.ok && r.data?.overview) setOverview(r.data.overview);
+  }, [role]);
+
+  useEffect(() => {
+    if (bare || role !== "admin") return;
     refresh();
     const t = setInterval(refresh, 60_000);
     return () => clearInterval(t);
-  }, [bare, refresh, path]);
+  }, [bare, refresh, role, path]);
 
   async function logout() {
     await fetch("/api/auth", { method: "DELETE" }).catch(() => undefined);
@@ -45,6 +58,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
 
   if (bare) return <>{children}<Toaster /></>;
 
+  const navItems = role === "worker" ? NAV.filter((it) => it.href === "/admin/orders" || it.href === "/admin/parts") : role === "admin" ? NAV : [];
   const active = (href: string) => (href === "/admin" ? path === "/admin" : path === href || path.startsWith(href + "/"));
 
   const link = (it: Item, mobile: boolean) => {
@@ -80,16 +94,16 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
       <aside className="glass-bar relative z-30 hidden w-64 shrink-0 flex-col gap-1 border-e p-4 md:sticky md:top-0 md:flex md:h-screen">
         <div className="pb-5 pt-2">
           <span className="text-3xl font-semibold tracking-tight text-white">اليورو</span>
-          <p className="text-xs text-gold">لوحة الإدارة</p>
+          <p className="text-xs text-gold">{role === "worker" ? "لوحة الموظف" : "لوحة الإدارة"}</p>
         </div>
-        <nav className="flex flex-1 flex-col gap-1 overflow-y-auto" aria-label="أقسام الإدارة">{NAV.map((it) => link(it, false))}</nav>
+        <nav className="flex flex-1 flex-col gap-1 overflow-y-auto" aria-label="أقسام الإدارة">{navItems.map((it) => link(it, false))}</nav>
         <button type="button" onClick={logout} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-[#FF6961] hover:bg-[#FF453A]/10"><LogOut size={18} />تسجيل الخروج</button>
       </aside>
 
       <div className="relative z-10 min-w-0 flex-1">
         <header className="glass-bar sticky top-0 z-40 border-b">
           <div className="flex items-center justify-between gap-2 px-4 py-3 md:px-8">
-            <span className="text-xl font-semibold tracking-tight text-white md:invisible">اليورو <small className="text-xs text-gold">الإدارة</small></span>
+            <span className="text-xl font-semibold tracking-tight text-white md:invisible">اليورو <small className="text-xs text-gold">{role === "worker" ? "الموظف" : "الإدارة"}</small></span>
             <div className="ms-auto flex items-center gap-2">
               <button
                 type="button"
@@ -103,7 +117,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
               <button type="button" onClick={logout} className="btn2 md:hidden" aria-label="تسجيل الخروج"><LogOut size={16} /></button>
             </div>
           </div>
-          <nav className="flex gap-1 overflow-x-auto border-t border-white/10 px-2 md:hidden" aria-label="أقسام الإدارة">{NAV.map((it) => link(it, true))}</nav>
+          <nav className="flex gap-1 overflow-x-auto border-t border-white/10 px-2 md:hidden" aria-label="أقسام الإدارة">{navItems.map((it) => link(it, true))}</nav>
         </header>
         <main className="p-4 pb-16 md:p-8">{children}</main>
       </div>

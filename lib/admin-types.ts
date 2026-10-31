@@ -25,7 +25,6 @@ export type AdminOrder = {
   created_at: string;
   has_receipt?: boolean;
   receipt_signed_url?: string | null;
-  /** Both only exist once supabase/updates_2026_10.sql has been run. */
   tracking_number?: string | null;
   delivery_address?: DeliveryAddress | null;
 };
@@ -55,6 +54,8 @@ export type AccountInfo = {
 export type AdminAccount = AccountInfo & {
   specs: string[] | null;
   cashback_balance: number | null;
+  loyalty_season_spend: number | null;
+  loyalty_season_started_at: string | null;
   my_ref_code: string | null;
   referred_by_name: string | null;
   is_active: boolean;
@@ -116,7 +117,6 @@ export type AdminPart = {
   image_url: string | null;
   is_active: boolean;
   created_at: string;
-  /** Catalogue section; only present once supabase/updates_2026_10.sql has been run. */
   category?: string | null;
 };
 

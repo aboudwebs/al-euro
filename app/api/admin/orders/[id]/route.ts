@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/admin-guard";
+import { requireStaffAccess } from "@/lib/admin-guard";
 import { dbFail, fail, isUuid, ok, signStored } from "@/lib/admin-api";
 import { getSupabaseAdmin } from "@/lib/supabase";
 
@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 /** One order with its customer, signed receipt URL, ledger rows and commission (for the drawer and the invoice). */
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
-  const guard = await requireAdmin();
+  const guard = await requireStaffAccess("orders");
   if (!guard.ok) return guard.response;
   if (!isUuid(params.id)) return fail("معرّف الطلب غير صالح");
 

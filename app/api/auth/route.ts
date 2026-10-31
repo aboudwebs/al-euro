@@ -118,12 +118,15 @@ export async function POST(req: Request) {
     if (!["login", "register"].includes(mode) || !allowedRoles.includes(role)) {
       return json({ error: "نوع العملية أو الحساب غير صالح" }, 400);
     }
-    if (!phone || !password || String(password).length < 4) {
-      return json({ error: "يرجى إدخال رقم الموبايل وكلمة مرور من 4 أحرف على الأقل" }, 400);
+    if (!(role === "worker" ? body.identifier : phone) || !password || String(password).length < 4) {
+      return json({ error: role === "worker" ? "يرجى إدخال معرّف الموظف وكلمة المرور" : "يرجى إدخال رقم الموبايل وكلمة مرور من 4 أحرف على الأقل" }, 400);
     }
 
     const db = getSupabaseAdmin();
-    const cleanPhone = String(phone).trim();
+    const cleanPhone = String(role === "worker" ? body.identifier : phone).trim();
+    if (role === "worker" && !/^\\d{8,10}$/.test(cleanPhone)) {
+      return json({ error: "معرّف الموظف يجب أن يتكون من 8 إلى 10 أرقام" }, 400);
+    }
     const passHash = hashPassword(String(password));
     const { data: existingUser, error: findError } = await db
       .from("users")
@@ -135,7 +138,7 @@ export async function POST(req: Request) {
     if (findError) return serverError("lookup", findError, "خطأ في الاتصال بقاعدة البيانات");
 
     if (mode === "login") {
-      if (!existingUser) return json({ error: "لا يوجد حساب مسجل بهذا الرقم ونوع الحساب." }, 404);
+      if (!existingUser) return json({ error: role === "worker" ? "معرّف الموظف أو كلمة المرور غير صحيح" : "لا يوجد حساب مسجل بهذا الرقم ونوع الحساب." }, 404);
       if (!safeEqual(String(existingUser.password_hash ?? ""), passHash)) {
         return json({ error: "كلمة المرور غير صحيحة" }, 401);
       }

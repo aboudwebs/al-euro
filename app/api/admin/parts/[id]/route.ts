@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/admin-guard";
+import { requireStaffAccess } from "@/lib/admin-guard";
 import { dbFail, fail, ok, readJson } from "@/lib/admin-api";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { parsePart } from "@/lib/admin-parts";
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 const SAFE_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
-  const guard = await requireAdmin();
+  const guard = await requireStaffAccess("parts");
   if (!guard.ok) return guard.response;
   if (!SAFE_ID.test(params.id)) return fail("معرّف القطعة غير صالح");
 

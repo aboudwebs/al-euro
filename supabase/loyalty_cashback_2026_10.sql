@@ -63,6 +63,7 @@ declare
   v_tier text;
   v_cashback numeric(12,2);
   v_cashback_status text;
+  v_reversed_debt_cashback numeric(12,2) := 0;
 begin
   select * into o from public.orders where id = p_order_id for update;
   if not found then raise exception 'الطلب غير موجود'; end if;
@@ -198,6 +199,29 @@ begin
         insert into public.debt_ledger (workshop_id, order_id, tx_type, amount, balance_after, note)
         values (u.id, o.id, 'payment', v_total, v_bal,
                 'إلغاء الطلب رقم ' || coalesce(o.order_number::text, o.id::text));
+
+        -- A cancellation can clear the final outstanding debt just like a repayment.
+        if v_bal = 0 then
+          update public.marketer_commissions
+             set status = 'available'
+           where workshop_id = u.id and status = 'held';
+
+          with released as (
+            update public.cashback_ledger
+               set status = 'available', released_at = now()
+             where workshop_id = u.id and status = 'held'
+             returning cashback_amount
+          )
+          select coalesce(sum(cashback_amount), 0)::numeric(12,2)
+            into v_reversed_debt_cashback
+            from released;
+
+          if v_reversed_debt_cashback > 0 then
+            update public.users
+               set cashback_balance = coalesce(cashback_balance, 0) + v_reversed_debt_cashback
+             where id = u.id;
+          end if;
+        end if;
       end if;
     end if;
   end if;

@@ -18,7 +18,7 @@ export default function PrintOrder() {
   const c = data?.customer;
 
   return (
-    <div className="app-canvas min-h-screen p-4 md:p-8">
+    <div className="app-canvas min-h-screen min-w-0 p-2 sm:p-4 md:p-8">
       <div className="no-print mx-auto mb-4 flex max-w-3xl flex-wrap items-center justify-between gap-2">
         <Link href="/admin/orders" className="btn2"><ArrowRight size={16} />رجوع للطلبات</Link>
         <div className="flex flex-wrap items-center gap-2">
@@ -37,7 +37,7 @@ export default function PrintOrder() {
       {loading && !o && <div className="no-print"><Spinner /></div>}
 
       {o && (
-        <article className="invoice-sheet mx-auto max-w-3xl" dir="rtl">
+        <article className="invoice-sheet mx-auto w-full min-w-0 max-w-3xl" dir="rtl">
           <header style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, borderBottom: "2px solid #0f172a", paddingBottom: 14, marginBottom: 18 }}>
             <div>
               <div style={{ fontSize: 28, fontWeight: 800 }}>اليورو</div>

@@ -41,7 +41,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const guard = await requireAdmin();
+  const guard = await requireStaffAccess("parts");
   if (!guard.ok) return guard.response;
 
   const body = await readJson(req);

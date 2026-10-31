@@ -18,7 +18,7 @@ export default function AdminLogin() {
       const res = await fetch("/api/auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: "login", role, phone: phone.trim(), password }),
+        body: JSON.stringify({ mode: "login", role, ...(role === "worker" ? { identifier: phone.trim() } : { phone: phone.trim() }), password }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.ok) {
@@ -45,7 +45,7 @@ export default function AdminLogin() {
             <button type="button" onClick={() => setRole("worker")} className={`rounded-lg px-3 py-2 text-sm ${role === "worker" ? "bg-white/15 text-white" : "text-white/55"}`}>موظف</button>
           </div>
         </div>
-        <input className="inp" dir="ltr" inputMode="tel" autoComplete="username" placeholder="رقم الموبايل" value={phone} onChange={(e) => setPhone(e.target.value)} required />
+        <input className="inp" dir="ltr" inputMode="tel" autoComplete="username" inputMode={role === "worker" ? "numeric" : "tel"} maxLength={role === "worker" ? 10 : 20} placeholder={role === "worker" ? "معرّف الموظف (8–10 أرقام)" : "رقم الموبايل"} value={phone} onChange={(e) => setPhone(e.target.value)} required />
         <input className="inp" type="password" autoComplete="current-password" placeholder="كلمة المرور" value={password} onChange={(e) => setPassword(e.target.value)} required />
         {error && <p role="alert" className="rounded-2xl border border-[#FF453A]/40 bg-[#FF453A]/15 p-3 text-sm text-[#FF6961]">{error}</p>}
         <button type="submit" disabled={loading} className="btn w-full">{loading ? "جارٍ التحقق..." : "دخول"}</button>

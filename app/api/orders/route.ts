@@ -176,13 +176,17 @@ export async function POST(req: Request) {
       uploadedPath = stored.path;
     }
 
+    const receiptFile = form.get("receipt");
+    const receiptHash = receiptPath && receiptFile && typeof receiptFile !== "string"
+      ? createHash("sha256").update(Buffer.from(await receiptFile.arrayBuffer())).digest("hex")
+      : null;
     const requestHash = createHash("sha256").update(JSON.stringify({
       items: Object.keys(requested).sort().map((id) => [id, requested[id]]),
       pay: finalPayMethod,
       total,
       cashbackUsed,
       addressId: typeof addressId === "string" ? addressId.trim() : null,
-      receipt: receiptPath ? { size: (form.get("receipt") as Blob).size } : null,
+      receiptHash,
     })).digest("hex");
 
     const { data: result, error: createError } = await db.rpc("create_workshop_order", {

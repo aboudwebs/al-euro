@@ -1,6 +1,7 @@
 import { requireAdmin } from "@/lib/admin-guard";
 import { dbFail, fail, isUuid, ok, readJson } from "@/lib/admin-api";
 import { getSupabaseAdmin } from "@/lib/supabase";
+import { notifyUser } from "@/lib/push";
 import { SPECIAL_STATUS, SPECIAL_STATUSES, SPECIAL_TRANSITIONS, joinRequestNotes, splitRequestNotes, type SpecialStatus } from "@/lib/status";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +20,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (!body) return fail("بيانات غير صالحة");
 
   const db = getSupabaseAdmin();
-  const { data: current, error: readError } = await db.from("special_requests").select("id, status, notes, quoted_price").eq("id", params.id).maybeSingle();
+  const { data: current, error: readError } = await db.from("special_requests").select("id, user_id, part_name, status, notes, quoted_price").eq("id", params.id).maybeSingle();
   if (readError) return dbFail("request read", readError);
   if (!current) return fail("الطلب غير موجود", 404);
 
@@ -57,5 +58,15 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   const { data, error } = await db.from("special_requests").update(updates).eq("id", current.id).eq("status", current.status).select("id, status, quoted_price").maybeSingle();
   if (error) return dbFail("request update", error, "تعذر حفظ التعديلات");
   if (!data) return fail("تغيّرت حالة الطلب أثناء التعديل، أعد تحميل الصفحة", 409);
+  if (nextStatus && nextStatus !== current.status) {
+    await notifyUser({
+      userId: String(current.user_id),
+      type: "special_request_update",
+      title: "تحديث طلب القطعة الخاصة",
+      body: `تم تحديث حالة طلب «${current.part_name}»`,
+      eventKey: `special-request:${current.id}:status:${nextStatus}`,
+      data: { screen: "requests", requestId: String(current.id) },
+    });
+  }
   return ok({ request: data });
 }

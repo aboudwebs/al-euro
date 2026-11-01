@@ -22,7 +22,7 @@ export default function ReferralLanding({ code, signature }: Props) {
     return () => window.clearTimeout(timer);
   }, [appUrl, attempted, code]);
 
-  const apkUrl = process.env.NEXT_PUBLIC_ANDROID_APK_URL;
+  const apkUrl = process.env.NEXT_PUBLIC_ANDROID_APK_URL || "https://github.com/aboudwebs/Euro-car.syria/releases/download/mobile-latest/app-release.apk";
 
   return (
     <main dir="rtl" className="min-h-screen flex items-center justify-center px-5 py-12 text-white bg-[#071426]">

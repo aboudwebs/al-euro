@@ -51,7 +51,8 @@ export async function GET() {
         paid: Math.round(totals.paid * 100) / 100,
         total: Math.round((totals.available + totals.held + totals.requested + totals.paid) * 100) / 100,
       },
-      payoutRequest: payoutRequests?.[0] ?? null,\n      payoutRequests: payoutRequests ?? [],
+      payoutRequest: payoutRequests?.[0] ?? null,
+      payoutRequests: payoutRequests ?? [],
     });
   } catch (error) {
     console.error("[api/marketer/dashboard]", error);

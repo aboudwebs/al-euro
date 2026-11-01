@@ -13,7 +13,7 @@ export default function CurrencySettingsPage() {
   async function save(e: React.FormEvent) {
     e.preventDefault();
     if (busy) return;
-    const value = Number(rate);
+    const value = Number(rate || current || 0);
     if (!Number.isFinite(value) || value < 1 || value > 1_000_000_000) return toast("أدخل سعر صرف صحيحاً", "err");
     setBusy(true);
     const r = await api<CurrencyData>("/api/admin/currency", { method: "PUT", body: { usdToSyp: value } });
@@ -35,7 +35,7 @@ export default function CurrencySettingsPage() {
         <input id="usd-syp-rate" className="inp" type="number" min="1" max="1000000000" step="1" inputMode="numeric" dir="ltr" placeholder="مثال: 12000" value={rate || (current ? String(current) : "")} onChange={(e)=>setRate(e.target.value)} required/>
       </div>
       <p className="text-xs leading-6 text-white/50">السعر يدوي ويجب تحديثه من الإدارة عند تغيّره. لا يتم جلب سعر تلقائي من مصدر خارجي. السعر الحالي: {current ? current.toLocaleString("en-US") + " ل.س لكل 1 USD" : "غير منشور"}.</p>
-      <button type="submit" className="btn" disabled={busy || !rate.trim()}><Save size={16}/>{busy ? "جارٍ الحفظ..." : "حفظ سعر الصرف"}</button>
+      <button type="submit" className="btn" disabled={busy || !(rate.trim() || current)}><Save size={16}/>{busy ? "جارٍ الحفظ..." : "حفظ سعر الصرف"}</button>
     </form>
   </>;
 }

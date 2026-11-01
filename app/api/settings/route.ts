@@ -5,6 +5,7 @@ import { reply } from "@/lib/account-api";
 export const dynamic = "force-dynamic";
 
 const RATE_CACHE_TTL_MS = 5 * 60 * 1000;
+const OLD_TO_NEW_SYP = 100;
 
 type CachedRate = {
   rate: number;
@@ -15,9 +16,9 @@ type CachedRate = {
 let cachedRate: CachedRate | null = null;
 
 /**
- * Fetch the Syrian-market USD selling rate from SPToday.
- * The provider reports the Syrian pound unit explicitly; EURO currently displays
- * the legacy ("old") SYP unit, so any other unit is rejected.
+ * SPToday currently reports SYP in the old denomination (unit: "old").
+ * EURO exposes only the new Syrian pound: 100 old SYP = 1 new SYP.
+ * Convert at the server boundary so every client receives the new unit.
  */
 async function getSptodayRate(apiKey: string): Promise<CachedRate | null> {
   if (cachedRate && Date.now() - cachedRate.fetchedAt < RATE_CACHE_TTL_MS) {
@@ -67,26 +68,27 @@ async function getSptodayRate(apiKey: string): Promise<CachedRate | null> {
     updated_at?: unknown;
   } | undefined;
 
-  const rate = Number(usd?.cities?.damascus?.sell);
+  const oldRate = Number(usd?.cities?.damascus?.sell);
   const updatedAt = typeof usd?.updated_at === "string"
     ? usd.updated_at
     : typeof data.updated_at === "string"
       ? data.updated_at
       : "";
 
-  if (!Number.isFinite(rate) || rate <= 0 || rate >= 1_000_000_000 || !updatedAt || !Number.isFinite(Date.parse(updatedAt))) {
+  if (!Number.isFinite(oldRate) || oldRate <= 0 || oldRate >= 1_000_000_000 || !updatedAt || !Number.isFinite(Date.parse(updatedAt))) {
     console.error("[api/settings] SPToday USD selling rate is missing or invalid");
     return null;
   }
 
-  cachedRate = { rate, updatedAt, fetchedAt: Date.now() };
+  const newRate = oldRate / OLD_TO_NEW_SYP;
+  cachedRate = { rate: newRate, updatedAt, fetchedAt: Date.now() };
   return cachedRate;
 }
 
 /**
- * Public settings for signed-in customers. Prefer SPToday's USD selling rate.
- * If SPTODAY_API_KEY is not configured, retain the existing admin-published
- * Supabase rate as a backward-compatible fallback.
+ * Signed-in customers receive usdToSyp in NEW Syrian pounds only.
+ * Legacy admin-published values in Supabase are also stored in old SYP,
+ * so normalize those by the same 100:1 conversion.
  */
 export async function GET() {
   try {
@@ -99,7 +101,7 @@ export async function GET() {
         usdToSyp: live?.rate ?? null,
         rateUpdatedAt: live?.updatedAt ?? null,
         rateSource: "sptoday",
-        sypUnit: "old",
+        sypUnit: "new",
       });
     }
 
@@ -113,17 +115,18 @@ export async function GET() {
       if (error.code !== "42P01" && error.code !== "PGRST205") {
         console.error("[api/settings] select:", error);
       }
-      return reply({ usdToSyp: null });
+      return reply({ usdToSyp: null, sypUnit: "new" });
     }
 
-    const rate = Number(String(data?.value ?? "").replace(/,/g, "").trim());
+    const oldRate = Number(String(data?.value ?? "").replace(/,/g, "").trim());
+    const newRate = oldRate / OLD_TO_NEW_SYP;
     return reply({
-      usdToSyp: Number.isFinite(rate) && rate > 0 && rate < 1_000_000_000 ? rate : null,
+      usdToSyp: Number.isFinite(newRate) && newRate > 0 && newRate < 1_000_000_000 ? newRate : null,
       rateSource: "admin",
-      sypUnit: "old",
+      sypUnit: "new",
     });
   } catch (err) {
     console.error("[api/settings] GET:", err);
-    return reply({ usdToSyp: null });
+    return reply({ usdToSyp: null, sypUnit: "new" });
   }
 }

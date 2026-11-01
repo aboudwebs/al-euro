@@ -17,7 +17,9 @@ const NAV: Item[] = [
   { href: "/admin/requests", label: "طلبات خاصة (VIN)", Icon: PackageSearch, badge: (o) => o.new_requests },
   { href: "/admin/ledger", label: "دفتر الدين", Icon: BookOpen },
   { href: "/admin/parts", label: "قطع الغيار", Icon: Boxes },
-  { href: "/admin/commissions", label: "عمولات المسوّقين", Icon: Percent },\n  { href: "/admin/payouts", label: "طلبات سحب العمولات", Icon: WalletCards },\n  { href: "/admin/currency", label: "سعر صرف الليرة", Icon: DollarSign },
+  { href: "/admin/commissions", label: "عمولات المسوّقين", Icon: Percent },
+  { href: "/admin/payouts", label: "طلبات سحب العمولات", Icon: WalletCards },
+  { href: "/admin/currency", label: "سعر صرف الليرة", Icon: DollarSign },
   { href: "/admin/workers", label: "حسابات الموظفين", Icon: UserCog },
 ];
 

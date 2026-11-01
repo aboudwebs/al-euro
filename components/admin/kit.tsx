@@ -112,7 +112,7 @@ export function Badge({ tone = "mute", children }: { tone?: Tone; children: Reac
 
 export const ORDER_TONE: Record<string, Tone> = { pending: "warn", approved: "info", shipped: "info", delivered: "ok", cancelled: "err" };
 export const SPECIAL_TONE: Record<string, Tone> = { new: "warn", priced: "info", ordered: "info", completed: "ok", cancelled: "err" };
-export const COMMISSION_TONE: Record<string, Tone> = { held: "warn", available: "ok", paid: "mute" };
+export const COMMISSION_TONE: Record<string, Tone> = { held: "warn", available: "ok", payout_requested: "info", paid: "mute" };
 
 export function PageHead({ title, sub, children }: { title: string; sub?: string; children?: React.ReactNode }) {
   return (

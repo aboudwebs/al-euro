@@ -2,6 +2,7 @@ import { requireAdmin } from "@/lib/admin-guard";
 import { clampLimit, dbFail, fail, isUuid, ok, readJson } from "@/lib/admin-api";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { COMMISSION_STATUS } from "@/lib/status";
+import { notifyUser } from "@/lib/push";
 
 export const dynamic = "force-dynamic";
 
@@ -57,7 +58,23 @@ export async function POST(req: Request) {
   const ids = body?.ids;
   if (!Array.isArray(ids) || !ids.length || ids.length > 500 || !ids.every(isUuid)) return fail("لم يتم اختيار عمولات صالحة");
 
-  const { data, error } = await getSupabaseAdmin().rpc("admin_mark_commissions_paid", { p_ids: ids });
+  const db = getSupabaseAdmin();
+  const { data: before, error: beforeError } = await db.from("marketer_commissions")
+    .select("id,marketer_id,status").in("id", ids);
+  if (beforeError) return dbFail("commission notification lookup", beforeError, "تعذر قراءة العمولات");
+  const { data, error } = await db.rpc("admin_mark_commissions_paid", { p_ids: ids });
   if (error) return dbFail("commissions pay", error, "تعذر تحديث العمولات");
+  for (const commission of before ?? []) {
+    if (commission.status !== "paid") {
+      await notifyUser({
+        userId: String(commission.marketer_id),
+        type: "commission_update",
+        title: "تحديث العمولة",
+        body: "تم تحديث حالة عمولتك",
+        eventKey: `commission:${commission.id}:paid`,
+        data: { screen: "dashboard", commissionId: String(commission.id) },
+      });
+    }
+  }
   return ok({ result: data });
 }

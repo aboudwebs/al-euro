@@ -1,6 +1,7 @@
 import { requireAdmin } from "@/lib/admin-guard";
 import { clampLimit, cleanSearch, dbFail, fail, isUuid, ok, readJson } from "@/lib/admin-api";
 import { getSupabaseAdmin } from "@/lib/supabase";
+import { notifyUser } from "@/lib/push";
 
 export const dynamic = "force-dynamic";
 
@@ -58,12 +59,34 @@ export async function POST(req: Request) {
   if (!Number.isFinite(amount) || amount <= 0 || amount > 1_000_000_000) return fail("مبلغ التسديد غير صالح");
   const note = typeof body.note === "string" ? body.note.trim().slice(0, 300) : "";
 
-  const { data, error } = await getSupabaseAdmin().rpc("admin_record_debt_payment", {
+  const db = getSupabaseAdmin();
+  const { data: heldBefore, error: heldError } = await db.from("marketer_commissions")
+    .select("id,marketer_id").eq("workshop_id", body.workshop_id).eq("status", "held");
+  if (heldError) return dbFail("held commission lookup", heldError, "تعذر قراءة العمولات المعلقة");
+  const { data, error } = await db.rpc("admin_record_debt_payment", {
     p_workshop_id: body.workshop_id,
     p_amount: amount,
     p_note: note || null,
     p_idempotency_key: idempotencyKey,
   });
   if (error) return dbFail("record payment", error, "تعذر تسجيل التسديد");
+  await notifyUser({
+    userId: String(body.workshop_id),
+    type: "debt_payment",
+    title: "دفتر الديون",
+    body: "تم تسجيل حركة جديدة في حسابك",
+    eventKey: `debt:repayment:${idempotencyKey}`,
+    data: { screen: "dashboard" },
+  });
+  for (const commission of heldBefore ?? []) {
+    await notifyUser({
+      userId: String(commission.marketer_id),
+      type: "commission_update",
+      title: "تحديث العمولة",
+      body: "أصبحت عمولتك متاحة بعد تسديد الورشة لمستحقاتها",
+      eventKey: `commission:${commission.id}:available`,
+      data: { screen: "dashboard", commissionId: String(commission.id) },
+    });
+  }
   return ok({ result: data });
 }

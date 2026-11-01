@@ -22,7 +22,14 @@ export async function GET() {
       return reply({ error: "تعذر تحميل بيانات لوحة الورشة" }, 500);
     }
     if (!user) return reply({ error: "حساب الورشة غير موجود" }, 404);
-    return reply({ user, orders: orders ?? [], ledger: ledger ?? [] });
+    const userView = { ...user };
+    const seasonStart = user.loyalty_season_started_at ? new Date(user.loyalty_season_started_at).getTime() : 0;
+    if (!seasonStart || Date.now() >= seasonStart + 90 * 24 * 60 * 60 * 1000) {
+      userView.tier = "Bronze";
+      userView.loyalty_season_spend = 0;
+      userView.loyalty_season_started_at = null;
+    }
+    return reply({ user: userView, orders: orders ?? [], ledger: ledger ?? [] });
   } catch (error) {
     console.error("[api/workshop/dashboard]", error);
     return reply({ error: "حدث خطأ غير متوقع" }, 500);

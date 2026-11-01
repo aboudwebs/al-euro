@@ -22,6 +22,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   const updates: Record<string, unknown> = {};
   const rejecting = body.reject === true;
+  if (rejecting && "is_active" in body) return fail("لا يمكن رفض الطلب وتغيير حالة التفعيل في العملية نفسها");
   if (rejecting) {
     if (target.role !== "workshop" || target.is_active) return fail("يمكن رفض طلب ورشة بانتظار التفعيل فقط");
     if (target.rejected_at) return fail("تم رفض طلب هذه الورشة مسبقاً");

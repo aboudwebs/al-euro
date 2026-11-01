@@ -17,7 +17,7 @@ export const ORDER_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   cancelled: [],
 };
 
-export const PAY_METHOD = { sham: "sham", cod: "cod", debt: "debt" } as const;
+export const PAY_METHOD = { sham: "sham", cod: "cod", debt: "debt", cashback: "cashback" } as const;
 export type PayMethod = (typeof PAY_METHOD)[keyof typeof PAY_METHOD];
 
 export const SPECIAL_STATUS = {
@@ -69,6 +69,7 @@ export const PAY_METHOD_LABEL: Record<PayMethod, string> = {
   sham: "شام كاش",
   cod: "كاش عند الاستلام",
   debt: "دفتر الدين",
+  cashback: "الكاش باك",
 };
 
 export const SPECIAL_STATUS_LABEL: Record<SpecialStatus, string> = {

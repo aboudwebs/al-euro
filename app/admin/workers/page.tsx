@@ -10,7 +10,9 @@ export default function WorkersPage() {
   const { data, error, loading, reload } = useApi<{ workers: Worker[] }>("/api/admin/workers");
   const [name, setName] = useState("");
     const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);\n  const [deleteTarget, setDeleteTarget] = useState<Worker | null>(null);\n  const [deleting, setDeleting] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Worker | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const workers = data?.workers ?? [];
 
   async function createWorker(e: React.FormEvent) {

@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from "@/lib/supabase";
 import { getSession } from "@/lib/session";
 import { PAY_METHOD } from "@/lib/status";
 import { removeImage, storeImage } from "@/lib/uploads";
+import { getStableInvoiceRate } from "@/lib/syr-rates";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +56,12 @@ export async function POST(req: Request) {
     const cashbackUsed = cashbackRaw == null || cashbackRaw === "" ? 0 : Number(cashbackRaw);
     if (!Number.isFinite(cashbackUsed) || cashbackUsed < 0 || cashbackUsed > 1_000_000_000) {
       return reply({ error: "قيمة الكاش باك غير صالحة" }, 400);
+    }
+
+    const invoiceCurrencyRaw = form.get("invoiceCurrency");
+    const invoiceCurrency = invoiceCurrencyRaw == null ? "USD" : String(invoiceCurrencyRaw);
+    if (invoiceCurrency !== "USD" && invoiceCurrency !== "SYP") {
+      return reply({ error: "عملة الفاتورة غير صالحة" }, 400);
     }
 
     const pay = form.get("pay");
@@ -110,6 +117,7 @@ export async function POST(req: Request) {
     const requestHash = createHash("sha256").update(JSON.stringify({
       items: Object.keys(requested).sort().map((id) => [id, requested[id]]),
       pay,
+      invoiceCurrency,
       cashbackUsed,
       addressId: typeof addressId === "string" ? addressId.trim() : null,
       receiptHash,
@@ -117,7 +125,7 @@ export async function POST(req: Request) {
 
     const { data: previousOrder, error: previousOrderError } = await db
       .from("orders")
-      .select("id, order_number, pay_method, total_amount, cashback_used, amount_due, request_hash")
+      .select("id, order_number, pay_method, total_amount, cashback_used, amount_due, request_hash, invoice_currency, invoice_exchange_rate, invoice_total_syp, invoice_cashback_used_syp, invoice_amount_due_syp")
       .eq("user_id", user.id)
       .eq("idempotency_key", idempotencyKey)
       .maybeSingle();
@@ -137,6 +145,11 @@ export async function POST(req: Request) {
         total: previousOrder.total_amount,
         cashbackUsed: previousOrder.cashback_used,
         amountDue: previousOrder.amount_due,
+        invoiceCurrency: previousOrder.invoice_currency ?? "USD",
+        invoiceExchangeRate: previousOrder.invoice_exchange_rate,
+        invoiceTotalSyp: previousOrder.invoice_total_syp,
+        invoiceCashbackUsedSyp: previousOrder.invoice_cashback_used_syp,
+        invoiceAmountDueSyp: previousOrder.invoice_amount_due_syp,
         duplicate: true,
       });
     }
@@ -179,6 +192,24 @@ export async function POST(req: Request) {
       return reply({ error: "الدفع بالكاش باك يتطلب تغطية كامل قيمة الطلب" }, 400);
     }
     const finalPayMethod = amountDue === 0 ? PAY_METHOD.cashback : pay;
+
+    let invoiceExchangeRate: number | null = null;
+    let invoiceTotalSyp: number | null = null;
+    let invoiceCashbackUsedSyp: number | null = null;
+    let invoiceAmountDueSyp: number | null = null;
+    if (invoiceCurrency === "SYP") {
+      const rate = await getStableInvoiceRate(true);
+      if (!rate?.stable) {
+        return reply({
+          code: "SYP_INVOICE_UNAVAILABLE",
+          error: "سعر الصرف متقلب أو لم يعد حديثاً. يجب تحويل عملة الفاتورة إلى الدولار قبل تأكيد الطلب.",
+        }, 409);
+      }
+      invoiceExchangeRate = rate.rate;
+      invoiceTotalSyp = Math.round(total * rate.rate);
+      invoiceCashbackUsedSyp = Math.round(cashbackUsed * rate.rate);
+      invoiceAmountDueSyp = Math.round(amountDue * rate.rate);
+    }
 
     if (pay === PAY_METHOD.debt) {
       if (user.role !== "workshop") {
@@ -235,6 +266,11 @@ export async function POST(req: Request) {
       p_cashback_used: cashbackUsed,
       p_idempotency_key: idempotencyKey,
       p_request_hash: requestHash,
+      p_invoice_currency: invoiceCurrency,
+      p_invoice_exchange_rate: invoiceExchangeRate,
+      p_invoice_total_syp: invoiceTotalSyp,
+      p_invoice_cashback_used_syp: invoiceCashbackUsedSyp,
+      p_invoice_amount_due_syp: invoiceAmountDueSyp,
     });
 
     if (createError || !result) {
@@ -260,6 +296,11 @@ export async function POST(req: Request) {
       total: result.total,
       cashbackUsed: result.cashbackUsed,
       amountDue: result.amountDue,
+      invoiceCurrency: result.invoiceCurrency ?? invoiceCurrency,
+      invoiceExchangeRate: result.invoiceExchangeRate ?? invoiceExchangeRate,
+      invoiceTotalSyp: result.invoiceTotalSyp ?? invoiceTotalSyp,
+      invoiceCashbackUsedSyp: result.invoiceCashbackUsedSyp ?? invoiceCashbackUsedSyp,
+      invoiceAmountDueSyp: result.invoiceAmountDueSyp ?? invoiceAmountDueSyp,
       duplicate: result.created === false,
     });
   } catch (err) {

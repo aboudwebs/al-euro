@@ -22,7 +22,7 @@ function reply(body: unknown, status = 200) {
 /**
  * Body: multipart/form-data with
  *   items   JSON string  { "<partId>": quantity }
- *   pay     "sham" | "cod" | "debt"
+ *   pay     "sham" | "cod" | "debt" | "cashback" (cashback only when it covers the full order)
  *   receipt image file (required for "sham")
  *   addressId optional id of one of the customer's saved addresses (public.user_addresses); a copy of it is stored
  *             with the order so a later edit or deletion of the address does not change old orders

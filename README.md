@@ -42,6 +42,7 @@ The server-side push delivery branch uses these Render environment variables (al
 Apply the two SQL migrations in `supabase/migrations/` in timestamp order before deploying:
 - `20261101130000_add_push_tokens.sql`
 - `20261101130100_add_user_notifications_and_fcm.sql`
+- `20261101130200_add_workshop_rejection_state.sql`
 
 The app registers device tokens at sign-in, refreshes them when FCM rotates them, unregisters them on sign-out, shows foreground notifications, and routes notification taps to the relevant app section. Server events persist each notification once before attempting FCM delivery.
 

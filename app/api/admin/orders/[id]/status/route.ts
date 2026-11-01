@@ -116,6 +116,31 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       }
     }
 
+    if (order.user_role === "workshop") {
+      const { data: workshopReferral, error: referralError } = await db.from("users")
+        .select("referred_by_code").eq("id", order.user_id).maybeSingle();
+      if (referralError) {
+        console.error("[api/admin/orders/status] referral lookup:", referralError);
+      } else if (workshopReferral?.referred_by_code) {
+        const { data: marketer, error: marketerError } = await db.from("users")
+          .select("id").eq("role", "marketer")
+          .eq("my_ref_code", workshopReferral.referred_by_code).maybeSingle();
+        if (marketerError) {
+          console.error("[api/admin/orders/status] marketer lookup:", marketerError);
+        } else if (marketer) {
+          await notifyUser({
+            userId: String(marketer.id),
+            type: "referral_order_update",
+            title: "تحديث طلب إحالة",
+            body: "يوجد تحديث على طلب مرتبط بإحالتك",
+            orderId: String(order.id),
+            eventKey: `referral-order:${order.id}:status:${status}`,
+            data: { screen: "dashboard", orderId: String(order.id) },
+          });
+        }
+      }
+    }
+
     if (status === "delivered") {
       const { data: commission, error: commissionError } = await db.from("marketer_commissions")
         .select("id,marketer_id,commission_amount")

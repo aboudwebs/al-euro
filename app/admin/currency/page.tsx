@@ -8,10 +8,10 @@ type CurrencyData = {
   sourceUpdatedAt?: string | null;
   rateSource?: string;
   sypUnit?: "new";
-  rateStatus?: "fresh" | "stale" | "unavailable";
+  rateStatus?: "stable" | "unstable" | "unavailable";
   providerStatus?: "fresh" | "cached";
   rateAgeSeconds?: number;
-  canUseSypPayments?: boolean;
+  canUseSypInvoices?: boolean;
   rateError?: string;
 };
 
@@ -21,11 +21,11 @@ export default function CurrencySettingsPage() {
   const updated = data?.rateUpdatedAt
     ? new Date(data.rateUpdatedAt).toLocaleString("ar-SY")
     : "غير متوفر";
-  const statusLabel = data?.rateStatus === "fresh"
-    ? "السعر حديث"
-    : data?.rateStatus === "stale"
-      ? "السعر مخزّن أو قديم — لا يُعتمد للدفع بالليرة"
-      : "تعذر جلب السعر";
+  const statusLabel = data?.rateStatus === "stable"
+    ? "السعر مستقر — يمكن إصدار الفواتير بالليرة"
+    : data?.rateStatus === "unstable"
+      ? "السعر متقلب أو بياناته قديمة — الفواتير بالدولار فقط"
+      : "تعذر التحقق من السعر — الفواتير بالدولار فقط";
 
   return <>
     <PageHead title="سعر صرف الليرة السورية" sub="يُجلب سعر بيع الدولار مباشرة من SYR Rates API. الأسعار والطلبات الأساسية تبقى بالدولار.">
@@ -44,10 +44,10 @@ export default function CurrencySettingsPage() {
       <div className="space-y-2 text-sm">
         <p className="text-white/75">المصدر: SYR Rates API (@api365)</p>
         <p className="text-white/55">آخر قبول للسعر: {updated}</p>
-        <p className={data.canUseSypPayments ? "text-emerald-400" : "text-amber-400"}>{statusLabel}</p>
+        <p className={data.canUseSypInvoices ? "text-emerald-400" : "text-amber-400"}>{statusLabel}</p>
         {typeof data.rateAgeSeconds === "number" && <p className="text-white/45">عمر السعر: {Math.floor(data.rateAgeSeconds / 60)} دقيقة</p>}
       </div>
-      {!data.usdToSyp && <p className="text-sm text-amber-400">تحقق من ضبط SYR_API_KEY في متغيرات بيئة خادم Render.</p>}
+      {!data.usdToSyp && <p className="text-sm text-amber-400">تحقق من ضبط SYR_RATES_API_KEY في متغيرات بيئة خادم Render.</p>}
     </section>}
   </>;
 }

@@ -66,6 +66,7 @@ export type AdminAccount = AccountInfo & {
   my_ref_code: string | null;
   referred_by_name: string | null;
   is_active: boolean;
+  rejected_at?: string | null;
   created_at: string;
 };
 

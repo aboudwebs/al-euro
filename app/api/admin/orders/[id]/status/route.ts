@@ -17,6 +17,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
    .select("id,user_id,order_number,user_role,pay_method")
    .eq("id", params.id).maybeSingle();
  if (orderReadError) return dbFail("order notification lookup", orderReadError, "تعذر قراءة الطلب");
+ const { data: loyaltyBefore } = order && status === "delivered" && order.user_role === "workshop"
+   ? await db.from("users").select("tier,cashback_balance").eq("id", order.user_id).maybeSingle()
+   : { data: null };
  const {data,error}=await db.rpc("admin_set_order_status_for_staff",{p_order_id:params.id,p_new_status:status,p_note:note||null,p_actor_id:guard.admin.id});
  if(error)return dbFail("order status rpc",error,"تعذر تحديث حالة الطلب");
  if (order) {
@@ -44,12 +47,22 @@ export async function POST(req: Request, { params }: { params: { id: string } })
      });
    }
    if (status === "delivered" && order.user_role === "workshop") {
-     const { data: workshop } = await db.from("users").select("tier").eq("id", order.user_id).maybeSingle();
-     if (workshop?.tier) {
+     const { data: workshopAfter } = await db.from("users")
+       .select("tier,cashback_balance").eq("id", order.user_id).maybeSingle();
+     if (workshopAfter?.tier && workshopAfter.tier !== loyaltyBefore?.tier) {
        await notifyUser({
-         userId: String(order.user_id), type: "loyalty_update", title: "نقاط الولاء",
-         body: "تم تحديث رصيد الولاء الخاص بك",
-         orderId: String(order.id), eventKey: `loyalty:order:${order.id}:delivered`,
+         userId: String(order.user_id), type: "discount_upgrade", title: "ترقية فئة الخصم",
+         body: `تمت ترقيتك إلى فئة ${workshopAfter.tier}`,
+         orderId: String(order.id), eventKey: `loyalty:order:${order.id}:tier:${workshopAfter.tier}`,
+         data: { screen: "dashboard", orderId: String(order.id) },
+       });
+     }
+     const cashbackAdded = Number(workshopAfter?.cashback_balance ?? 0) - Number(loyaltyBefore?.cashback_balance ?? 0);
+     if (cashbackAdded > 0) {
+       await notifyUser({
+         userId: String(order.user_id), type: "loyalty_reward", title: "مكافأة الولاء",
+         body: `تمت إضافة مكافأة بقيمة ${cashbackAdded.toFixed(2)}$ إلى رصيدك`,
+         orderId: String(order.id), eventKey: `loyalty:order:${order.id}:cashback`,
          data: { screen: "dashboard", orderId: String(order.id) },
        });
      }

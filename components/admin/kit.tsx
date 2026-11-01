@@ -7,13 +7,13 @@ import { AlertTriangle, ExternalLink, Loader2, RotateCcw, X, ZoomIn, ZoomOut } f
 
 export type ApiResult<T> = { ok: boolean; status: number; data: T | null; error: string };
 
-export async function api<T = Record<string, unknown>>(url: string, init?: { method?: string; body?: unknown }): Promise<ApiResult<T>> {
+export async function api<T = Record<string, unknown>>(url: string, init?: { method?: string; body?: unknown; headers?: Record<string, string> }): Promise<ApiResult<T>> {
   try {
     const res = await fetch(url, {
       method: init?.method ?? "GET",
       cache: "no-store",
       credentials: "same-origin",
-      headers: init?.body !== undefined ? { "Content-Type": "application/json" } : undefined,
+      headers: { ...(init?.body !== undefined ? { "Content-Type": "application/json" } : {}), ...(init?.headers ?? {}) },
       body: init?.body !== undefined ? JSON.stringify(init.body) : undefined,
     });
     if (res.status === 401) {

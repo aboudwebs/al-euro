@@ -1,0 +1,40 @@
+name: Verify Firebase push server
+
+on:
+  push:
+    branches:
+      - feature/firebase-push-delivery
+    paths:
+      - "app/api/**"
+      - "lib/**"
+      - "package.json"
+      - "tsconfig.json"
+      - ".github/workflows/verify-push-server.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "app/api/**"
+      - "lib/**"
+      - "package.json"
+      - "tsconfig.json"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - name: Install dependencies
+        run: npm install --no-package-lock
+      - name: Type-check
+        run: npx tsc --noEmit
+      - name: Build Next.js
+        run: npm run build

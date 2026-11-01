@@ -19,9 +19,12 @@ function firebaseMessaging() {
   const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
   if (!projectId || !clientEmail || !privateKey) return null;
 
-  const app = getApps().length
-    ? getApps()[0]
-    : initializeApp({ credential: cert({ projectId, clientEmail, privateKey }), projectId });
+  const appName = "euro-cars-push";
+  const app = getApps().find((candidate) => candidate.name === appName)
+    ?? initializeApp(
+      { credential: cert({ projectId, clientEmail, privateKey }), projectId },
+      appName,
+    );
   return getMessaging(app);
 }
 
@@ -88,6 +91,12 @@ export async function notifyUser(input: NotificationInput): Promise<void> {
     for (let offset = 0; offset < tokens.length; offset += 500) {
       const batch = tokens.slice(offset, offset + 500);
       const result = await messaging.sendEachForMulticast({ ...payload, tokens: batch });
+      console.info("[push] FCM batch result:", {
+        userId: input.userId,
+        attempted: batch.length,
+        succeeded: result.successCount,
+        failed: result.failureCount,
+      });
       const invalid: string[] = [];
       result.responses.forEach((response, index) => {
         if (!response.success) {

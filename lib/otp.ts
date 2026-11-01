@@ -28,6 +28,14 @@ export function codeMatches(storedHash: string, purpose: OtpPurpose, userId: str
   return safeEqual(storedHash, hashCode(purpose, userId, target, code));
 }
 
+/** Convert Syrian local mobile numbers to Green API's international WhatsApp chat ID format. */
+export function whatsappChatId(phone: string): string {
+  let digits = String(phone).replace(/\D/g, "");
+  if (digits.startsWith("00")) digits = digits.slice(2);
+  if (/^0?9\d{8}$/.test(digits)) digits = `963${digits.replace(/^0/, "")}`;
+  return `${digits}@c.us`;
+}
+
 export function whatsappConfigured(): boolean {
   return Boolean(process.env.GREEN_API_URL && process.env.GREEN_API_INSTANCE_ID && process.env.GREEN_API_TOKEN);
 }
@@ -42,10 +50,10 @@ export async function sendWhatsAppText(phone: string, message: string): Promise<
     return false;
   }
   try {
-    const res = await fetch(`${apiUrl}/waInstance${instanceId}/sendMessage/${token}`, {
+    const res = await fetch(`${apiUrl.replace(/\/+$/, "")}/waInstance${instanceId}/sendMessage/${token}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chatId: `${phone}@c.us`, message }),
+      body: JSON.stringify({ chatId: whatsappChatId(phone), message }),
     });
     const data = await res.json().catch(() => null);
     return res.ok && Boolean(data?.idMessage);

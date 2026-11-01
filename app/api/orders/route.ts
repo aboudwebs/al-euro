@@ -97,6 +97,47 @@ export async function POST(req: Request) {
       return reply({ error: "حسابات الإدارة لا تنشئ طلبات شراء" }, 403);
     }
 
+    // Resolve a retry before checking today's stock or prices: the original order
+    // may already have been approved while the client's response was lost.
+    const addressId = form.get("addressId");
+    const receiptFileForHash = form.get("receipt");
+    const receiptHash = receiptFileForHash && typeof receiptFileForHash !== "string"
+      ? createHash("sha256").update(Buffer.from(await receiptFileForHash.arrayBuffer())).digest("hex")
+      : null;
+    const requestHash = createHash("sha256").update(JSON.stringify({
+      items: Object.keys(requested).sort().map((id) => [id, requested[id]]),
+      pay,
+      cashbackUsed,
+      addressId: typeof addressId === "string" ? addressId.trim() : null,
+      receiptHash,
+    })).digest("hex");
+
+    const { data: previousOrder, error: previousOrderError } = await db
+      .from("orders")
+      .select("id, order_number, pay_method, total_amount, cashback_used, amount_due, request_hash")
+      .eq("user_id", user.id)
+      .eq("idempotency_key", idempotencyKey)
+      .maybeSingle();
+    if (previousOrderError) {
+      console.error("[api/orders] idempotency lookup:", previousOrderError);
+      return reply({ error: "تعذر التحقق من محاولة الطلب السابقة" }, 500);
+    }
+    if (previousOrder) {
+      if (previousOrder.request_hash !== requestHash) {
+        return reply({ error: "مفتاح التأكيد مرتبط بطلب مختلف. حدّث السلة قبل المحاولة مجدداً" }, 409);
+      }
+      return reply({
+        ok: true,
+        orderId: previousOrder.id,
+        orderNumber: previousOrder.order_number,
+        pay: previousOrder.pay_method,
+        total: previousOrder.total_amount,
+        cashbackUsed: previousOrder.cashback_used,
+        amountDue: previousOrder.amount_due,
+        duplicate: true,
+      });
+    }
+
     const { data: rows, error: partsError } = await db
       .from("parts")
       .select("id, name, brand, oem_number, price, stock")
@@ -147,7 +188,6 @@ export async function POST(req: Request) {
 
     // Optional delivery address: it must belong to the signed-in customer.
     let deliveryAddress: Record<string, string | null> | null = null;
-    const addressId = form.get("addressId");
     if (typeof addressId === "string" && addressId.trim()) {
       if (!UUID_RE.test(addressId.trim())) return reply({ error: "عنوان التسليم غير صالح" }, 400);
       const { data: address, error: addressError } = await db
@@ -175,19 +215,6 @@ export async function POST(req: Request) {
       receiptPath = stored.path;
       uploadedPath = stored.path;
     }
-
-    const receiptFile = form.get("receipt");
-    const receiptHash = receiptPath && receiptFile && typeof receiptFile !== "string"
-      ? createHash("sha256").update(Buffer.from(await receiptFile.arrayBuffer())).digest("hex")
-      : null;
-    const requestHash = createHash("sha256").update(JSON.stringify({
-      items: Object.keys(requested).sort().map((id) => [id, requested[id]]),
-      pay: finalPayMethod,
-      total,
-      cashbackUsed,
-      addressId: typeof addressId === "string" ? addressId.trim() : null,
-      receiptHash,
-    })).digest("hex");
 
     const { data: result, error: createError } = await db.rpc("create_workshop_order", {
       p_user_id: user.id,

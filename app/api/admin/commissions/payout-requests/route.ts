@@ -25,10 +25,14 @@ export async function POST(req: Request) {
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
   const body = await readJson(req);
-  if (!isUuid(body?.id) || !["paid", "rejected"].includes(body?.action)) return fail("طلب التحويل أو الإجراء غير صالح");
+  const requestId = body?.id;
+  const action = body?.action;
+  if (!isUuid(requestId) || typeof action !== "string" || !["paid", "rejected"].includes(action)) {
+    return fail("طلب التحويل أو الإجراء غير صالح");
+  }
   const note = typeof body?.note === "string" ? body.note.trim().slice(0, 500) : null;
   const { data, error } = await getSupabaseAdmin().rpc("admin_process_marketer_payout", {
-    p_request_id: body.id, p_action: body.action, p_admin_note: note,
+    p_request_id: requestId, p_action: action, p_admin_note: note,
   });
   if (error) return dbFail("process payout request", error, "تعذر معالجة طلب التحويل");
   return ok({ result: data });

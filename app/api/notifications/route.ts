@@ -17,7 +17,7 @@ export async function GET() {
   return NextResponse.json({ notifications: data ?? [] }, { headers: { "Cache-Control": "no-store" } });
 }
 
-export async function PATCH() {
+export async function POST() {
   const session = getSession();
   if (!session) return NextResponse.json({ error: "يرجى تسجيل الدخول" }, { status: 401 });
   const { error } = await getSupabaseAdmin().from("user_notifications")

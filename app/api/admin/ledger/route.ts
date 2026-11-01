@@ -52,6 +52,8 @@ export async function POST(req: Request) {
 
   const body = await readJson(req);
   if (!body || !isUuid(body.workshop_id)) return fail("الورشة غير صالحة");
+  const idempotencyKey = req.headers.get("idempotency-key")?.trim() ?? "";
+  if (!isUuid(idempotencyKey)) return fail("مفتاح التأكيد غير صالح");
   const amount = Number(body.amount);
   if (!Number.isFinite(amount) || amount <= 0 || amount > 1_000_000_000) return fail("مبلغ التسديد غير صالح");
   const note = typeof body.note === "string" ? body.note.trim().slice(0, 300) : "";
@@ -60,6 +62,7 @@ export async function POST(req: Request) {
     p_workshop_id: body.workshop_id,
     p_amount: amount,
     p_note: note || null,
+    p_idempotency_key: idempotencyKey,
   });
   if (error) return dbFail("record payment", error, "تعذر تسجيل التسديد");
   return ok({ result: data });

@@ -20,6 +20,7 @@ export async function GET() {
       usdToSyp: live.rate,
       rateUpdatedAt: live.acceptedAt ? new Date(live.acceptedAt * 1000).toISOString() : null,
       sourceUpdatedAt: new Date(live.sourceUpdatedAt * 1000).toISOString(),
+      sourceAgeSeconds: Math.max(0, Math.floor(Date.now() / 1000) - live.sourceUpdatedAt),
       rateSource: "syr-rates", sypUnit: "new", rateDenomination: live.denomination,
       rateStatus: live.stable ? "stable" : "unstable",
       providerStatus: live.providerStatus,

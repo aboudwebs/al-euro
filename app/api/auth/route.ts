@@ -256,6 +256,21 @@ export async function POST(req: Request) {
       return serverError("register", insertError, "تعذر إنشاء الحساب");
     }
 
+    if (validatedReferralCode) {
+      const { data: referrer } = await db.from("users").select("id")
+        .eq("role", "marketer").eq("my_ref_code", validatedReferralCode).maybeSingle();
+      if (referrer) {
+        await notifyUser({
+          userId: String(referrer.id),
+          type: "referral_new",
+          title: "إحالة جديدة",
+          body: "انضم مستخدم جديد عبر رابطك",
+          eventKey: `referral:user:${newUser.id}`,
+          data: { screen: "dashboard", referralUserId: String(newUser.id) },
+        });
+      }
+    }
+
     if (role === "workshop") {
       return json({
         ok: true,

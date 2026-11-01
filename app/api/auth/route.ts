@@ -41,7 +41,7 @@ async function sendWhatsAppOtp(phone: string, code: string) {
     return false;
   }
 
-  const url = `${apiUrl.replace(/\\/+$/, "")}/waInstance${instanceId}/sendMessage/${token}`;
+  const url = `${apiUrl.replace(/\/+$/, "")}/waInstance${instanceId}/sendMessage/${token}`;
   const chatId = whatsappChatId(phone);
   const message = `رمز التحقق الخاص بك في تطبيق EURO CARS هو: *${code}*.\nصالح لمدة 5 دقائق.`;
 

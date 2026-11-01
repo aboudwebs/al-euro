@@ -21,7 +21,7 @@ export async function GET(req: Request) {
 
   const { data: all, error: totalsError } = await db.from("marketer_commissions").select("status, commission_amount").limit(100000);
   if (totalsError) return dbFail("commission totals", totalsError, "تعذر حساب الإجماليات");
-  const totals = { held: 0, available: 0, paid: 0 };
+  const totals = { held: 0, available: 0, payout_requested: 0, paid: 0 };
   for (const row of all ?? []) if (row.status in totals) totals[row.status as keyof typeof totals] += Number(row.commission_amount) || 0;
 
   const userIds = Array.from(new Set((data ?? []).flatMap((c) => [c.marketer_id, c.workshop_id]).filter(Boolean)));

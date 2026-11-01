@@ -87,7 +87,7 @@ export default function WorkersPage() {
             </div>
             <div className="flex flex-col gap-2"><Link href={"/admin/workers/" + worker.id} className="btn2">عرض التفاصيل</Link><button type="button" className={worker.is_active ? "btn2 !text-[#FF6961]" : "btn"} onClick={() => toggle(worker)}>
               {worker.is_active ? <><Pause size={15} />إيقاف</> : <><Check size={15} />تفعيل</>}
-            </button>{!worker.is_active && <button type="button" className="btn2 !border-[#FF453A]/40 !text-[#FF6961]" onClick={() => setDeleteTarget(worker)}><Trash2 size={15}/>حذف الحساب</button>}</div>
+            </button><div className="flex flex-wrap gap-2">{!worker.is_active && <button type="button" className="btn2 !border-[#FF453A]/40 !text-[#FF6961]" onClick={() => setDeleteTarget(worker)}><Trash2 size={15}/>حذف الحساب</button>}</div></div>
           </article>
         ))}
       </div>

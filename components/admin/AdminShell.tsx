@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
-import { BookOpen, Banknote, Boxes, LayoutDashboard, LogOut, Moon, PackageSearch, Percent, ShoppingBag, Sun, Users, UserCog, type LucideIcon } from "lucide-react";
+import { BookOpen, Banknote, Boxes, LayoutDashboard, LogOut, Moon, PackageSearch, Percent, ShoppingBag, Sun, Users, UserCog, DollarSign, WalletCards, type LucideIcon } from "lucide-react";
 import { api, Toaster } from "./kit";
 import type { Overview } from "@/lib/admin-types";
 
@@ -17,7 +17,7 @@ const NAV: Item[] = [
   { href: "/admin/requests", label: "طلبات خاصة (VIN)", Icon: PackageSearch, badge: (o) => o.new_requests },
   { href: "/admin/ledger", label: "دفتر الدين", Icon: BookOpen },
   { href: "/admin/parts", label: "قطع الغيار", Icon: Boxes },
-  { href: "/admin/commissions", label: "عمولات المسوّقين", Icon: Percent },
+  { href: "/admin/commissions", label: "عمولات المسوّقين", Icon: Percent },\n  { href: "/admin/payouts", label: "طلبات سحب العمولات", Icon: WalletCards },\n  { href: "/admin/currency", label: "سعر صرف الليرة", Icon: DollarSign },
   { href: "/admin/workers", label: "حسابات الموظفين", Icon: UserCog },
 ];
 

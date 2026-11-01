@@ -14,6 +14,7 @@ import {
 } from "@/lib/session";
 import { cookies } from "next/headers";
 import { finalizeDueDeletion } from "@/lib/account-deletion";
+import { whatsappChatId } from "@/lib/otp";
 
 export const dynamic = "force-dynamic";
 
@@ -40,8 +41,8 @@ async function sendWhatsAppOtp(phone: string, code: string) {
     return false;
   }
 
-  const url = `${apiUrl}/waInstance${instanceId}/sendMessage/${token}`;
-  const chatId = `${phone}@c.us`;
+  const url = `${apiUrl.replace(/\\/+$/, "")}/waInstance${instanceId}/sendMessage/${token}`;
+  const chatId = whatsappChatId(phone);
   const message = `رمز التحقق الخاص بك في تطبيق EURO CARS هو: *${code}*.\nصالح لمدة 5 دقائق.`;
 
   try {

@@ -46,18 +46,18 @@ export default function PaymentsPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge tone={ORDER_TONE[p.status]}>{ORDER_STATUS_LABEL[p.status]}</Badge>
-                  <b className="text-xl font-semibold text-gold">{money(p.total_amount)}</b>
+                  <div className="text-end"><b className="block text-xl font-semibold text-gold">{money(p.amount_due ?? p.total_amount)}</b><small className="text-xs text-white/50">المبلغ المطلوب تحويله</small></div>
                 </div>
               </header>
 
               <div className="flex gap-3">
                 <Thumb src={p.receipt_signed_url} alt={`إيصال الطلب ${p.order_number ?? ""}`} onOpen={setZoom} className="h-32 w-28" />
                 <dl className="min-w-0 flex-1 space-y-1 text-sm">
-                  <div><dt className="inline text-white/45">العميل: </dt><dd className="inline font-medium text-white">{p.customer_name}</dd></div>
+                  <div><dt className="inline text-white/45">إجمالي الطلب: </dt><dd className="inline text-white">{money(p.total_amount)}</dd></div>\n                  {Number(p.cashback_used ?? 0) > 0 && <div><dt className="inline text-white/45">كاش باك مستخدم: </dt><dd className="inline text-white">{money(p.cashback_used)}</dd></div>}\n                  <div><dt className="inline text-white/45">العميل: </dt><dd className="inline font-medium text-white">{p.customer_name}</dd></div>
                   <div><dt className="inline text-white/45">الهاتف: </dt><dd className="inline text-white" dir="ltr">{p.customer_phone}</dd></div>
                   <div><dt className="inline text-white/45">الحساب: </dt><dd className="inline text-white">{ROLE_LABEL[p.user_role]}{acc?.city ? ` · ${acc.city}` : ""}</dd></div>
                   {acc?.license && <div><dt className="inline text-white/45">الترخيص: </dt><dd className="inline text-white">{acc.license}</dd></div>}
-                  {!p.receipt_signed_url && <p className="text-xs text-[#FF9F0A]">لا يوجد إيصال مرفق</p>}
+                  {!p.receipt_signed_url && <p className="text-xs text-[#FF9F0A]">لا يوجد إيصال مرفق — لا تعتمد الدفعة</p>}
                 </dl>
               </div>
 

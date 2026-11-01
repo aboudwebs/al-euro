@@ -1,8 +1,8 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { Check, Pause, Plus, UserCog } from "lucide-react";
-import { api, Badge, Empty, ErrorBox, PageHead, Spinner, toast, useApi } from "@/components/admin/kit";
+import { Check, Pause, Plus, Trash2, UserCog } from "lucide-react";
+import { api, Badge, Empty, ErrorBox, Modal, PageHead, Spinner, toast, useApi } from "@/components/admin/kit";
 
 type Worker = { id: string; name: string; phone: string; is_active: boolean; created_at: string };
 
@@ -10,7 +10,7 @@ export default function WorkersPage() {
   const { data, error, loading, reload } = useApi<{ workers: Worker[] }>("/api/admin/workers");
   const [name, setName] = useState("");
     const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(false);\n  const [deleteTarget, setDeleteTarget] = useState<Worker | null>(null);\n  const [deleting, setDeleting] = useState(false);
   const workers = data?.workers ?? [];
 
   async function createWorker(e: React.FormEvent) {

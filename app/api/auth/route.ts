@@ -15,6 +15,7 @@ import {
 import { cookies } from "next/headers";
 import { finalizeDueDeletion } from "@/lib/account-deletion";
 import { whatsappChatId } from "@/lib/otp";
+import { notifyUser } from "@/lib/push";
 
 export const dynamic = "force-dynamic";
 
@@ -320,6 +321,16 @@ export async function PUT(req: Request) {
       .select(USER_FIELDS)
       .single();
     if (error || !user) return serverError("update", error, "تعذر تحديث البيانات");
+    if (typeof updates.password_hash === "string") {
+      await notifyUser({
+        userId: String(user.id),
+        type: "security_password_changed",
+        title: "تغيير كلمة المرور",
+        body: "تم تغيير كلمة المرور بنجاح",
+        eventKey: `security:password-changed:${user.id}:${Date.now()}`,
+        data: { screen: "account", security: "password_changed" },
+      });
+    }
 
     setSession({
       id: String(user.id),

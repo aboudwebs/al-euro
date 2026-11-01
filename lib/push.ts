@@ -17,7 +17,14 @@ function firebaseMessaging() {
   const projectId = process.env.FIREBASE_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
   const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
-  if (!projectId || !clientEmail || !privateKey) return null;
+  if (!projectId || !clientEmail || !privateKey) {
+    console.error("[push] Firebase Admin configuration is incomplete.", {
+      projectId: Boolean(projectId),
+      clientEmail: Boolean(clientEmail),
+      privateKey: Boolean(privateKey),
+    });
+    return null;
+  }
 
   const appName = "euro-cars-push";
   const app = getApps().find((candidate) => candidate.name === appName)

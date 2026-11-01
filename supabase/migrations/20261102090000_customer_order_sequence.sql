@@ -54,6 +54,27 @@ create trigger orders_assign_customer_order_number
 before insert on public.orders
 for each row execute function public.assign_customer_order_number();
 
+-- Acquire the customer lock before the order row is changed, preventing
+-- lock-order inversions with concurrent checkouts and cancellations.
+create or replace function public.lock_customer_order_sequence()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $
+begin
+  if old.status is distinct from new.status and new.user_id is not null then
+    perform 1 from public.users where id = new.user_id for update;
+  end if;
+  return new;
+end;
+$;
+
+drop trigger if exists orders_lock_customer_sequence on public.orders;
+create trigger orders_lock_customer_sequence
+before update of status on public.orders
+for each row execute function public.lock_customer_order_sequence();
+
 create or replace function public.resequence_customer_orders_after_cancel()
 returns trigger
 language plpgsql
@@ -93,6 +114,7 @@ after update of status on public.orders
 for each row execute function public.resequence_customer_orders_after_cancel();
 
 revoke all on function public.assign_customer_order_number() from public, anon, authenticated;
+revoke all on function public.lock_customer_order_sequence() from public, anon, authenticated;
 revoke all on function public.resequence_customer_orders_after_cancel() from public, anon, authenticated;
 
 commit;

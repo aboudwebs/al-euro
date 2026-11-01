@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { getSession } from "@/lib/session";
-import { ORDER_STATUS, PAY_METHOD } from "@/lib/status";
+import { PAY_METHOD } from "@/lib/status";
 import { removeImage, storeImage } from "@/lib/uploads";
 
 export const dynamic = "force-dynamic";
@@ -131,6 +131,7 @@ export async function POST(req: Request) {
     }
     if (cashbackUsed > total) return reply({ error: "الكاش باك لا يمكن أن يتجاوز إجمالي الطلب" }, 400);
     const amountDue = Math.round((total - cashbackUsed) * 100) / 100;
+    const finalPayMethod = amountDue === 0 ? "cashback" : pay;
 
     if (pay === PAY_METHOD.debt) {
       if (user.role !== "workshop") {
@@ -179,7 +180,7 @@ export async function POST(req: Request) {
 
     const requestHash = createHash("sha256").update(JSON.stringify({
       items: Object.keys(requested).sort().map((id) => [id, requested[id]]),
-      pay,
+      pay: finalPayMethod,
       total,
       cashbackUsed,
       addressId: typeof addressId === "string" ? addressId.trim() : null,
@@ -193,7 +194,7 @@ export async function POST(req: Request) {
       p_user_role: user.role,
       p_items: lines,
       p_total_amount: total,
-      p_pay_method: pay,
+      p_pay_method: finalPayMethod,
       p_receipt_url: receiptPath,
       p_delivery_address: deliveryAddress,
       p_cashback_used: cashbackUsed,

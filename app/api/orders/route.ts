@@ -25,7 +25,7 @@ function reply(body: unknown, status = 200) {
  *   items   JSON string  { "<partId>": quantity }
  *   pay     "sham" | "cod" | "debt" | "cashback" (cashback only when it covers the full order)
  *   receipt image file (required for "sham")
- *   addressId optional id of one of the customer's saved addresses (public.user_addresses); a copy of it is stored
+ *   addressId required id of one of the customer's saved addresses (public.user_addresses); a copy of it is stored
  *             with the order so a later edit or deletion of the address does not change old orders
  *
  * Prices, stock and totals come from the database, never from the client. The order is saved with status
@@ -107,6 +107,9 @@ export async function POST(req: Request) {
     // Resolve a retry before checking today's stock or prices: the original order
     // may already have been approved while the client's response was lost.
     const addressId = form.get("addressId");
+    if (typeof addressId !== "string" || !addressId.trim()) {
+      return reply({ error: "يجب إضافة عنوان شحن محفوظ قبل تأكيد الطلب" }, 400);
+    }
     const receiptFileForHash = form.get("receipt");
     if (receiptFileForHash && typeof receiptFileForHash !== "string" && receiptFileForHash.size > 5 * 1024 * 1024) {
       return reply({ error: "حجم الصورة يجب ألا يتجاوز 5 ميغابايت" }, 413);
@@ -225,21 +228,19 @@ export async function POST(req: Request) {
 
     // Optional delivery address: it must belong to the signed-in customer.
     let deliveryAddress: Record<string, string | null> | null = null;
-    if (typeof addressId === "string" && addressId.trim()) {
-      if (!UUID_RE.test(addressId.trim())) return reply({ error: "عنوان التسليم غير صالح" }, 400);
-      const { data: address, error: addressError } = await db
-        .from("user_addresses")
-        .select("label, governorate, area, street, details, phone")
-        .eq("id", addressId.trim())
-        .eq("user_id", user.id)
-        .maybeSingle();
-      if (addressError) {
-        console.error("[api/orders] address lookup:", addressError);
-        return reply({ error: "تعذر التحقق من عنوان التسليم" }, 500);
-      }
-      if (!address) return reply({ error: "عنوان التسليم غير موجود، اختر عنواناً آخر" }, 400);
-      deliveryAddress = address;
+    if (!UUID_RE.test(addressId.trim())) return reply({ error: "عنوان التسليم غير صالح" }, 400);
+    const { data: address, error: addressError } = await db
+      .from("user_addresses")
+      .select("label, governorate, area, street, details, phone")
+      .eq("id", addressId.trim())
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (addressError) {
+      console.error("[api/orders] address lookup:", addressError);
+      return reply({ error: "تعذر التحقق من عنوان التسليم" }, 500);
     }
+    if (!address) return reply({ error: "عنوان التسليم غير موجود، اختر عنواناً آخر" }, 400);
+    deliveryAddress = address;
 
     let receiptPath: string | null = null;
     if (pay === PAY_METHOD.sham && amountDue > 0) {

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createHash } from "node:crypto";
 import { BRANDS } from "@/lib/data";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { getSession } from "@/lib/session";
@@ -8,6 +9,7 @@ import { removeImage, storeImage } from "@/lib/uploads";
 export const dynamic = "force-dynamic";
 
 const BUCKET = "special-requests";
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function reply(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
@@ -37,6 +39,9 @@ export async function POST(req: Request) {
       return reply({ error: "بيانات الطلب غير صالحة" }, 400);
     }
 
+    const idempotencyKey = req.headers.get("idempotency-key")?.trim() ?? "";
+    if (!UUID_RE.test(idempotencyKey)) return reply({ error: "تعذر التحقق من محاولة الإرسال. أعد فتح النموذج" }, 400);
+
     const brand = text(form, "brand", 60);
     const otherBrand = text(form, "otherBrand", 80);
     const partName = text(form, "partName", 120);
@@ -63,8 +68,27 @@ export async function POST(req: Request) {
       return reply({ error: "هذه الخدمة متاحة لحسابات الورشات والمسوّقين فقط" }, 403);
     }
 
-    let imagePath: string | null = null;
     const file = form.get("image");
+    const requestHash = createHash("sha256").update(JSON.stringify({
+      brand, otherBrand: brand === "أخرى" ? otherBrand : "", partName,
+      vinOrOem, notes, imageSize: file && typeof file !== "string" ? (file as Blob).size : 0,
+    })).digest("hex");
+
+    const { data: previous, error: previousError } = await db
+      .from("special_requests")
+      .select("id, request_hash")
+      .eq("user_id", user.id)
+      .eq("idempotency_key", idempotencyKey)
+      .maybeSingle();
+    if (previousError) return reply({ error: "تعذر التحقق من الطلب السابق" }, 500);
+    if (previous) {
+      if (previous.request_hash !== requestHash) {
+        return reply({ error: "مفتاح التأكيد مرتبط بطلب مختلف. حدّث قائمة طلباتك قبل المحاولة مجدداً" }, 409);
+      }
+      return reply({ ok: true, id: previous.id, duplicate: true });
+    }
+
+    let imagePath: string | null = null;
     if (file && typeof file === "object" && "arrayBuffer" in file && (file as Blob).size > 0) {
       const stored = await storeImage(BUCKET, String(user.id), file);
       if (!stored.ok) return reply({ error: stored.error }, stored.status);
@@ -85,17 +109,32 @@ export async function POST(req: Request) {
         notes: notes || null,
         image_url: imagePath,
         status: SPECIAL_STATUS.new,
+        idempotency_key: idempotencyKey,
+        request_hash: requestHash,
       })
       .select("id")
       .single();
 
     if (error || !data) {
+      if (error?.code === "23505") {
+        const { data: duplicate } = await db
+          .from("special_requests")
+          .select("id, request_hash")
+          .eq("user_id", user.id)
+          .eq("idempotency_key", idempotencyKey)
+          .maybeSingle();
+        await removeImage(BUCKET, uploadedPath);
+        if (duplicate?.request_hash === requestHash) {
+          return reply({ ok: true, id: duplicate.id, duplicate: true });
+        }
+        return reply({ error: "تم استقبال محاولة التأكيد مسبقاً. حدّث طلباتك للتحقق من النتيجة" }, 409);
+      }
       console.error("[api/special-requests] insert:", error);
       await removeImage(BUCKET, uploadedPath);
       return reply({ error: "تعذر حفظ الطلب، حاول مجدداً" }, 500);
     }
 
-    return reply({ ok: true, id: data.id });
+    return reply({ ok: true, id: data.id, duplicate: false });
   } catch (err) {
     console.error("[api/special-requests] POST:", err);
     await removeImage(BUCKET, uploadedPath);

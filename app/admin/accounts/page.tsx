@@ -1,13 +1,13 @@
 "use client";
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Check, Pause, Save, Search } from "lucide-react";
+import { Check, Pause, Save, Search, XCircle } from "lucide-react";
 import { api, Badge, Empty, ErrorBox, fmtDate, money, PageHead, Spinner, Tabs, toast, useApi } from "@/components/admin/kit";
 import type { AdminAccount } from "@/lib/admin-types";
 import { ROLE_LABEL, TIER_LABEL, type Tier } from "@/lib/status";
 
 type Role = "all" | "workshop" | "marketer";
-type State = "all" | "active" | "inactive";
+type State = "all" | "active" | "inactive" | "rejected";
 
 function AccountCard({ a, onChanged }: { a: AdminAccount; onChanged: () => void }) {
   const [limit, setLimit] = useState(String(Number(a.debt_limit) || 0));
@@ -39,7 +39,7 @@ function AccountCard({ a, onChanged }: { a: AdminAccount; onChanged: () => void 
         </div>
         <div className="flex flex-wrap gap-1.5">
           <Badge tone={isWorkshop ? "info" : "gold"}>{ROLE_LABEL[a.role]}</Badge>
-          <Badge tone={a.is_active ? "ok" : "warn"}>{a.is_active ? "مفعّل" : "غير مفعّل"}</Badge>
+          <Badge tone={a.is_active ? "ok" : "warn"}>{a.is_active ? "مفعّل" : a.rejected_at ? "مرفوض" : "بانتظار التفعيل"}</Badge>
         </div>
       </div>
 
@@ -74,9 +74,16 @@ function AccountCard({ a, onChanged }: { a: AdminAccount; onChanged: () => void 
             <Pause size={15} />تعليق الحساب
           </button>
         ) : (
-          <button type="button" disabled={busy} className="btn" onClick={() => patch({ is_active: true }, "تم تفعيل الحساب")}>
-            <Check size={15} />تفعيل الحساب
-          </button>
+          <>
+            <button type="button" disabled={busy} className="btn" onClick={() => patch({ is_active: true }, a.rejected_at ? "تمت إعادة تفعيل الحساب" : "تم تفعيل الحساب")}>
+              <Check size={15} />{a.rejected_at ? "إعادة تفعيل الحساب" : "تفعيل الحساب"}
+            </button>
+            {isWorkshop && !a.rejected_at && (
+              <button type="button" disabled={busy} className="inline-flex items-center gap-1.5 rounded-full border border-[#FF453A]/40 bg-[#FF453A]/10 px-4 py-2 text-sm font-semibold text-[#FF6961] hover:bg-[#FF453A]/20" onClick={() => { if (confirm(`رفض طلب تسجيل الورشة «${a.name}»؟`)) patch({ reject: true }, "تم رفض طلب الورشة"); }}>
+                <XCircle size={15} />رفض الطلب
+              </button>
+            )}
+          </>
         )}
       </div>
     </article>
@@ -86,7 +93,8 @@ function AccountCard({ a, onChanged }: { a: AdminAccount; onChanged: () => void 
 function AccountsInner() {
   const sp = useSearchParams();
   const [role, setRole] = useState<Role>("all");
-  const [state, setState] = useState<State>((sp.get("status") as State) === "inactive" ? "inactive" : "all");
+  const initialStatus = sp.get("status");
+  const [state, setState] = useState<State>(initialStatus === "inactive" || initialStatus === "active" || initialStatus === "rejected" ? initialStatus : "all");
   const [q, setQ] = useState("");
   const [dq, setDq] = useState("");
   useEffect(() => { const t = setTimeout(() => setDq(q.trim()), 300); return () => clearTimeout(t); }, [q]);
@@ -103,7 +111,7 @@ function AccountsInner() {
       <PageHead title="الشركات والورشات" sub="التحقق من التسجيلات، تفعيل أو تعليق الحسابات، ومتابعة الولاء والكاش باك وسقف الدين" />
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Tabs<Role> value={role} onChange={setRole} items={[{ value: "all", label: "الكل" }, { value: "workshop", label: "ورشات" }, { value: "marketer", label: "مسوّقون" }]} />
-        <Tabs<State> value={state} onChange={setState} items={[{ value: "all", label: "كل الحالات" }, { value: "inactive", label: "بانتظار التفعيل" }, { value: "active", label: "مفعّلة" }]} />
+        <Tabs<State> value={state} onChange={setState} items={[{ value: "all", label: "كل الحالات" }, { value: "inactive", label: "بانتظار التفعيل" }, { value: "rejected", label: "مرفوضة" }, { value: "active", label: "مفعّلة" }]} />
         <div className="relative min-w-[200px] flex-1">
           <Search size={16} className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-white/45" />
           <input className="inp pe-9" placeholder="بحث بالاسم أو الهاتف أو المدينة" value={q} onChange={(e) => setQ(e.target.value)} />

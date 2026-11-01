@@ -36,7 +36,7 @@ create index if not exists cashback_ledger_workshop_status_idx
 alter table public.cashback_ledger enable row level security;
 
 -- Delivered orders update season progress, tier and cashback atomically.
--- The order's entire amount uses the tier reached AFTER adding that order (Option A).
+-- Cashback uses the tier held BEFORE this order; any tier reached by this order applies to the NEXT order.
 create or replace function public.admin_set_order_status(
   p_order_id uuid,
   p_new_status text,
@@ -127,12 +127,13 @@ begin
 
       v_spend_after := round(v_spend_before + v_total, 2);
 
-      -- Option A: choose the rate from the tier reached after this entire purchase is counted.
+      -- Cashback rate is based on the tier BEFORE this order.
+      -- The tier reached after counting this order becomes active on the NEXT order.
       v_rate := case
-        when v_spend_after >= 4000 then 0.10
-        when v_spend_after >= 3000 then 0.08
-        when v_spend_after >= 2000 then 0.06
-        when v_spend_after >= 1000 then 0.04
+        when v_spend_before >= 4000 then 0.10
+        when v_spend_before >= 3000 then 0.08
+        when v_spend_before >= 2000 then 0.06
+        when v_spend_before >= 1000 then 0.04
         else 0.02
       end;
       v_tier := case

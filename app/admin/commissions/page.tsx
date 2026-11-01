@@ -38,15 +38,15 @@ export default function CommissionsPage() {
         <button type="button" className="btn2" onClick={reload}><RefreshCw size={15} />تحديث</button>
       </PageHead>
 
-      <section className="mb-5 grid gap-3 sm:grid-cols-3">
+      <section className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Stat label="معلّقة (حتى تسديد الدين)" value={money(data?.totals.held)} tone="warn" />
-        <Stat label="مستحقة الدفع" value={money(data?.totals.available)} tone="ok" />
+        <Stat label="مستحقة الدفع" value={money(data?.totals.available)} tone="ok" />\n        <Stat label="محجوزة بطلب تحويل" value={money(data?.totals.payout_requested)} tone="warn" />
         <Stat label="مدفوعة" value={money(data?.totals.paid)} />
       </section>
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <Tabs<Filter> value={filter} onChange={(f) => { setFilter(f); setPicked([]); }} items={[
-          { value: "available", label: "مستحقة" }, { value: "held", label: "معلّقة" }, { value: "paid", label: "مدفوعة" }, { value: "all", label: "الكل" },
+          { value: "available", label: "مستحقة" }, { value: "held", label: "معلّقة" }, { value: "payout_requested", label: "بطلب تحويل" }, { value: "paid", label: "مدفوعة" }, { value: "all", label: "الكل" },
         ]} />
         {!!availableIds.length && (
           <div className="flex flex-wrap items-center gap-2">

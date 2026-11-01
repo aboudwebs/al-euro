@@ -2,11 +2,11 @@
 import { useState } from "react";
 import { RefreshCw } from "lucide-react";
 import OrderActions from "@/components/admin/OrderActions";
-import { Badge, Empty, ErrorBox, fmtDateTime, Lightbox, money, ORDER_TONE, PageHead, Spinner, Tabs, Thumb, useApi } from "@/components/admin/kit";
+import { api, Badge, Empty, ErrorBox, fmtDateTime, Lightbox, money, ORDER_TONE, PageHead, Spinner, Tabs, Thumb, toast, useApi } from "@/components/admin/kit";
 import type { AccountInfo, AdminOrder } from "@/lib/admin-types";
 import { ORDER_STATUS_LABEL, ROLE_LABEL } from "@/lib/status";
 
-type Payment = AdminOrder & { account: AccountInfo | null };
+type Payment = AdminOrder & { account: AccountInfo | null; refund_status?: "not_required" | "pending_review" | "refunded" | "not_refundable"; refund_note?: string | null; refunded_at?: string | null };
 type Filter = "pending" | "approved" | "cancelled" | "all";
 
 export default function PaymentsPage() {
@@ -14,6 +14,18 @@ export default function PaymentsPage() {
   const [zoom, setZoom] = useState<string | null>(null);
   const { data, error, loading, reload } = useApi<{ payments: Payment[] }>(`/api/admin/payments?status=${filter}`);
   const list = data?.payments ?? [];
+
+  async function updateRefund(payment: Payment, status: "refunded" | "not_refundable") {
+    const note = window.prompt(status === "refunded" ? "ملاحظة تأكيد إعادة المبلغ (اختياري)" : "سبب عدم استرداد المبلغ");
+    if (note === null) return;
+    if (status === "not_refundable" && note.trim().length < 3) return toast("اكتب سبباً واضحاً لعدم الاسترداد", "err");
+    const action = status === "refunded" ? "تأكيد أن المبلغ أُعيد فعلياً للعميل" : "تأكيد أن التحويل لم يصل أو لا يستحق الاسترداد";
+    if (!window.confirm(action + "؟")) return;
+    const result = await api(`/api/admin/payments/${payment.id}/refund`, { method: "POST", body: { status, note } });
+    if (!result.ok) return toast(result.error, "err");
+    toast(status === "refunded" ? "تم تسجيل إعادة مبلغ شام كاش وإشعار العميل" : "تم إغلاق مراجعة الاسترداد وإشعار العميل");
+    reload();
+  }
 
   return (
     <>
@@ -76,7 +88,24 @@ export default function PaymentsPage() {
                 </tbody>
               </table>
 
-              {p.status === "cancelled" && p.status_note && <p className="rounded-xl bg-[#FF453A]/10 p-2.5 text-sm text-[#FF8A80]">سبب الرفض: {p.status_note}</p>}
+              {p.status === "cancelled" && p.status_note && <p className="rounded-xl bg-[#FF453A]/10 p-2.5 text-sm text-[#FF8A80]">سبب الإلغاء/الرفض: {p.status_note}</p>}
+              {p.status === "cancelled" && p.receipt_signed_url && (
+                <section className="space-y-2 rounded-xl border border-white/10 bg-white/[0.04] p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-sm font-semibold text-white">استرداد دفعة شام كاش</span>
+                    <Badge tone={p.refund_status === "refunded" ? "ok" : p.refund_status === "not_refundable" ? "mute" : "warn"}>
+                      {p.refund_status === "refunded" ? "تم تأكيد الاسترداد" : p.refund_status === "not_refundable" ? "لا يوجد مبلغ مسترد" : p.refund_status === "pending_review" ? "بانتظار مراجعة الاسترداد" : "غير محدد"}
+                    </Badge>
+                  </div>
+                  {p.refund_note && <p className="text-xs text-white/60">ملاحظة: {p.refund_note}</p>}
+                  {p.refund_status === "pending_review" && (
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" className="btn" onClick={() => updateRefund(p, "refunded")}>تمت إعادة المبلغ فعلياً</button>
+                      <button type="button" className="btn2 !text-[#FF6961]" onClick={() => updateRefund(p, "not_refundable")}>لا يوجد مبلغ لإعادته</button>
+                    </div>
+                  )}
+                </section>
+              )}
               <OrderActions order={p} onDone={reload} approveLabel="اعتماد الدفعة والموافقة" cancelLabel="رفض الإيصال" />
             </article>
           );

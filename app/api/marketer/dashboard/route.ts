@@ -15,31 +15,30 @@ export async function GET() {
     const db = getSupabaseAdmin();
     const { data: marketer, error: userError } = await db.from("users")
       .select("id,name,my_ref_code").eq("id", session.id).eq("role", "marketer").maybeSingle();
-    if (userError) {
-      console.error("[api/marketer/dashboard] user:", userError);
-      return reply({ error: "تعذر تحميل حساب المسوّق" }, 500);
-    }
+    if (userError) return reply({ error: "تعذر تحميل حساب المسوّق" }, 500);
     if (!marketer) return reply({ error: "حساب المسوّق غير موجود" }, 404);
     if (!marketer.my_ref_code) return reply({ error: "لم يتم إنشاء كود دعوة لحسابك بعد" }, 409);
 
-    const [{ count, error: workshopsError }, { data: commissions, error: commissionsError }] = await Promise.all([
+    const [{ count, error: workshopsError }, { data: commissions, error: commissionsError }, { data: payoutRequest, error: payoutError }] = await Promise.all([
       db.from("users").select("id", { count: "exact", head: true })
         .eq("role", "workshop").eq("referred_by_code", marketer.my_ref_code),
-      db.from("marketer_commissions").select("commission_amount,status")
-        .eq("marketer_id", marketer.id)
+      db.from("marketer_commissions").select("commission_amount,status").eq("marketer_id", marketer.id),
+      db.from("marketer_payout_requests").select("id,amount,status,payout_details,created_at")
+        .eq("marketer_id", marketer.id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
     ]);
-    if (workshopsError || commissionsError) {
-      console.error("[api/marketer/dashboard]", workshopsError || commissionsError);
+    if (workshopsError || commissionsError || payoutError) {
+      console.error("[api/marketer/dashboard]", workshopsError || commissionsError || payoutError);
       return reply({ error: "تعذر تحميل إحصائيات المسوّق" }, 500);
     }
-    const totals = { available: 0, held: 0, payout_requested: 0, paid: 0 };
+    const totals = { available: 0, held: 0, requested: 0, paid: 0 };
     for (const row of commissions ?? []) {
       const amount = Number(row.commission_amount) || 0;
       if (row.status === "available") totals.available += amount;
       else if (row.status === "held") totals.held += amount;
-      else if (row.status === "payout_requested") totals.payout_requested += amount;\n      else if (row.status === "paid") totals.paid += amount;
+      else if (row.status === "payout_requested") totals.requested += amount;
+      else if (row.status === "paid") totals.paid += amount;
     }
-    const { data: payoutRequest, error: payoutError } = await db.from("marketer_payout_requests")\n      .select("id,amount,status,payout_details,created_at").eq("marketer_id", marketer.id).order("created_at", { ascending: false }).limit(1).maybeSingle();\n    if (payoutError) return reply({ error: "تعذر تحميل طلب التحويل" }, 500);\n    const referralSignature = crypto.createHmac("sha256", process.env.AUTH_SECRET || "").update(`workshop-referral:${marketer.my_ref_code}`).digest("hex");
+    const referralSignature = crypto.createHmac("sha256", process.env.AUTH_SECRET || "").update(`workshop-referral:${marketer.my_ref_code}`).digest("hex");
     const origin = new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://al-euro-cdzo.onrender.com").origin;
     const referralUrl = `${origin}/login?ref=${encodeURIComponent(marketer.my_ref_code)}&sig=${referralSignature}`;
     return reply({
@@ -48,9 +47,11 @@ export async function GET() {
       commissions: {
         available: Math.round(totals.available * 100) / 100,
         held: Math.round(totals.held * 100) / 100,
+        requested: Math.round(totals.requested * 100) / 100,
         paid: Math.round(totals.paid * 100) / 100,
-        total: Math.round((totals.available + totals.held + totals.paid) * 100) / 100
-      }
+        total: Math.round((totals.available + totals.held + totals.requested + totals.paid) * 100) / 100,
+      },
+      payoutRequest,
     });
   } catch (error) {
     console.error("[api/marketer/dashboard]", error);

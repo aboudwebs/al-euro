@@ -56,8 +56,10 @@ export async function DELETE(req: Request) {
   const session = getSession();
   if (!session) return NextResponse.json({ error: "يرجى تسجيل الدخول" }, { status: 401 });
   try {
-    const body = await req.json();
-    const token = typeof body?.token === "string" ? body.token.trim() : "";
+    let body: Record<string, unknown> = {};
+    try { body = await req.json(); } catch { /* query-string token is used by native sign-out */ }
+    const queryToken = new URL(req.url).searchParams.get("token");
+    const token = typeof body?.token === "string" ? body.token.trim() : (queryToken ?? "").trim();
     if (!token) return NextResponse.json({ ok: true });
     const { error } = await getSupabaseAdmin().from("push_tokens")
       .delete().eq("user_id", session.id).eq("token", token);

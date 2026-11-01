@@ -141,6 +141,7 @@ export type Overview = {
   revenue_30d: number;
   pending_orders: number;
   pending_sham: number;
+  pending_sham_refunds: number;
   pending_activations: number;
   total_debt: number;
   new_requests: number;

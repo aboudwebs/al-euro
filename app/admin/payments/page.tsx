@@ -37,7 +37,7 @@ export default function PaymentsPage() {
         <Tabs<Filter> value={filter} onChange={setFilter} items={[
           { value: "pending", label: "بانتظار التحقق" },
           { value: "approved", label: "تمت الموافقة" },
-          { value: "cancelled", label: "مرفوضة" },
+          { value: "cancelled", label: "ملغاة / مرفوضة" },
           { value: "all", label: "الكل" },
         ]} />
       </div>
@@ -93,7 +93,7 @@ export default function PaymentsPage() {
                 <section className="space-y-2 rounded-xl border border-white/10 bg-white/[0.04] p-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-sm font-semibold text-white">استرداد دفعة شام كاش</span>
-                    <Badge tone={p.refund_status === "refunded" ? "ok" : p.refund_status === "not_refundable" ? "mute" : "warn"}>
+                    <Badge tone={p.refund_status === "refunded" ? "ok" : p.refund_status === "not_refundable" ? "err" : "warn"}>
                       {p.refund_status === "refunded" ? "تم تأكيد الاسترداد" : p.refund_status === "not_refundable" ? "لا يوجد مبلغ مسترد" : p.refund_status === "pending_review" ? "بانتظار مراجعة الاسترداد" : "غير محدد"}
                     </Badge>
                   </div>

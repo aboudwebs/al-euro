@@ -166,39 +166,66 @@ export async function POST(req: Request) {
     let receiptPath: string | null = null;
     if (pay === PAY_METHOD.sham) {
       const file = form.get("receipt");
-      if (!file || typeof file === "string" || (file as Blob).size === 0) {
+      if (amountDue > 0 && (!file || typeof file === "string" || (file as Blob).size === 0)) {
         return reply({ error: "يرجى إرفاق إشعار تحويل شام كاش" }, 400);
       }
-      if (file && typeof file !== "string" && (file as Blob).size > 0) {\n      const stored = await storeImage(RECEIPT_BUCKET, String(user.id), file);
-      if (!stored.ok) return reply({ error: stored.error }, stored.status);
-      receiptPath = stored.path;
-      uploadedPath = stored.path;
+      if (file && typeof file !== "string" && (file as Blob).size > 0) {
+        const stored = await storeImage(RECEIPT_BUCKET, String(user.id), file);
+        if (!stored.ok) return reply({ error: stored.error }, stored.status);
+        receiptPath = stored.path;
+        uploadedPath = stored.path;
+      }
     }
 
-    const { data: order, error: insertError } = await db
-      .from("orders")
-      .insert({
-        user_id: user.id,
-        customer_name: user.name,
-        customer_phone: user.phone,
-        user_role: user.role,
-        items: lines,
-        total_amount: total,
-        pay_method: pay,
-        receipt_url: receiptPath,
-        status: ORDER_STATUS.pending,
-        ...(deliveryAddress ? { delivery_address: deliveryAddress } : {}),
-      })
-      .select("id, order_number")
-      .single();
+    const requestHash = createHash("sha256").update(JSON.stringify({
+      items: Object.keys(requested).sort().map((id) => [id, requested[id]]),
+      pay,
+      total,
+      cashbackUsed,
+      addressId: typeof addressId === "string" ? addressId.trim() : null,
+      receipt: receiptPath ? { size: (form.get("receipt") as Blob).size } : null,
+    })).digest("hex");
 
-    if (insertError || !order) {
-      console.error("[api/orders] insert:", insertError);
+    const { data: result, error: createError } = await db.rpc("create_workshop_order", {
+      p_user_id: user.id,
+      p_customer_name: user.name,
+      p_customer_phone: user.phone,
+      p_user_role: user.role,
+      p_items: lines,
+      p_total_amount: total,
+      p_pay_method: pay,
+      p_receipt_url: receiptPath,
+      p_delivery_address: deliveryAddress,
+      p_cashback_used: cashbackUsed,
+      p_idempotency_key: idempotencyKey,
+      p_request_hash: requestHash,
+    });
+
+    if (createError || !result) {
+      console.error("[api/orders] create RPC:", createError);
       await removeImage(RECEIPT_BUCKET, uploadedPath);
-      return reply({ error: "تعذر حفظ الطلب، حاول مجدداً" }, 500);
+      const message = createError?.message ?? "تعذر حفظ الطلب، حاول مجدداً";
+      const safeMessage = message.includes("مفتاح التأكيد") || message.includes("رصيد الكاش باك")
+        || message.includes("الكاش باك") || message.includes("سقف الدين")
+        ? message
+        : "تعذر حفظ الطلب، حاول مجدداً";
+      return reply({ error: safeMessage }, 400);
     }
 
-    return reply({ ok: true, orderId: order.id, orderNumber: order.order_number, pay, total });
+    if (result.created === false && uploadedPath) {
+      await removeImage(RECEIPT_BUCKET, uploadedPath);
+      uploadedPath = null;
+    }
+    return reply({
+      ok: true,
+      orderId: result.orderId,
+      orderNumber: result.orderNumber,
+      pay: result.pay,
+      total: result.total,
+      cashbackUsed: result.cashbackUsed,
+      amountDue: result.amountDue,
+      duplicate: result.created === false,
+    });
   } catch (err) {
     console.error("[api/orders] POST:", err);
     await removeImage(RECEIPT_BUCKET, uploadedPath);

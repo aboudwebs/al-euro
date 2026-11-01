@@ -38,7 +38,7 @@ export const SPECIAL_TRANSITIONS: Record<SpecialStatus, SpecialStatus[]> = {
   cancelled: [],
 };
 
-export const COMMISSION_STATUS = { held: "held", available: "available", paid: "paid" } as const;
+export const COMMISSION_STATUS = { held: "held", available: "available", payout_requested: "payout_requested", paid: "paid" } as const;
 export type CommissionStatus = (typeof COMMISSION_STATUS)[keyof typeof COMMISSION_STATUS];
 
 export const LEDGER_TX = { debit: "debit", payment: "payment" } as const;
@@ -83,6 +83,7 @@ export const SPECIAL_STATUS_LABEL: Record<SpecialStatus, string> = {
 export const COMMISSION_STATUS_LABEL: Record<CommissionStatus, string> = {
   held: "معلّقة",
   available: "مستحقة",
+  payout_requested: "بطلب تحويل",
   paid: "مدفوعة",
 };
 

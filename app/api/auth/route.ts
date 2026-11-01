@@ -177,7 +177,7 @@ export async function POST(req: Request) {
     try {
       const decoded = JSON.parse(Buffer.from(String(otpToken), "base64").toString("utf-8"));
       const submittedCode = String(otpCode).trim();
-      if (!/^\\d{6}$/.test(submittedCode) || decoded.p !== cleanPhone || typeof decoded.e !== "number" || !Number.isFinite(decoded.e) || decoded.e <= Date.now() || decoded.e > Date.now() + 5 * 60 * 1000) {
+      if (!/^\d{6}$/.test(submittedCode) || decoded.p !== cleanPhone || typeof decoded.e !== "number" || !Number.isFinite(decoded.e) || decoded.e <= Date.now() || decoded.e > Date.now() + 5 * 60 * 1000) {
         return json({ error: "رمز التحقق غير صحيح أو انتهت صلاحيته، أعد طلب رمز جديد" }, 400);
       }
       const expectedSig = crypto.createHmac("sha256", getSecret()).update(`${cleanPhone}:${decoded.e}:${submittedCode}`).digest("hex");

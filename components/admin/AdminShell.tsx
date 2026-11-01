@@ -12,7 +12,7 @@ type Item = { href: string; label: string; Icon: LucideIcon; badge?: (o: Overvie
 const NAV: Item[] = [
   { href: "/admin", label: "نظرة عامة", Icon: LayoutDashboard },
   { href: "/admin/accounts", label: "الحسابات", Icon: Users, badge: (o) => o.pending_activations },
-  { href: "/admin/payments", label: "دفعات شام كاش", Icon: Banknote, badge: (o) => o.pending_sham },
+  { href: "/admin/payments", label: "دفعات شام كاش", Icon: Banknote, badge: (o) => o.pending_sham + (o.pending_sham_refunds ?? 0) },
   { href: "/admin/orders", label: "الطلبات", Icon: ShoppingBag, badge: (o) => o.pending_orders },
   { href: "/admin/requests", label: "طلبات خاصة (VIN)", Icon: PackageSearch, badge: (o) => o.new_requests },
   { href: "/admin/ledger", label: "دفتر الدين", Icon: BookOpen },

@@ -12,7 +12,7 @@ export async function GET() {
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
   const { data, error } = await getSupabaseAdmin()
-    .from("users").select(FIELDS).eq("role", "worker")
+    .from("users").select(FIELDS).eq("role", "worker").is("deleted_at", null)
     .order("created_at", { ascending: false });
   if (error) return dbFail("workers list", error, "تعذر تحميل حسابات الموظفين");
   return ok({ workers: data ?? [] });

@@ -43,7 +43,7 @@ export async function getStableInvoiceRate(forceRefresh = false): Promise<Stable
 
   const currentPayload = await currentResponse.json() as {
     data?: { code?: unknown; sell?: unknown; accepted_at?: unknown; source_updated_at?: unknown; status?: unknown };
-    meta?: { denomination?: unknown };
+    meta?: { denomination?: unknown; total?: unknown };
   };
   const item = currentPayload.data;
   const denomination = currentPayload.meta?.denomination;
@@ -73,17 +73,21 @@ export async function getStableInvoiceRate(forceRefresh = false): Promise<Stable
     } else {
       const historyPayload = await historyResponse.json() as {
         data?: Array<{ sell?: unknown }>;
-        meta?: { denomination?: unknown };
+        meta?: { denomination?: unknown; total?: unknown };
       };
-      if (!Array.isArray(historyPayload.data) || historyPayload.meta?.denomination !== denomination) {
+      if (!Array.isArray(historyPayload.data) || historyPayload.meta?.denomination !== denomination ||
+          (Number.isFinite(Number(historyPayload.meta.total)) && Number(historyPayload.meta.total) > historyPayload.data.length)) {
         stable = false;
       } else {
-        const prices = [rate, ...historyPayload.data
-          .map((entry) => normalize(entry.sell, denomination))
-          .filter((value): value is number => value !== null)];
-        const lowest = Math.min(...prices);
-        const highest = Math.max(...prices);
-        stable = lowest > 0 && (highest - lowest) / lowest <= MAX_WINDOW_CHANGE;
+        const historyPrices = historyPayload.data.map((entry) => normalize(entry.sell, denomination));
+        if (historyPrices.some((value) => value === null)) {
+          stable = false;
+        } else {
+          const prices = [rate, ...(historyPrices as number[])];
+          const lowest = Math.min(...prices);
+          const highest = Math.max(...prices);
+          stable = lowest > 0 && (highest - lowest) / lowest <= MAX_WINDOW_CHANGE;
+        }
       }
     }
   }

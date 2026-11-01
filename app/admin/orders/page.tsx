@@ -15,6 +15,20 @@ type Detail = {
   commission: { id: string; commission_amount: number; status: CommissionStatus } | null;
 };
 
+function orderInvoiceMoney(value: number, order: AdminOrder): string {
+  const rate = Number(order.invoice_exchange_rate);
+  if (order.invoice_currency === "SYP" && Number.isFinite(rate) && rate > 0) {
+    return `${Math.round(value * rate).toLocaleString("en-US")} ل.س`;
+  }
+  return money(value);
+}
+function orderInvoiceTotal(order: AdminOrder): string {
+  if (order.invoice_currency === "SYP" && order.invoice_total_syp != null) {
+    return `${Math.round(Number(order.invoice_total_syp)).toLocaleString("en-US")} ل.س`;
+  }
+  return money(order.total_amount);
+}
+
 const STEPS: OrderStatus[] = ["pending", "approved", "shipped", "delivered"];
 
 function Timeline({ status }: { status: OrderStatus }) {
@@ -88,7 +102,7 @@ function OrderDrawer({ id, onClose, onChanged, isWorker }: { id: string | null; 
               <Badge tone={ORDER_TONE[o.status]}>{ORDER_STATUS_LABEL[o.status]}</Badge>
               <Badge tone="mute">{PAY_METHOD_LABEL[o.pay_method]}</Badge>
             </div>
-            <b className="text-xl text-gold">{money(o.total_amount)}</b>
+            <b className="text-xl text-gold">{orderInvoiceTotal(o)}</b>
           </div>
           {o.status === "cancelled" && o.status_note && <p className="rounded-xl bg-[#FF453A]/10 p-3 text-sm text-[#FF8A80]">سبب الإلغاء: {o.status_note}</p>}
 
@@ -110,8 +124,8 @@ function OrderDrawer({ id, onClose, onChanged, isWorker }: { id: string | null; 
                   {(o.items ?? []).map((it, i) => (
                     <tr key={i} className="border-b border-white/[0.07] last:border-0">
                       <td className="py-1.5 text-white">{it.name}<small className="block text-white/45">{[it.brand, it.oem_number].filter(Boolean).join(" · ")}</small></td>
-                      <td className="text-center text-white/80">{it.qty} × {money(it.unit_price)}</td>
-                      <td className="text-end text-white">{money(it.line_total)}</td>
+                      <td className="text-center text-white/80">{it.qty} × {orderInvoiceMoney(it.unit_price, o)}</td>
+                      <td className="text-end text-white">{orderInvoiceMoney(it.line_total, o)}</td>
                     </tr>
                   ))}
                 </tbody>

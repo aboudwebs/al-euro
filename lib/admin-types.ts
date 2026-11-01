@@ -21,6 +21,11 @@ export type AdminOrder = {
   total_amount: number;
   amount_due?: number | null;
   cashback_used?: number;
+  invoice_currency?: 'USD' | 'SYP';
+  invoice_exchange_rate?: number | null;
+  invoice_total_syp?: number | null;
+  invoice_cashback_used_syp?: number | null;
+  invoice_amount_due_syp?: number | null;
   pay_method: PayMethod;
   status: OrderStatus;
   status_note: string | null;

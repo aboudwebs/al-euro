@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 // password_hash is never selected.
 const FIELDS =
-  "id, role, name, phone, license, city, specs, tier, debt_limit, debt_balance, cashback_balance, loyalty_season_spend, loyalty_season_started_at, my_ref_code, referred_by_code, is_active, created_at";
+  "id, role, name, phone, license, city, specs, tier, debt_limit, debt_balance, cashback_balance, loyalty_season_spend, loyalty_season_started_at, my_ref_code, referred_by_code, is_active, rejected_at, created_at";
 
 export async function GET(req: Request) {
   const guard = await requireAdmin();
@@ -20,7 +20,8 @@ export async function GET(req: Request) {
   const db = getSupabaseAdmin();
   let query = db.from("users").select(FIELDS).in("role", role === "workshop" || role === "marketer" ? [role] : ["workshop", "marketer"]);
   if (status === "active") query = query.eq("is_active", true);
-  if (status === "inactive") query = query.eq("is_active", false);
+  if (status === "inactive") query = query.eq("is_active", false).is("rejected_at", null);
+  if (status === "rejected") query = query.eq("role", "workshop").not("rejected_at", "is", null);
   if (q) query = query.or(`name.ilike.*${q}*,phone.ilike.*${q}*,city.ilike.*${q}*`);
   const { data, error } = await query.order("is_active", { ascending: true }).order("created_at", { ascending: false }).limit(clampLimit(url.searchParams.get("limit")));
   if (error) return dbFail("accounts list", error, "تعذر تحميل الحسابات");

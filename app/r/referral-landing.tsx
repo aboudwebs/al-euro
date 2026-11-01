@@ -10,7 +10,9 @@ export default function ReferralLanding({ code, signature }: Props) {
     const query = new URLSearchParams();
     if (code) query.set("ref", code);
     if (signature) query.set("sig", signature);
-    return `eurocars://referral?${query.toString()}`;
+    const queryString = query.toString();
+    const fallback = `https://al-euro-cdzo.onrender.com/r?${queryString}`;
+    return `intent://referral?${queryString}#Intent;scheme=eurocars;package=com.eurocars.euro_cars;S.browser_fallback_url=${encodeURIComponent(fallback)};end`;
   }, [code, signature]);
 
   useEffect(() => {

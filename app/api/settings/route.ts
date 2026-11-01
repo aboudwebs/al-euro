@@ -113,7 +113,7 @@ export async function GET() {
   try {
     if (!getSession()) return reply({ error: "يرجى تسجيل الدخول" }, 401);
 
-    const apiKey = process.env.SYR_API_KEY?.trim();
+    const apiKey = process.env.SYR_RATES_API_KEY?.trim();
     if (!apiKey) {
       return reply({
         usdToSyp: null,

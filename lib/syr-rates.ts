@@ -79,12 +79,15 @@ export async function getStableInvoiceRate(forceRefresh = false): Promise<Stable
           (Number.isFinite(Number(historyPayload.meta.total)) && Number(historyPayload.meta.total) > historyPayload.data.length)) {
         stable = false;
       } else {
-        const prices = [rate, ...historyPayload.data
-          .map((entry) => normalize(entry.sell, denomination))
-          .filter((value): value is number => value !== null)];
-        const lowest = Math.min(...prices);
-        const highest = Math.max(...prices);
-        stable = lowest > 0 && (highest - lowest) / lowest <= MAX_WINDOW_CHANGE;
+        const historyPrices = historyPayload.data.map((entry) => normalize(entry.sell, denomination));
+        if (historyPrices.some((value) => value === null)) {
+          stable = false;
+        } else {
+          const prices = [rate, ...(historyPrices as number[])];
+          const lowest = Math.min(...prices);
+          const highest = Math.max(...prices);
+          stable = lowest > 0 && (highest - lowest) / lowest <= MAX_WINDOW_CHANGE;
+        }
       }
     }
   }

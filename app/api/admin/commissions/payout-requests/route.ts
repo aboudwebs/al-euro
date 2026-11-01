@@ -49,9 +49,9 @@ export async function POST(req: Request) {
       type: action === "paid" ? "payout_paid" : "payout_rejected",
       title: action === "paid" ? "تم تحويل أرباحك" : "تحديث طلب تحويل الأرباح",
       body: action === "paid"
-        ? \`تم تأكيد تحويل أرباحك بقيمة \${Number(payout.amount).toFixed(2)}$\`
-        : (note ? \`تم رفض طلب تحويل الأرباح: \${note}\` : "تم رفض طلب تحويل الأرباح"),
-      eventKey: \`payout:\${payout.id}:\${action}\`,
+        ? "تم تأكيد تحويل أرباحك بقيمة " + Number(payout.amount).toFixed(2) + "$"
+        : (note ? "تم رفض طلب تحويل الأرباح: " + note : "تم رفض طلب تحويل الأرباح"),
+      eventKey: "payout:" + payout.id + ":" + action,
       data: { screen: "dashboard", payoutRequestId: String(payout.id) },
     });
   }

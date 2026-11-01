@@ -25,7 +25,7 @@ export async function POST(req: Request) {
     }
     if (valid !== true) return reply({ error: "Unauthorized" }, 401);
 
-    const { error: processError } = await db.rpc("process_account_deletions");
+    const { data: processedIds, error: processError } = await db.rpc("process_account_deletions");
     if (processError) {
       console.error("[cron/account-deletions] process:", processError);
       return reply({ error: "Account deletion processing failed" }, 500);
@@ -44,7 +44,8 @@ export async function POST(req: Request) {
     }
 
     const ids = (pending ?? []).map((row) => String(row.user_id));
-    if (!ids.length) return reply({ ok: true, accountsProcessed: 0, avatarsRemoved: 0 });
+    const accountsProcessed = Array.isArray(processedIds) ? processedIds.length : 0;
+    if (!ids.length) return reply({ ok: true, accountsProcessed, avatarsRemoved: 0 });
 
     const { error: storageError } = await db.storage.from("avatars").remove(ids.map((id) => `${id}.jpg`));
     if (storageError) {
@@ -63,7 +64,7 @@ export async function POST(req: Request) {
       return reply({ error: "Avatar cleanup could not be confirmed" }, 500);
     }
 
-    return reply({ ok: true, accountsProcessed: 0, avatarsRemoved: ids.length });
+    return reply({ ok: true, accountsProcessed, avatarsRemoved: ids.length });
   } catch (err) {
     console.error("[cron/account-deletions] POST:", err);
     return reply({ error: "Unexpected cron failure" }, 500);

@@ -354,9 +354,9 @@ end;
 $$;
 
 revoke all on function public.admin_set_order_status(uuid, text, text) from public, anon, authenticated;
-revoke all on function public.admin_record_debt_payment(uuid, numeric, text) from public, anon, authenticated;
+revoke all on function public.admin_record_debt_payment(uuid, numeric, text, uuid) from public, anon, authenticated;
 grant execute on function public.admin_set_order_status(uuid, text, text) to service_role;
-grant execute on function public.admin_record_debt_payment(uuid, numeric, text) to service_role;
+grant execute on function public.admin_record_debt_payment(uuid, numeric, text, uuid) to service_role;
 
 commit;
 

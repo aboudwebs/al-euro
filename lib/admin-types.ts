@@ -19,6 +19,8 @@ export type AdminOrder = {
   user_role: "workshop" | "marketer";
   items: OrderItem[] | null;
   total_amount: number;
+  amount_due?: number | null;
+  cashback_used?: number;
   pay_method: PayMethod;
   status: OrderStatus;
   status_note: string | null;

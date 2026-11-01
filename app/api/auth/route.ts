@@ -6,6 +6,7 @@ import {
   clearSession,
   getSession,
   hashPassword,
+  getSecret,
   safeEqual,
   setSession,
   verifySession,
@@ -102,11 +103,11 @@ export async function POST(req: Request) {
         return json({ error: "يرجى إدخال رقم موبايل صالح" }, 400);
       }
       const cleanPhone = String(phone).trim();
-      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      const code = crypto.randomInt(100000, 1000000).toString();
       const expires = Date.now() + 5 * 60 * 1000;
-      const secret = process.env.AUTH_SECRET || "euro-secret";
-      const signature = crypto.createHmac("sha256", secret).update(`${cleanPhone}:${code}:${expires}`).digest("hex");
-      const tokenPayload = Buffer.from(JSON.stringify({ p: cleanPhone, c: code, e: expires, s: signature })).toString("base64");
+      const signature = crypto.createHmac("sha256", getSecret()).update(`${cleanPhone}:${expires}:${code}`).digest("hex");
+      // The token binds the phone, expiry and OTP hash, but never contains the six-digit code.
+      const tokenPayload = Buffer.from(JSON.stringify({ p: cleanPhone, e: expires, s: signature })).toString("base64");
 
       const sent = await sendWhatsAppOtp(cleanPhone, code);
       if (!sent) {
@@ -175,12 +176,12 @@ export async function POST(req: Request) {
     }
     try {
       const decoded = JSON.parse(Buffer.from(String(otpToken), "base64").toString("utf-8"));
-      const secret = process.env.AUTH_SECRET || "euro-secret";
-      const expectedSig = crypto.createHmac("sha256", secret).update(`${cleanPhone}:${decoded.c}:${decoded.e}`).digest("hex");
-      if (!safeEqual(expectedSig, decoded.s) || decoded.p !== cleanPhone || Date.now() > decoded.e) {
+      const submittedCode = String(otpCode).trim();
+      if (!/^\d{6}$/.test(submittedCode) || decoded.p !== cleanPhone || typeof decoded.e !== "number" || !Number.isFinite(decoded.e) || decoded.e <= Date.now() || decoded.e > Date.now() + 5 * 60 * 1000) {
         return json({ error: "رمز التحقق غير صحيح أو انتهت صلاحيته، أعد طلب رمز جديد" }, 400);
       }
-      if (String(otpCode).trim() !== String(decoded.c)) {
+      const expectedSig = crypto.createHmac("sha256", getSecret()).update(`${cleanPhone}:${decoded.e}:${submittedCode}`).digest("hex");
+      if (!safeEqual(expectedSig, decoded.s)) {
         return json({ error: "رمز التحقق المدخل غير صحيح" }, 400);
       }
     } catch {

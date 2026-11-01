@@ -165,17 +165,15 @@ export async function POST(req: Request) {
     }
 
     let receiptPath: string | null = null;
-    if (pay === PAY_METHOD.sham) {
+    if (pay === PAY_METHOD.sham && amountDue > 0) {
       const file = form.get("receipt");
-      if (amountDue > 0 && (!file || typeof file === "string" || (file as Blob).size === 0)) {
+      if (!file || typeof file === "string" || (file as Blob).size === 0) {
         return reply({ error: "يرجى إرفاق إشعار تحويل شام كاش" }, 400);
       }
-      if (file && typeof file !== "string" && (file as Blob).size > 0) {
-        const stored = await storeImage(RECEIPT_BUCKET, String(user.id), file);
-        if (!stored.ok) return reply({ error: stored.error }, stored.status);
-        receiptPath = stored.path;
-        uploadedPath = stored.path;
-      }
+      const stored = await storeImage(RECEIPT_BUCKET, String(user.id), file);
+      if (!stored.ok) return reply({ error: stored.error }, stored.status);
+      receiptPath = stored.path;
+      uploadedPath = stored.path;
     }
 
     const requestHash = createHash("sha256").update(JSON.stringify({

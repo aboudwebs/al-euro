@@ -9,7 +9,7 @@ export async function GET(req:Request){
  let query=getSupabaseAdmin().from("orders").select("id,order_number,user_id,customer_name,customer_phone,user_role,items,total_amount,pay_method,receipt_url,status,status_note,created_at,claimed_by,claimed_at");
  if(status&&(ORDER_STATUSES as string[]).includes(status))query=query.eq("status",status);
  if(pay&&(Object.values(PAY_METHOD) as string[]).includes(pay))query=query.eq("pay_method",pay);
- if(q){const parts=[`customer_name.ilike.*${q}*`,`customer_phone.ilike.*${q}*`];if(/^\\d{1,9}$/.test(q))parts.push(`order_number.eq.${Number(q)}`);query=query.or(parts.join(","));}
+ if(q){const parts=[`customer_name.ilike.*${q}*`,`customer_phone.ilike.*${q}*`];if(/^\d{1,9}$/.test(q))parts.push(`order_number.eq.${Number(q)}`);query=query.or(parts.join(","));}
  const {data,error}=await query.order("created_at",{ascending:false}).limit(clampLimit(url.searchParams.get("limit")));
  if(error)return dbFail("orders list",error,"تعذر تحميل الطلبات");
  const rows=data??[],ids=Array.from(new Set(rows.map(o=>o.claimed_by).filter((v):v is string=>!!v)));

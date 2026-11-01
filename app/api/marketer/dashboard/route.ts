@@ -32,14 +32,14 @@ export async function GET() {
       console.error("[api/marketer/dashboard]", workshopsError || commissionsError);
       return reply({ error: "تعذر تحميل إحصائيات المسوّق" }, 500);
     }
-    const totals = { available: 0, held: 0, paid: 0 };
+    const totals = { available: 0, held: 0, payout_requested: 0, paid: 0 };
     for (const row of commissions ?? []) {
       const amount = Number(row.commission_amount) || 0;
       if (row.status === "available") totals.available += amount;
       else if (row.status === "held") totals.held += amount;
-      else if (row.status === "paid") totals.paid += amount;
+      else if (row.status === "payout_requested") totals.payout_requested += amount;\n      else if (row.status === "paid") totals.paid += amount;
     }
-    const referralSignature = crypto.createHmac("sha256", process.env.AUTH_SECRET || "").update(`workshop-referral:${marketer.my_ref_code}`).digest("hex");
+    const { data: payoutRequest, error: payoutError } = await db.from("marketer_payout_requests")\n      .select("id,amount,status,payout_details,created_at").eq("marketer_id", marketer.id).order("created_at", { ascending: false }).limit(1).maybeSingle();\n    if (payoutError) return reply({ error: "تعذر تحميل طلب التحويل" }, 500);\n    const referralSignature = crypto.createHmac("sha256", process.env.AUTH_SECRET || "").update(`workshop-referral:${marketer.my_ref_code}`).digest("hex");
     const origin = new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://al-euro-cdzo.onrender.com").origin;
     const referralUrl = `${origin}/login?ref=${encodeURIComponent(marketer.my_ref_code)}&sig=${referralSignature}`;
     return reply({

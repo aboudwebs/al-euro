@@ -48,11 +48,13 @@ export async function POST(req: Request) {
         }
         return reply({ ok: true, message: SENT }); // asked again too soon: same answer, no new message
       }
-      // Not awaited on purpose: the answer must not be slower for a registered number than for an unknown one.
-      void sendWhatsAppText(String(user.phone), otpMessage("password_reset", issued.code)).then(async (sent) => {
-        if (!sent) await dropOtp(issued.id);
-      }).catch(() => undefined);
-      return reply({ ok: true, message: SENT });
+      // Wait for Green API confirmation. Never tell the user the code was sent when delivery failed.
+      const sent = await sendWhatsAppText(String(user.phone), otpMessage("password_reset", issued.code));
+      if (!sent) {
+        await dropOtp(issued.id);
+        return reply({ error: "تعذر إرسال رمز واتساب حالياً. تحقق من ربط الواتساب وحاول مجدداً." }, 502);
+      }
+      return reply({ ok: true, message: "تم إرسال رمز التحقق إلى واتساب. أدخله لإكمال تغيير كلمة المرور." });
     }
 
     if (body.mode === "confirm") {

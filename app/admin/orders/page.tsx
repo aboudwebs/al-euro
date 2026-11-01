@@ -229,7 +229,7 @@ function OrdersInner() {
                   <p className="mt-0.5 text-sm text-white/55" dir="ltr" style={{ textAlign: "right" }}>{o.customer_phone}</p>
                 </div>
                 <div className="text-start sm:text-end">
-                  <b className="text-xl font-bold text-gold">{money(o.total_amount)}</b>
+                  <b className="text-xl font-bold text-gold">{orderInvoiceTotal(o)}</b>
                   <p className="mt-1 text-xs text-white/50">{fmtDateTime(o.created_at)}</p>
                 </div>
               </div>

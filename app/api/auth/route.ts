@@ -95,7 +95,7 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { mode = "login", role, name, phone, password, license, city, spec, refCode, refSignature, client, otpCode, otpToken } = body ?? {};
+    const { mode = "login", role, name, phone, password, license, city, spec, refCode, refSignature, client, otpCode, otpToken, pushToken } = body ?? {};
     const isMobileClient = client === "mobile";
 
     const allowedRoles = mode === "login" ? (isMobileClient ? ["workshop", "marketer"] : ["workshop", "marketer", "admin", "worker"]) : ["workshop", "marketer"];
@@ -254,6 +254,20 @@ export async function POST(req: Request) {
     if (insertError || !newUser) {
       if (insertError?.code === "23505") return json({ error: "هذا الرقم مسجل مسبقاً أو تعذر إنشاء كود فريد." }, 400);
       return serverError("register", insertError, "تعذر إنشاء الحساب");
+    }
+
+    // A workshop cannot sign in while awaiting admin approval, so capture its device token during verified registration.
+    if (typeof pushToken === "string" && pushToken.trim().length > 0 && pushToken.trim().length <= 4096) {
+      const { error: pushTokenError } = await db.from("push_tokens").upsert({
+        user_id: newUser.id,
+        token: pushToken.trim(),
+        platform: "android",
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "token" });
+      if (pushTokenError) {
+        // Registration must succeed even if push-token storage has not been migrated yet.
+        console.error("[api/auth] pending account push token:", pushTokenError);
+      }
     }
 
     if (validatedReferralCode) {

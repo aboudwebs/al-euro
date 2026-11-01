@@ -1,6 +1,7 @@
 import { requireAdmin } from "@/lib/admin-guard";
 import { clampLimit, cleanSearch, dbFail, fail, isUuid, ok, readJson } from "@/lib/admin-api";
 import { getSupabaseAdmin } from "@/lib/supabase";
+import { notifyUser } from "@/lib/push";
 
 export const dynamic = "force-dynamic";
 
@@ -65,5 +66,13 @@ export async function POST(req: Request) {
     p_idempotency_key: idempotencyKey,
   });
   if (error) return dbFail("record payment", error, "تعذر تسجيل التسديد");
+  await notifyUser({
+    userId: String(body.workshop_id),
+    type: "debt_payment",
+    title: "دفتر الديون",
+    body: "تم تسجيل حركة جديدة في حسابك",
+    eventKey: `debt:repayment:${idempotencyKey}`,
+    data: { screen: "dashboard" },
+  });
   return ok({ result: data });
 }

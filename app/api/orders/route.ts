@@ -58,7 +58,7 @@ export async function POST(req: Request) {
     }
 
     const pay = form.get("pay");
-    if (pay !== PAY_METHOD.sham && pay !== PAY_METHOD.cod && pay !== PAY_METHOD.debt) {
+    if (pay !== PAY_METHOD.sham && pay !== PAY_METHOD.cod && pay !== PAY_METHOD.debt && pay !== PAY_METHOD.cashback) {
       return reply({ error: "طريقة دفع غير صالحة" }, 400);
     }
 
@@ -175,7 +175,10 @@ export async function POST(req: Request) {
     }
     if (cashbackUsed > total) return reply({ error: "الكاش باك لا يمكن أن يتجاوز إجمالي الطلب" }, 400);
     const amountDue = Math.round((total - cashbackUsed) * 100) / 100;
-    const finalPayMethod = amountDue === 0 ? "cashback" : pay;
+    if (pay === PAY_METHOD.cashback && amountDue > 0) {
+      return reply({ error: "الدفع بالكاش باك يتطلب تغطية كامل قيمة الطلب" }, 400);
+    }
+    const finalPayMethod = amountDue === 0 ? PAY_METHOD.cashback : pay;
 
     if (pay === PAY_METHOD.debt) {
       if (user.role !== "workshop") {

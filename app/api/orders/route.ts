@@ -101,6 +101,9 @@ export async function POST(req: Request) {
     // may already have been approved while the client's response was lost.
     const addressId = form.get("addressId");
     const receiptFileForHash = form.get("receipt");
+    if (receiptFileForHash && typeof receiptFileForHash !== "string" && receiptFileForHash.size > 5 * 1024 * 1024) {
+      return reply({ error: "حجم الصورة يجب ألا يتجاوز 5 ميغابايت" }, 413);
+    }
     const receiptHash = receiptFileForHash && typeof receiptFileForHash !== "string"
       ? createHash("sha256").update(Buffer.from(await receiptFileForHash.arrayBuffer())).digest("hex")
       : null;

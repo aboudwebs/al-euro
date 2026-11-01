@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { getSupabaseAdmin } from "@/lib/supabase";
+import { createHash } from "node:crypto";
+import { notifyUser } from "@/lib/push";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +15,15 @@ export async function POST(req: Request) {
     if (!token || token.length > 4096) {
       return NextResponse.json({ error: "رمز الجهاز غير صالح" }, { status: 400 });
     }
-    const { error } = await getSupabaseAdmin().from("push_tokens").upsert({
+    const db = getSupabaseAdmin();
+    const { data: existingTokens, error: lookupError } = await db.from("push_tokens")
+      .select("token").eq("user_id", session.id);
+    if (lookupError) {
+      console.error("[api/push/register] lookup", lookupError);
+      return NextResponse.json({ error: "تعذر التحقق من الجهاز" }, { status: 500 });
+    }
+    const isNewDevice = (existingTokens ?? []).some((row) => row.token !== token);
+    const { error } = await db.from("push_tokens").upsert({
       user_id: session.id,
       token,
       platform: "android",
@@ -22,6 +32,18 @@ export async function POST(req: Request) {
     if (error) {
       console.error("[api/push/register]", error);
       return NextResponse.json({ error: "تعذر تسجيل الجهاز للإشعارات" }, { status: 500 });
+    }
+    if (isNewDevice) {
+      const tokenFingerprint = createHash("sha256").update(token).digest("hex").slice(0, 32);
+      await notifyUser({
+        userId: String(session.id),
+        type: "security_new_device",
+        title: "تسجيل دخول من جهاز جديد",
+        body: "تم تسجيل الدخول إلى حسابك من جهاز جديد",
+        eventKey: `security:new-device:${tokenFingerprint}`,
+        excludeToken: token,
+        data: { screen: "account", security: "new_device" },
+      });
     }
     return NextResponse.json({ ok: true });
   } catch (error) {

@@ -40,7 +40,8 @@ export default function CommissionsPage() {
 
       <section className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Stat label="معلّقة (حتى تسديد الدين)" value={money(data?.totals.held)} tone="warn" />
-        <Stat label="مستحقة الدفع" value={money(data?.totals.available)} tone="ok" />\n        <Stat label="محجوزة بطلب تحويل" value={money(data?.totals.payout_requested)} tone="warn" />
+        <Stat label="مستحقة الدفع" value={money(data?.totals.available)} tone="ok" />
+        <Stat label="محجوزة بطلب تحويل" value={money(data?.totals.payout_requested)} tone="warn" />
         <Stat label="مدفوعة" value={money(data?.totals.paid)} />
       </section>
 

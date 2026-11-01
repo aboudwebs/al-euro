@@ -143,7 +143,7 @@ begin
         when v_spend_after >= 1000 then 'Silver'
         else 'Bronze'
       end;
-      v_cashback := round(v_total * v_rate, 2);
+      v_cashback := round(greatest(0, v_total - coalesce(o.cashback_used, 0)) * v_rate, 2);
       v_cashback_status := case
         when o.pay_method = 'debt' and coalesce(u.debt_balance, 0) > 0 then 'held'
         else 'available'
@@ -224,6 +224,21 @@ begin
           end if;
         end if;
       end if;
+    end if;
+  end if;
+
+  -- Refund any cashback used on this order if it is cancelled, including while still pending.
+  if p_new_status = 'cancelled' and coalesce(o.cashback_used, 0) > 0 then
+    select * into u from public.users where id = o.user_id for update;
+    if found and not exists (
+      select 1 from public.cashback_refunds where order_id = o.id
+    ) then
+      update public.users
+         set cashback_balance = coalesce(cashback_balance, 0) + o.cashback_used
+       where id = u.id;
+      insert into public.cashback_refunds(workshop_id, order_id, amount, balance_after)
+      values (u.id, o.id, o.cashback_used,
+              (select cashback_balance from public.users where id = u.id));
     end if;
   end if;
 

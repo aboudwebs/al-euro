@@ -29,3 +29,24 @@ inside Postgres functions (`admin_*`) so they are atomic. Only the server (servi
 - The admin's reply to a special request is stored inside `special_requests.notes` after the marker
   `[ملاحظة الإدارة]` (no extra column); the customer sees it under "طلباتي الخاصة" in their account.
 - `orders.status_note` holds the rejection / cancellation reason shown to the customer under "طلباتي".
+
+
+## Firebase push notifications
+
+The server-side push delivery branch uses these Render environment variables (all server-only):
+- `FIREBASE_PROJECT_ID`
+- `FIREBASE_CLIENT_EMAIL`
+- `FIREBASE_PRIVATE_KEY` (paste the rotated service-account private key; keep its newline formatting)
+- `CRON_SECRET` (random secret used by the scheduled debt reminder endpoint)
+
+Apply the two SQL migrations in `supabase/migrations/` in timestamp order before deploying:
+- `20261101130000_add_push_tokens.sql`
+- `20261101130100_add_user_notifications_and_fcm.sql`
+
+The app registers device tokens at sign-in, refreshes them when FCM rotates them, unregisters them on sign-out, shows foreground notifications, and routes notification taps to the relevant app section. Server events persist each notification once before attempting FCM delivery.
+
+For debt reminders, create a daily Render Cron Job that sends:
+`GET https://al-euro-cdzo.onrender.com/api/cron/debt-reminders`
+with header `Authorization: Bearer <CRON_SECRET>`. It sends one reminder when a workshop is 25–30 days from its latest debit entry.
+
+Admin operational announcements (maintenance, release notes and important messages) can be sent through `POST /api/admin/notifications` using an admin session. This endpoint is restricted to active workshops and marketers; it is not a marketing broadcast channel.

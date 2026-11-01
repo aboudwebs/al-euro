@@ -34,9 +34,17 @@ export default function LedgerPage() {
     if (!(value > 0)) return toast("أدخل مبلغاً صالحاً", "err");
     if (!confirm(`تسجيل تسديد ${money(value)} من «${current.name}»؟`)) return;
     setBusy(true);
-    const r = await api<{ result?: { balance_after: number; released_commissions: number } }>("/api/admin/ledger", { method: "POST", body: { workshop_id: current.id, amount: value, note } });
+    const keyName = `euro_admin_debt_payment_key_${current.id}`;
+    const key = sessionStorage.getItem(keyName) || crypto.randomUUID();
+    sessionStorage.setItem(keyName, key);
+    const r = await api<{ result?: { balance_after: number; released_commissions: number; duplicate?: boolean } }>("/api/admin/ledger", {
+      method: "POST",
+      body: { workshop_id: current.id, amount: value, note },
+      headers: { "Idempotency-Key": key },
+    });
     setBusy(false);
     if (!r.ok) return toast(r.error, "err");
+    sessionStorage.removeItem(keyName);
     const rel = r.data?.result?.released_commissions ?? 0;
     toast(`تم تسجيل التسديد. الرصيد الجديد ${money(r.data?.result?.balance_after)}${rel ? ` · أُفرج عن ${rel} عمولة` : ""}`);
     setAmount(""); setNote("");

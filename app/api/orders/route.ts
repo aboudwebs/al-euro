@@ -14,7 +14,7 @@ const SAFE_ID = /^[A-Za-z0-9_-]{1,64}$/;
 const RECEIPT_BUCKET = "receipts";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const IDEMPOTENCY_RE = UUID_RE;
-const LIST_FIELDS = "id, order_number, total_amount, cashback_used, amount_due, pay_method, status, status_note, created_at, items, refund_status, refund_note, refunded_at, invoice_currency, invoice_exchange_rate, invoice_total_syp, invoice_cashback_used_syp, invoice_amount_due_syp";
+const LIST_FIELDS = "id, order_number, customer_order_number, total_amount, cashback_used, amount_due, pay_method, status, status_note, created_at, items, refund_status, refund_note, refunded_at, invoice_currency, invoice_exchange_rate, invoice_total_syp, invoice_cashback_used_syp, invoice_amount_due_syp";
 
 function reply(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
@@ -128,7 +128,7 @@ export async function POST(req: Request) {
 
     const { data: previousOrder, error: previousOrderError } = await db
       .from("orders")
-      .select("id, order_number, pay_method, total_amount, cashback_used, amount_due, request_hash, invoice_currency, invoice_exchange_rate, invoice_total_syp, invoice_cashback_used_syp, invoice_amount_due_syp")
+      .select("id, order_number, customer_order_number, pay_method, total_amount, cashback_used, amount_due, request_hash, invoice_currency, invoice_exchange_rate, invoice_total_syp, invoice_cashback_used_syp, invoice_amount_due_syp")
       .eq("user_id", user.id)
       .eq("idempotency_key", idempotencyKey)
       .maybeSingle();
@@ -144,6 +144,7 @@ export async function POST(req: Request) {
         ok: true,
         orderId: previousOrder.id,
         orderNumber: previousOrder.order_number,
+        customerOrderNumber: previousOrder.customer_order_number,
         pay: previousOrder.pay_method,
         total: previousOrder.total_amount,
         cashbackUsed: previousOrder.cashback_used,
@@ -285,6 +286,18 @@ export async function POST(req: Request) {
       return reply({ error: safeMessage }, 400);
     }
 
+    const { data: customerSequenceRow, error: customerSequenceError } = await db
+      .from("orders")
+      .select("customer_order_number")
+      .eq("id", result.orderId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (customerSequenceError) {
+      console.error("[api/orders] customer order number lookup:", customerSequenceError);
+      await removeImage(RECEIPT_BUCKET, uploadedPath);
+      return reply({ error: "تم حفظ الطلب لكن تعذر تحميل رقمه، حدّث صفحة الطلبات" }, 500);
+    }
+
     if (result.created === false && uploadedPath) {
       await removeImage(RECEIPT_BUCKET, uploadedPath);
       uploadedPath = null;
@@ -293,6 +306,7 @@ export async function POST(req: Request) {
       ok: true,
       orderId: result.orderId,
       orderNumber: result.orderNumber,
+      customerOrderNumber: customerSequenceRow?.customer_order_number ?? null,
       pay: result.pay,
       total: result.total,
       cashbackUsed: result.cashbackUsed,

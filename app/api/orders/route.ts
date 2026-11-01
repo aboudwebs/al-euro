@@ -14,7 +14,7 @@ const SAFE_ID = /^[A-Za-z0-9_-]{1,64}$/;
 const RECEIPT_BUCKET = "receipts";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const IDEMPOTENCY_RE = UUID_RE;
-const LIST_FIELDS = "id, order_number, total_amount, cashback_used, amount_due, pay_method, status, status_note, created_at, items, refund_status, refund_note, refunded_at, invoice_currency, invoice_exchange_rate, invoice_total_syp, invoice_cashback_used_syp, invoice_amount_due_syp";
+const LIST_FIELDS = "id, order_number, customer_order_number, total_amount, cashback_used, amount_due, pay_method, status, status_note, created_at, items, refund_status, refund_note, refunded_at, invoice_currency, invoice_exchange_rate, invoice_total_syp, invoice_cashback_used_syp, invoice_amount_due_syp";
 
 function reply(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
@@ -25,7 +25,7 @@ function reply(body: unknown, status = 200) {
  *   items   JSON string  { "<partId>": quantity }
  *   pay     "sham" | "cod" | "debt" | "cashback" (cashback only when it covers the full order)
  *   receipt image file (required for "sham")
- *   addressId optional id of one of the customer's saved addresses (public.user_addresses); a copy of it is stored
+ *   addressId required id of one of the customer's saved addresses (public.user_addresses); a copy of it is stored
  *             with the order so a later edit or deletion of the address does not change old orders
  *
  * Prices, stock and totals come from the database, never from the client. The order is saved with status
@@ -107,6 +107,9 @@ export async function POST(req: Request) {
     // Resolve a retry before checking today's stock or prices: the original order
     // may already have been approved while the client's response was lost.
     const addressId = form.get("addressId");
+    if (typeof addressId !== "string" || !addressId.trim()) {
+      return reply({ error: "يجب إضافة عنوان شحن محفوظ قبل تأكيد الطلب" }, 400);
+    }
     const receiptFileForHash = form.get("receipt");
     if (receiptFileForHash && typeof receiptFileForHash !== "string" && receiptFileForHash.size > 5 * 1024 * 1024) {
       return reply({ error: "حجم الصورة يجب ألا يتجاوز 5 ميغابايت" }, 413);
@@ -125,7 +128,7 @@ export async function POST(req: Request) {
 
     const { data: previousOrder, error: previousOrderError } = await db
       .from("orders")
-      .select("id, order_number, pay_method, total_amount, cashback_used, amount_due, request_hash, invoice_currency, invoice_exchange_rate, invoice_total_syp, invoice_cashback_used_syp, invoice_amount_due_syp")
+      .select("id, order_number, customer_order_number, pay_method, total_amount, cashback_used, amount_due, request_hash, invoice_currency, invoice_exchange_rate, invoice_total_syp, invoice_cashback_used_syp, invoice_amount_due_syp")
       .eq("user_id", user.id)
       .eq("idempotency_key", idempotencyKey)
       .maybeSingle();
@@ -141,6 +144,7 @@ export async function POST(req: Request) {
         ok: true,
         orderId: previousOrder.id,
         orderNumber: previousOrder.order_number,
+        customerOrderNumber: previousOrder.customer_order_number,
         pay: previousOrder.pay_method,
         total: previousOrder.total_amount,
         cashbackUsed: previousOrder.cashback_used,
@@ -225,21 +229,19 @@ export async function POST(req: Request) {
 
     // Optional delivery address: it must belong to the signed-in customer.
     let deliveryAddress: Record<string, string | null> | null = null;
-    if (typeof addressId === "string" && addressId.trim()) {
-      if (!UUID_RE.test(addressId.trim())) return reply({ error: "عنوان التسليم غير صالح" }, 400);
-      const { data: address, error: addressError } = await db
-        .from("user_addresses")
-        .select("label, governorate, area, street, details, phone")
-        .eq("id", addressId.trim())
-        .eq("user_id", user.id)
-        .maybeSingle();
-      if (addressError) {
-        console.error("[api/orders] address lookup:", addressError);
-        return reply({ error: "تعذر التحقق من عنوان التسليم" }, 500);
-      }
-      if (!address) return reply({ error: "عنوان التسليم غير موجود، اختر عنواناً آخر" }, 400);
-      deliveryAddress = address;
+    if (!UUID_RE.test(addressId.trim())) return reply({ error: "عنوان التسليم غير صالح" }, 400);
+    const { data: address, error: addressError } = await db
+      .from("user_addresses")
+      .select("label, governorate, area, street, details, phone")
+      .eq("id", addressId.trim())
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (addressError) {
+      console.error("[api/orders] address lookup:", addressError);
+      return reply({ error: "تعذر التحقق من عنوان التسليم" }, 500);
     }
+    if (!address) return reply({ error: "عنوان التسليم غير موجود، اختر عنواناً آخر" }, 400);
+    deliveryAddress = address;
 
     let receiptPath: string | null = null;
     if (pay === PAY_METHOD.sham && amountDue > 0) {
@@ -284,6 +286,18 @@ export async function POST(req: Request) {
       return reply({ error: safeMessage }, 400);
     }
 
+    const { data: customerSequenceRow, error: customerSequenceError } = await db
+      .from("orders")
+      .select("customer_order_number")
+      .eq("id", result.orderId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (customerSequenceError) {
+      console.error("[api/orders] customer order number lookup:", customerSequenceError);
+      await removeImage(RECEIPT_BUCKET, uploadedPath);
+      return reply({ error: "تم حفظ الطلب لكن تعذر تحميل رقمه، حدّث صفحة الطلبات" }, 500);
+    }
+
     if (result.created === false && uploadedPath) {
       await removeImage(RECEIPT_BUCKET, uploadedPath);
       uploadedPath = null;
@@ -292,6 +306,7 @@ export async function POST(req: Request) {
       ok: true,
       orderId: result.orderId,
       orderNumber: result.orderNumber,
+      customerOrderNumber: customerSequenceRow?.customer_order_number ?? null,
       pay: result.pay,
       total: result.total,
       cashbackUsed: result.cashbackUsed,

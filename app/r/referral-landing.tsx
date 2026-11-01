@@ -2,27 +2,27 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-type Props = { code: string; signature: string };
+type Props = { code: string; signature: string; autoLaunch: boolean };
 
-export default function ReferralLanding({ code, signature }: Props) {
+export default function ReferralLanding({ code, signature, autoLaunch }: Props) {
   const [attempted, setAttempted] = useState(false);
   const appUrl = useMemo(() => {
     const query = new URLSearchParams();
     if (code) query.set("ref", code);
     if (signature) query.set("sig", signature);
     const queryString = query.toString();
-    const fallback = `https://al-euro-cdzo.onrender.com/r?${queryString}`;
+    const fallback = `https://al-euro-cdzo.onrender.com/r?${queryString}&launch=0`;
     return `intent://referral?${queryString}#Intent;scheme=eurocars;package=com.eurocars.euro_cars;S.browser_fallback_url=${encodeURIComponent(fallback)};end`;
   }, [code, signature]);
 
   useEffect(() => {
-    if (!code || attempted) return;
+    if (!autoLaunch || !code || attempted) return;
     const timer = window.setTimeout(() => {
       window.location.href = appUrl;
       setAttempted(true);
     }, 350);
     return () => window.clearTimeout(timer);
-  }, [appUrl, attempted, code]);
+  }, [appUrl, attempted, autoLaunch, code]);
 
   const apkUrl = process.env.NEXT_PUBLIC_ANDROID_APK_URL || "https://github.com/aboudwebs/Euro-car.syria/releases/download/mobile-latest/app-release.apk";
 

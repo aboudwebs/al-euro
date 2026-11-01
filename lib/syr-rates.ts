@@ -73,7 +73,7 @@ export async function getStableInvoiceRate(forceRefresh = false): Promise<Stable
     } else {
       const historyPayload = await historyResponse.json() as {
         data?: Array<{ sell?: unknown }>;
-        meta?: { denomination?: unknown };
+        meta?: { denomination?: unknown; total?: unknown };
       };
       if (!Array.isArray(historyPayload.data) || historyPayload.meta?.denomination !== denomination ||
           (Number.isFinite(Number(historyPayload.meta.total)) && Number(historyPayload.meta.total) > historyPayload.data.length)) {

@@ -19,12 +19,12 @@ export async function GET() {
     if (!marketer) return reply({ error: "حساب المسوّق غير موجود" }, 404);
     if (!marketer.my_ref_code) return reply({ error: "لم يتم إنشاء كود دعوة لحسابك بعد" }, 409);
 
-    const [{ count, error: workshopsError }, { data: commissions, error: commissionsError }, { data: payoutRequest, error: payoutError }] = await Promise.all([
+    const [{ count, error: workshopsError }, { data: commissions, error: commissionsError }, { data: payoutRequests, error: payoutError }] = await Promise.all([
       db.from("users").select("id", { count: "exact", head: true })
         .eq("role", "workshop").eq("referred_by_code", marketer.my_ref_code),
       db.from("marketer_commissions").select("commission_amount,status").eq("marketer_id", marketer.id),
-      db.from("marketer_payout_requests").select("id,amount,status,payout_details,created_at")
-        .eq("marketer_id", marketer.id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+      db.from("marketer_payout_requests").select("id,amount,status,payout_details,admin_note,created_at,processed_at")
+        .eq("marketer_id", marketer.id).order("created_at", { ascending: false }).limit(10),
     ]);
     if (workshopsError || commissionsError || payoutError) {
       console.error("[api/marketer/dashboard]", workshopsError || commissionsError || payoutError);
@@ -51,7 +51,7 @@ export async function GET() {
         paid: Math.round(totals.paid * 100) / 100,
         total: Math.round((totals.available + totals.held + totals.requested + totals.paid) * 100) / 100,
       },
-      payoutRequest,
+      payoutRequest: payoutRequests?.[0] ?? null,\n      payoutRequests: payoutRequests ?? [],
     });
   } catch (error) {
     console.error("[api/marketer/dashboard]", error);

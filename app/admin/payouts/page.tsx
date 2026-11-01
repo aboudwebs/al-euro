@@ -10,7 +10,9 @@ export default function MarketerPayoutsPage(){
  async function process(r:PayoutRequest,action:"paid"|"rejected"){
   if(busy)return;
   const prompt=action==="rejected"?"سبب رفض الطلب (اختياري)":"ملاحظة التحويل (اختياري)";
-  const entered=window.prompt(prompt);\n  if(entered===null)return;\n  const note=entered;
+  const entered=window.prompt(prompt);
+  if(entered===null)return;
+  const note=entered;
   if(action==="rejected"&&!window.confirm("تأكيد رفض طلب السحب وإعادة العمولات إلى الرصيد المتاح؟"))return;
   if(action==="paid"&&!window.confirm("هل تم تحويل المبلغ فعلياً إلى المسوّق؟ سيتم تسجيل العمولات كمدفوعة."))return;
   setBusy(r.id);

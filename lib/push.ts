@@ -10,6 +10,7 @@ type NotificationInput = {
   eventKey: string;
   orderId?: string | null;
   data?: Record<string, string>;
+  excludeToken?: string;
 };
 
 function firebaseMessaging() {
@@ -67,7 +68,7 @@ export async function notifyUser(input: NotificationInput): Promise<void> {
       return;
     }
 
-    const tokens = Array.from(new Set((rows ?? []).map((row) => String(row.token)).filter(Boolean)));
+    const tokens = Array.from(new Set((rows ?? []).map((row) => String(row.token)).filter((token) => token && token !== input.excludeToken)));
     if (!tokens.length) return;
 
     const payload = {

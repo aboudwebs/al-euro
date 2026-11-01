@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createHash } from "node:crypto";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { getSession } from "@/lib/session";
 import { ORDER_STATUS, PAY_METHOD } from "@/lib/status";
@@ -11,6 +12,7 @@ const MAX_DISTINCT_ITEMS = 50;
 const SAFE_ID = /^[A-Za-z0-9_-]{1,64}$/;
 const RECEIPT_BUCKET = "receipts";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const IDEMPOTENCY_RE = UUID_RE;
 const LIST_FIELDS = "id, order_number, total_amount, pay_method, status, status_note, created_at, items";
 
 function reply(body: unknown, status = 200) {
@@ -46,6 +48,15 @@ export async function POST(req: Request) {
       return reply({ error: "بيانات الطلب غير صالحة" }, 400);
     }
 
+    const idempotencyKey = req.headers.get("idempotency-key")?.trim() ?? "";
+    if (!IDEMPOTENCY_RE.test(idempotencyKey)) return reply({ error: "تعذر التحقق من محاولة التأكيد. أعد فتح صفحة السلة" }, 400);
+
+    const cashbackRaw = form.get("cashbackUsed");
+    const cashbackUsed = cashbackRaw == null || cashbackRaw === "" ? 0 : Number(cashbackRaw);
+    if (!Number.isFinite(cashbackUsed) || cashbackUsed < 0 || cashbackUsed > 1_000_000_000) {
+      return reply({ error: "قيمة الكاش باك غير صالحة" }, 400);
+    }
+
     const pay = form.get("pay");
     if (pay !== PAY_METHOD.sham && pay !== PAY_METHOD.cod && pay !== PAY_METHOD.debt) {
       return reply({ error: "طريقة دفع غير صالحة" }, 400);
@@ -74,7 +85,7 @@ export async function POST(req: Request) {
     // The account must still exist and be active (the cookie alone is not enough).
     const { data: user, error: userError } = await db
       .from("users")
-      .select("id, role, name, phone, is_active, debt_limit, debt_balance")
+      .select("id, role, name, phone, is_active, debt_limit, debt_balance, cashback_balance")
       .eq("id", session.id)
       .maybeSingle();
     if (userError) {
@@ -112,6 +123,15 @@ export async function POST(req: Request) {
     total = Math.round(total * 100) / 100;
     if (!Number.isFinite(total) || total <= 0) return reply({ error: "قيمة الطلب غير صالحة" }, 400);
 
+    if (cashbackUsed > 0 && user.role !== "workshop") {
+      return reply({ error: "استخدام الكاش باك متاح لحسابات الورشات فقط" }, 403);
+    }
+    if (cashbackUsed > Number(user.cashback_balance ?? 0)) {
+      return reply({ error: "رصيد الكاش باك المتاح غير كافٍ، حدّث الرصيد وحاول مجدداً" }, 400);
+    }
+    if (cashbackUsed > total) return reply({ error: "الكاش باك لا يمكن أن يتجاوز إجمالي الطلب" }, 400);
+    const amountDue = Math.round((total - cashbackUsed) * 100) / 100;
+
     if (pay === PAY_METHOD.debt) {
       if (user.role !== "workshop") {
         return reply({ error: "غير مصرح: الدفع عبر دفتر الدين متاح حصريًا لحسابات الورشات المعتمدة" }, 403);
@@ -119,7 +139,7 @@ export async function POST(req: Request) {
       const limit = Number(user.debt_limit);
       const available = limit - Number(user.debt_balance);
       if (!(limit > 0)) return reply({ error: "لم يُحدَّد سقف دين لحسابك بعد، تواصل مع الإدارة" }, 400);
-      if (total > available) {
+      if (amountDue > available) {
         return reply({ error: `قيمة الطلب تتجاوز سقف الدين المتاح (${Math.max(0, available)}$)` }, 400);
       }
     }
@@ -149,7 +169,7 @@ export async function POST(req: Request) {
       if (!file || typeof file === "string" || (file as Blob).size === 0) {
         return reply({ error: "يرجى إرفاق إشعار تحويل شام كاش" }, 400);
       }
-      const stored = await storeImage(RECEIPT_BUCKET, String(user.id), file);
+      if (file && typeof file !== "string" && (file as Blob).size > 0) {\n      const stored = await storeImage(RECEIPT_BUCKET, String(user.id), file);
       if (!stored.ok) return reply({ error: stored.error }, stored.status);
       receiptPath = stored.path;
       uploadedPath = stored.path;

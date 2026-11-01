@@ -46,7 +46,6 @@ export default function CurrencySettingsPage() {
         <p className="text-white/55">آخر قبول للسعر: {updated}</p>
         <p className="text-white/55">عمر تحديث المصدر: {typeof data.sourceAgeSeconds === "number" ? Math.floor(data.sourceAgeSeconds / 60) + " دقيقة" : "غير متوفر"}</p>
         <p className={data.canUseSypInvoices ? "text-emerald-400" : "text-amber-400"}>{statusLabel}</p>
-        {typeof data.rateAgeSeconds === "number" && <p className="text-white/45">عمر السعر: {Math.floor(data.rateAgeSeconds / 60)} دقيقة</p>}
       </div>
       {!data.usdToSyp && <p className="text-sm text-amber-400">تحقق من ضبط SYR_RATES_API_KEY في متغيرات بيئة خادم Render.</p>}
     </section>}

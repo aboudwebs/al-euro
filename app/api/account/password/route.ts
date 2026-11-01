@@ -1,6 +1,7 @@
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { hashPassword, safeEqual } from "@/lib/session";
 import { readBody, reply, requireUser } from "@/lib/account-api";
+import { notifyUser } from "@/lib/push";
 
 export const dynamic = "force-dynamic";
 
@@ -21,5 +22,13 @@ export async function POST(req: Request) {
     console.error("[api/account/password] update:", error);
     return reply({ error: "تعذر تغيير كلمة المرور" }, 500);
   }
+  await notifyUser({
+    userId: String(auth.user.id),
+    type: "security_password_changed",
+    title: "تغيير كلمة المرور",
+    body: "تم تغيير كلمة المرور بنجاح",
+    eventKey: `security:password-changed:${auth.user.id}:${Date.now()}`,
+    data: { screen: "account", security: "password_changed" },
+  });
   return reply({ ok: true });
 }

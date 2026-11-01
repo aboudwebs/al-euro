@@ -13,7 +13,7 @@ const SAFE_ID = /^[A-Za-z0-9_-]{1,64}$/;
 const RECEIPT_BUCKET = "receipts";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const IDEMPOTENCY_RE = UUID_RE;
-const LIST_FIELDS = "id, order_number, total_amount, pay_method, status, status_note, created_at, items";
+const LIST_FIELDS = "id, order_number, total_amount, cashback_used, amount_due, pay_method, status, status_note, created_at, items";
 
 function reply(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });

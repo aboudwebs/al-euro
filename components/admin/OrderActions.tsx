@@ -28,7 +28,7 @@ export default function OrderActions({order,onDone,cancelLabel="إلغاء ال�
  if(!canUpdate){
   const worker=order.claimed_worker;
   return <div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/65">
-   {worker?<>استلمها الموظف **{worker.name}** · رقم الموظف {worker.phone}</>:"هذه الطلبية محجوزة لموظف آخر"}
+   {worker?<>استلمها الموظف <b>{worker.name}</b> · رقم الموظف {worker.phone}</>:"هذه الطلبية محجوزة لموظف آخر"}
   </div>;
  }
  const options=(ORDER_TRANSITIONS[order.status]??[]).filter(s=>allowCancel||s!=="cancelled");

@@ -37,6 +37,18 @@ alter table public.cashback_ledger enable row level security;
 
 -- Delivered orders update season progress, tier and cashback atomically.
 -- Cashback uses the tier held BEFORE this order; any tier reached by this order applies to the NEXT order.
+create table if not exists public.cashback_refunds (
+  id uuid primary key default gen_random_uuid(),
+  workshop_id uuid not null references public.users(id) on delete restrict,
+  order_id uuid not null unique references public.orders(id) on delete restrict,
+  amount numeric(12,2) not null check (amount > 0),
+  balance_after numeric(12,2) not null check (balance_after >= 0),
+  created_at timestamptz not null default now()
+);
+create index if not exists cashback_refunds_workshop_created_idx
+  on public.cashback_refunds(workshop_id, created_at desc);
+alter table public.cashback_refunds enable row level security;
+
 create or replace function public.admin_set_order_status(
   p_order_id uuid,
   p_new_status text,
@@ -54,6 +66,7 @@ declare
   r record;
   v_note text := nullif(btrim(coalesce(p_note, '')), '');
   v_total numeric(12,2);
+  v_due numeric(12,2);
   v_bal numeric(12,2);
   v_comm numeric(12,2);
   v_season_start timestamptz;
@@ -81,6 +94,7 @@ begin
   end if;
 
   v_total := round(coalesce(o.total_amount, 0), 2);
+  v_due := greatest(0, round(coalesce(o.amount_due, v_total - coalesce(o.cashback_used, 0)), 2));
 
   -- pending -> approved: reserve stock and, for debt orders, charge the workshop.
   if p_new_status = 'approved' then
@@ -101,14 +115,14 @@ begin
       select * into u from public.users where id = o.user_id for update;
       if not found or u.role <> 'workshop' then raise exception 'حساب الورشة غير موجود'; end if;
       if coalesce(u.debt_limit, 0) <= 0 then raise exception 'لم يُحدَّد سقف دين لهذه الورشة'; end if;
-      if coalesce(u.debt_balance, 0) + v_total > u.debt_limit then
+      if coalesce(u.debt_balance, 0) + v_due > u.debt_limit then
         raise exception 'قيمة الطلب تتجاوز سقف الدين المتاح للورشة (المتاح %)',
           greatest(0, u.debt_limit - coalesce(u.debt_balance, 0));
       end if;
-      v_bal := round(coalesce(u.debt_balance, 0) + v_total, 2);
+      v_bal := round(coalesce(u.debt_balance, 0) + v_due, 2);
       update public.users set debt_balance = v_bal where id = u.id;
       insert into public.debt_ledger (workshop_id, order_id, tx_type, amount, balance_after, note)
-      values (u.id, o.id, 'debit', v_total, v_bal, 'طلب رقم ' || coalesce(o.order_number::text, o.id::text));
+      values (u.id, o.id, 'debit', v_due, v_bal, 'طلب رقم ' || coalesce(o.order_number::text, o.id::text));
     end if;
   end if;
 
@@ -195,10 +209,10 @@ begin
     if o.pay_method = 'debt' then
       select * into u from public.users where id = o.user_id for update;
       if found then
-        v_bal := greatest(0, coalesce(u.debt_balance, 0) - v_total);
+        v_bal := greatest(0, coalesce(u.debt_balance, 0) - v_due);
         update public.users set debt_balance = v_bal where id = u.id;
         insert into public.debt_ledger (workshop_id, order_id, tx_type, amount, balance_after, note)
-        values (u.id, o.id, 'payment', v_total, v_bal,
+        values (u.id, o.id, 'payment', v_due, v_bal,
                 'إلغاء الطلب رقم ' || coalesce(o.order_number::text, o.id::text));
 
         -- A cancellation can clear the final outstanding debt just like a repayment.

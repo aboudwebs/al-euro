@@ -28,6 +28,17 @@ export default function WorkersPage() {
     reload();
   }
 
+  async function deleteWorker() {
+    if (!deleteTarget || deleting) return;
+    setDeleting(true);
+    const r = await api(`/api/admin/workers/${deleteTarget.id}`, { method: "DELETE" });
+    setDeleting(false);
+    if (!r.ok) return toast(r.error, "err");
+    toast("تم حذف حساب الموظف مع الاحتفاظ بسجلاته");
+    setDeleteTarget(null);
+    reload();
+  }
+
   async function toggle(worker: Worker) {
     const r = await api(`/api/admin/workers/${worker.id}`, {
       method: "PATCH",
@@ -76,10 +87,13 @@ export default function WorkersPage() {
             </div>
             <div className="flex flex-col gap-2"><Link href={"/admin/workers/" + worker.id} className="btn2">عرض التفاصيل</Link><button type="button" className={worker.is_active ? "btn2 !text-[#FF6961]" : "btn"} onClick={() => toggle(worker)}>
               {worker.is_active ? <><Pause size={15} />إيقاف</> : <><Check size={15} />تفعيل</>}
-            </button></div>
+            </button>{!worker.is_active && <button type="button" className="btn2 !border-[#FF453A]/40 !text-[#FF6961]" onClick={() => setDeleteTarget(worker)}><Trash2 size={15}/>حذف الحساب</button>}</div>
           </article>
         ))}
       </div>
+      <Modal open={!!deleteTarget} onClose={() => !deleting && setDeleteTarget(null)} title="تأكيد حذف حساب الموظف" footer={<><button type="button" className="btn2" disabled={deleting} onClick={() => setDeleteTarget(null)}>إلغاء</button><button type="button" className="btn !bg-[#FF453A] !text-white" disabled={deleting} onClick={deleteWorker}><Trash2 size={15}/>{deleting ? "جارٍ الحذف..." : "تأكيد الحذف"}</button></>}>
+        <p className="text-sm leading-7 text-white/75">هل تريد حذف حساب <b className="text-white">{deleteTarget?.name}</b>؟ لن يتمكن من تسجيل الدخول، وسيختفي الحساب من قائمة الموظفين. ستبقى سجلات الطلبات وحركات المخزون محفوظة لأغراض المراجعة والتدقيق.</p>
+      </Modal>
     </>
   );
 }

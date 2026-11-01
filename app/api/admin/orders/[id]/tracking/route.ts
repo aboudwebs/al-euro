@@ -2,6 +2,7 @@ import { requireStaffAccess } from "@/lib/admin-guard";
 import { dbFail, fail, isUuid, ok, readJson } from "@/lib/admin-api";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { ORDER_STATUS } from "@/lib/status";
+import { notifyUser } from "@/lib/push";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   if (tracking.length > 60) return fail("رقم التتبع طويل جداً (الحد 60 حرفاً)");
 
   const db = getSupabaseAdmin();
-  const { data: order, error: readError } = await db.from("orders").select("id, status, claimed_by").eq("id", params.id).maybeSingle();
+  const { data: order, error: readError } = await db.from("orders").select("id, user_id, status, claimed_by, tracking_number").eq("id", params.id).maybeSingle();
   if (readError) return dbFail("tracking read", readError);
   if (!order) return fail("الطلب غير موجود", 404);
   if (order.status === ORDER_STATUS.cancelled) return fail("لا يمكن إضافة رقم تتبع لطلب ملغي");
@@ -34,5 +35,16 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   if (!error && !updated) return fail("لم تعد تملك الطلبية أو تم تغيير المسؤول عنها", 403);
   if (error?.code === "42703") return fail("عمود رقم التتبع غير موجود: شغّل ملف supabase/updates_2026_10.sql في Supabase", 500);
   if (error) return dbFail("tracking update", error, "تعذر حفظ رقم التتبع");
+  if ((order as any).tracking_number !== (tracking || null)) {
+    await notifyUser({
+      userId: String(order.user_id),
+      type: "order_tracking",
+      title: "تحديث تتبع الطلب",
+      body: tracking ? `تم تحديث رقم تتبع طلبك: ${tracking}` : "تم إزالة رقم تتبع طلبك",
+      orderId: String(order.id),
+      eventKey: `order:${order.id}:tracking:${tracking || "cleared"}`,
+      data: { screen: "orders", orderId: String(order.id) },
+    });
+  }
   return ok({ tracking: tracking || null });
 }

@@ -1,41 +1,53 @@
 "use client";
-import { useState } from "react";
-import { RefreshCw, Save } from "lucide-react";
-import { api, ErrorBox, PageHead, Spinner, toast, useApi } from "@/components/admin/kit";
+import { RefreshCw } from "lucide-react";
+import { ErrorBox, PageHead, Spinner, useApi } from "@/components/admin/kit";
 
-type CurrencyData = { usdToSyp: number | null; updatedAt: string | null };
+type CurrencyData = {
+  usdToSyp: number | null;
+  rateUpdatedAt: string | null;
+  sourceUpdatedAt?: string | null;
+  rateSource?: string;
+  sypUnit?: "new";
+  rateStatus?: "fresh" | "stale" | "unavailable";
+  providerStatus?: "fresh" | "cached";
+  rateAgeSeconds?: number;
+  canUseSypPayments?: boolean;
+  rateError?: string;
+};
 
 export default function CurrencySettingsPage() {
-  const { data, error, loading, reload } = useApi<CurrencyData>("/api/admin/currency");
-  const [rate, setRate] = useState("");
-  const [busy, setBusy] = useState(false);
-  const current = data?.usdToSyp;
-  async function save(e: React.FormEvent) {
-    e.preventDefault();
-    if (busy) return;
-    const value = Number(rate || current || 0);
-    if (!Number.isFinite(value) || value < 1 || value > 1_000_000_000) return toast("أدخل سعر صرف صحيحاً", "err");
-    setBusy(true);
-    const r = await api<CurrencyData>("/api/admin/currency", { method: "PUT", body: { usdToSyp: value } });
-    setBusy(false);
-    if (!r.ok) return toast(r.error, "err");
-    setRate(String(r.data?.usdToSyp ?? value));
-    toast("تم تحديث سعر صرف الدولار مقابل الليرة");
-    reload();
-  }
+  const { data, error, loading, reload } = useApi<CurrencyData>("/api/settings");
+
+  const updated = data?.rateUpdatedAt
+    ? new Date(data.rateUpdatedAt).toLocaleString("ar-SY")
+    : "غير متوفر";
+  const statusLabel = data?.rateStatus === "fresh"
+    ? "السعر حديث"
+    : data?.rateStatus === "stale"
+      ? "السعر مخزّن أو قديم — لا يُعتمد للدفع بالليرة"
+      : "تعذر جلب السعر";
+
   return <>
-    <PageHead title="سعر صرف الليرة السورية" sub="السعر المنشور هنا يُستخدم لتحويل الأسعار المعروضة في تطبيق EURO فقط؛ الحسابات والطلبات تبقى بالدولار.">
+    <PageHead title="سعر صرف الليرة السورية" sub="يُجلب سعر بيع الدولار مباشرة من SYR Rates API. الأسعار والطلبات الأساسية تبقى بالدولار.">
       <button type="button" className="btn2" onClick={reload}><RefreshCw size={15}/>تحديث</button>
     </PageHead>
     {error && <ErrorBox message={error} onRetry={reload}/>}
     {loading && !data && <Spinner/>}
-    <form onSubmit={save} className="card max-w-xl space-y-4">
+    {data && <section className="card max-w-xl space-y-4">
       <div>
-        <label className="mb-2 block text-sm text-white/70" htmlFor="usd-syp-rate">كم ليرة سورية تساوي دولاراً واحداً؟</label>
-        <input id="usd-syp-rate" className="inp" type="number" min="1" max="1000000000" step="1" inputMode="numeric" dir="ltr" placeholder="مثال: 12000" value={rate || (current ? String(current) : "")} onChange={(e)=>setRate(e.target.value)} required/>
+        <p className="text-sm text-white/55">سعر بيع الدولار مقابل الليرة الجديدة</p>
+        <p className="mt-1 text-3xl font-semibold text-gold">
+          {data.usdToSyp ? data.usdToSyp.toLocaleString("en-US", { maximumFractionDigits: 2 }) : "—"}
+          <span className="ms-2 text-base font-normal text-white/60">ل.س لكل 1 USD</span>
+        </p>
       </div>
-      <p className="text-xs leading-6 text-white/50">السعر يدوي ويجب تحديثه من الإدارة عند تغيّره. لا يتم جلب سعر تلقائي من مصدر خارجي. السعر الحالي: {current ? current.toLocaleString("en-US") + " ل.س لكل 1 USD" : "غير منشور"}.</p>
-      <button type="submit" className="btn" disabled={busy || !(rate.trim() || current)}><Save size={16}/>{busy ? "جارٍ الحفظ..." : "حفظ سعر الصرف"}</button>
-    </form>
+      <div className="space-y-2 text-sm">
+        <p className="text-white/75">المصدر: SYR Rates API (@api365)</p>
+        <p className="text-white/55">آخر قبول للسعر: {updated}</p>
+        <p className={data.canUseSypPayments ? "text-emerald-400" : "text-amber-400"}>{statusLabel}</p>
+        {typeof data.rateAgeSeconds === "number" && <p className="text-white/45">عمر السعر: {Math.floor(data.rateAgeSeconds / 60)} دقيقة</p>}
+      </div>
+      {!data.usdToSyp && <p className="text-sm text-amber-400">تحقق من ضبط SYR_API_KEY في متغيرات بيئة خادم Render.</p>}
+    </section>}
   </>;
 }

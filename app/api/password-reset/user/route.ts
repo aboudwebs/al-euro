@@ -2,6 +2,7 @@ import { getSupabaseAdmin } from "@/lib/supabase";
 import { hashPassword } from "@/lib/session";
 import { isMissingTable, readBody, reply } from "@/lib/account-api";
 import { consumeOtp, dropOtp, issueOtp, otpMessage, sendWhatsAppText, whatsappConfigured } from "@/lib/otp";
+import { notifyUser } from "@/lib/push";
 
 export const dynamic = "force-dynamic";
 
@@ -73,6 +74,14 @@ export async function POST(req: Request) {
         console.error("[password-reset/user] update:", error);
         return reply({ error: "تعذر تغيير كلمة المرور" }, 500);
       }
+      await notifyUser({
+        userId: String(user.id),
+        type: "security_password_changed",
+        title: "تغيير كلمة المرور",
+        body: "تم إعادة تعيين كلمة المرور لحسابك. إذا لم تكن أنت، تواصل مع الإدارة فوراً.",
+        eventKey: `security:password-reset:${user.id}:${Date.now()}`,
+        data: { screen: "account", security: "password_reset" },
+      });
       return reply({ ok: true, message: "تم تغيير كلمة المرور. سجّل الدخول بكلمة المرور الجديدة." });
     }
 

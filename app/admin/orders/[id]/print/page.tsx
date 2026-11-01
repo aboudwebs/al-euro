@@ -9,6 +9,33 @@ import { ORDER_STATUS_LABEL, PAY_METHOD_LABEL, ROLE_LABEL } from "@/lib/status";
 
 type Detail = { order: AdminOrder; customer: AccountInfo | null };
 type Mode = "invoice" | "packing";
+function invoiceMoney(value: number, order: AdminOrder): string {
+  const rate = Number(order.invoice_exchange_rate);
+  if (order.invoice_currency === "SYP" && Number.isFinite(rate) && rate > 0) {
+    return `${Math.round(value * rate).toLocaleString("en-US")} ل.س`;
+  }
+  return money(value);
+}
+function invoiceTotal(order: AdminOrder): string {
+  if (order.invoice_currency === "SYP" && order.invoice_total_syp != null) {
+    return `${Math.round(Number(order.invoice_total_syp)).toLocaleString("en-US")} ل.س`;
+  }
+  return money(order.total_amount);
+}
+function invoiceCashback(order: AdminOrder): string {
+  if (order.invoice_currency === "SYP" && order.invoice_cashback_used_syp != null) {
+    return `${Math.round(Number(order.invoice_cashback_used_syp)).toLocaleString("en-US")} ل.س`;
+  }
+  return money(order.cashback_used ?? 0);
+}
+function invoiceDue(order: AdminOrder): string {
+  if (order.invoice_currency === "SYP" && order.invoice_amount_due_syp != null) {
+    return `${Math.round(Number(order.invoice_amount_due_syp)).toLocaleString("en-US")} ل.س`;
+  }
+  return money(order.amount_due ?? order.total_amount - (order.cashback_used ?? 0));
+}
+
+
 
 export default function PrintOrder() {
   const { id } = useParams<{ id: string }>();
@@ -86,8 +113,8 @@ export default function PrintOrder() {
                   <td><b>{it.name}</b>{it.brand ? <div className="muted" style={{ fontSize: 11 }}>{it.brand}</div> : null}</td>
                   <td dir="ltr" style={{ textAlign: "right" }}>{it.oem_number || "—"}</td>
                   <td style={{ textAlign: "center", fontWeight: 700 }}>{it.qty}</td>
-                  {mode === "invoice" && <td>{money(it.unit_price)}</td>}
-                  {mode === "invoice" && <td>{money(it.line_total)}</td>}
+                  {mode === "invoice" && <td>{invoiceMoney(it.unit_price, o)}</td>}
+                  {mode === "invoice" && <td>{invoiceMoney(it.line_total, o)}</td>}
                   {mode === "packing" && <td style={{ textAlign: "center" }}>☐</td>}
                 </tr>
               ))}
@@ -96,7 +123,15 @@ export default function PrintOrder() {
               <tfoot>
                 <tr>
                   <td colSpan={5} style={{ textAlign: "left", fontWeight: 700 }}>الإجمالي</td>
-                  <td className="gold" style={{ fontWeight: 800, fontSize: 15 }}>{money(o.total_amount)}</td>
+                  <td className="gold" style={{ fontWeight: 800, fontSize: 15 }}>{invoiceTotal(o)}</td>
+                </tr>
+                {(o.cashback_used ?? 0) > 0 && <tr>
+                  <td colSpan={5} style={{ textAlign: "left" }}>الكاش باك المستخدم</td>
+                  <td>{invoiceCashback(o)}</td>
+                </tr>}
+                <tr>
+                  <td colSpan={5} style={{ textAlign: "left", fontWeight: 700 }}>المتبقي للدفع</td>
+                  <td style={{ fontWeight: 700 }}>{invoiceDue(o)}</td>
                 </tr>
               </tfoot>
             )}

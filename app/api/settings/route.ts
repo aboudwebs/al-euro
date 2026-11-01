@@ -1,31 +1,35 @@
-import { getSupabaseAdmin } from "@/lib/supabase";
 import { getSession } from "@/lib/session";
 import { reply } from "@/lib/account-api";
 
 export const dynamic = "force-dynamic";
 
-const RATE_CACHE_TTL_MS = 5 * 60 * 1000;
+const API_BASE_URL = "https://api.exchanger.sy";
+const RATE_CACHE_TTL_MS = 60 * 1000;
+const MAX_PAYMENT_RATE_AGE_MS = 10 * 60 * 1000;
 const OLD_TO_NEW_SYP = 100;
 
 type CachedRate = {
   rate: number;
-  updatedAt: string;
+  acceptedAt: number;
+  sourceUpdatedAt: number | null;
   fetchedAt: number;
+  denomination: "old" | "new";
+  status: "fresh" | "cached";
 };
 
 let cachedRate: CachedRate | null = null;
 
-/**
- * SPToday currently reports SYP in the old denomination (unit: "old").
- * EURO exposes only the new Syrian pound: 100 old SYP = 1 new SYP.
- * Convert at the server boundary so every client receives the new unit.
- */
-async function getSptodayRate(apiKey: string): Promise<CachedRate | null> {
+function validUnixSeconds(value: unknown): number | null {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : null;
+}
+
+async function getSyrRate(apiKey: string): Promise<CachedRate | null> {
   if (cachedRate && Date.now() - cachedRate.fetchedAt < RATE_CACHE_TTL_MS) {
     return cachedRate;
   }
 
-  const response = await fetch("https://api-v2.sp-today.com/api/v1/currencies", {
+  const response = await fetch(`${API_BASE_URL}/api/v1/currencies/USD`, {
     method: "GET",
     headers: {
       Accept: "application/json",
@@ -36,7 +40,7 @@ async function getSptodayRate(apiKey: string): Promise<CachedRate | null> {
   });
 
   if (!response.ok) {
-    console.error("[api/settings] SPToday HTTP status:", response.status);
+    console.error("[api/settings] SYR Rates HTTP status:", response.status);
     return null;
   }
 
@@ -44,89 +48,126 @@ async function getSptodayRate(apiKey: string): Promise<CachedRate | null> {
   if (!payload || typeof payload !== "object") return null;
 
   const root = payload as {
-    ok?: unknown;
     data?: {
-      unit?: unknown;
-      updated_at?: unknown;
-      currencies?: unknown;
+      code?: unknown;
+      sell?: unknown;
+      accepted_at?: unknown;
+      source_updated_at?: unknown;
+      status?: unknown;
+    };
+    meta?: {
+      denomination?: unknown;
     };
   };
+
   const data = root.data;
-  if (root.ok !== true || !data || data.unit !== "old" || !Array.isArray(data.currencies)) {
-    console.error("[api/settings] SPToday response shape or SYP unit is invalid");
+  const denomination = root.meta?.denomination;
+  if (
+    !data ||
+    data.code !== "USD" ||
+    (denomination !== "old" && denomination !== "new") ||
+    (data.status !== "fresh" && data.status !== "cached")
+  ) {
+    console.error("[api/settings] SYR Rates response shape or denomination is invalid");
     return null;
   }
 
-  const usd = data.currencies.find((item: unknown) => {
-    return !!item && typeof item === "object" && (item as { code?: unknown }).code === "USD";
-  }) as {
-    cities?: {
-      damascus?: {
-        sell?: unknown;
-      };
-    };
-    updated_at?: unknown;
-  } | undefined;
+  const sellRate = Number(data.sell);
+  const acceptedAt = validUnixSeconds(data.accepted_at);
+  const sourceUpdatedAt = validUnixSeconds(data.source_updated_at);
 
-  const oldRate = Number(usd?.cities?.damascus?.sell);
-  const updatedAt = typeof usd?.updated_at === "string"
-    ? usd.updated_at
-    : typeof data.updated_at === "string"
-      ? data.updated_at
-      : "";
-
-  if (!Number.isFinite(oldRate) || oldRate <= 0 || oldRate >= 1_000_000_000 || !updatedAt || !Number.isFinite(Date.parse(updatedAt))) {
-    console.error("[api/settings] SPToday USD selling rate is missing or invalid");
+  if (
+    !Number.isFinite(sellRate) ||
+    sellRate <= 0 ||
+    sellRate >= 1_000_000_000 ||
+    acceptedAt === null
+  ) {
+    console.error("[api/settings] SYR Rates USD sell price or accepted_at is invalid");
     return null;
   }
 
-  const newRate = oldRate / OLD_TO_NEW_SYP;
-  cachedRate = { rate: newRate, updatedAt, fetchedAt: Date.now() };
+  const normalizedRate = denomination === "old"
+    ? sellRate / OLD_TO_NEW_SYP
+    : sellRate;
+
+  if (!Number.isFinite(normalizedRate) || normalizedRate <= 0) return null;
+
+  cachedRate = {
+    rate: normalizedRate,
+    acceptedAt,
+    sourceUpdatedAt,
+    fetchedAt: Date.now(),
+    denomination,
+    status: data.status,
+  };
+
   return cachedRate;
 }
 
 /**
- * Signed-in customers receive usdToSyp in NEW Syrian pounds only.
- * Legacy admin-published values in Supabase are also stored in old SYP,
- * so normalize those by the same 100:1 conversion.
+ * Returns the USD sell rate normalized to new Syrian pounds.
+ * Cached/stale provider values may be displayed, but must not authorize
+ * a Syrian-pound payment.
  */
 export async function GET() {
   try {
     if (!getSession()) return reply({ error: "يرجى تسجيل الدخول" }, 401);
 
-    const apiKey = process.env.SPTODAY_API_KEY?.trim();
-    if (apiKey) {
-      const live = await getSptodayRate(apiKey);
+    const apiKey = process.env.SYR_API_KEY?.trim();
+    if (!apiKey) {
       return reply({
-        usdToSyp: live?.rate ?? null,
-        rateUpdatedAt: live?.updatedAt ?? null,
-        rateSource: "sptoday",
+        usdToSyp: null,
+        rateUpdatedAt: null,
+        rateSource: "syr-rates",
         sypUnit: "new",
+        rateStatus: "unavailable",
+        canUseSypPayments: false,
+        rateError: "api_key_missing",
       });
     }
 
-    const { data, error } = await getSupabaseAdmin()
-      .from("app_settings")
-      .select("value")
-      .eq("key", "usd_to_syp")
-      .maybeSingle();
-
-    if (error) {
-      if (error.code !== "42P01" && error.code !== "PGRST205") {
-        console.error("[api/settings] select:", error);
-      }
-      return reply({ usdToSyp: null, sypUnit: "new" });
+    const live = await getSyrRate(apiKey);
+    if (!live) {
+      return reply({
+        usdToSyp: null,
+        rateUpdatedAt: null,
+        rateSource: "syr-rates",
+        sypUnit: "new",
+        rateStatus: "unavailable",
+        canUseSypPayments: false,
+        rateError: "provider_unavailable",
+      });
     }
 
-    const oldRate = Number(String(data?.value ?? "").replace(/,/g, "").trim());
-    const newRate = oldRate / OLD_TO_NEW_SYP;
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const rateAgeSeconds = Math.max(0, nowSeconds - live.acceptedAt);
+    const rateIsRecent = rateAgeSeconds * 1000 <= MAX_PAYMENT_RATE_AGE_MS;
+    const canUseSypPayments = live.status === "fresh" && rateIsRecent;
+
     return reply({
-      usdToSyp: Number.isFinite(newRate) && newRate > 0 && newRate < 1_000_000_000 ? newRate : null,
-      rateSource: "admin",
+      usdToSyp: live.rate,
+      rateUpdatedAt: new Date(live.acceptedAt * 1000).toISOString(),
+      sourceUpdatedAt: live.sourceUpdatedAt
+        ? new Date(live.sourceUpdatedAt * 1000).toISOString()
+        : null,
+      rateSource: "syr-rates",
       sypUnit: "new",
+      rateDenomination: live.denomination,
+      rateStatus: canUseSypPayments ? "fresh" : "stale",
+      providerStatus: live.status,
+      rateAgeSeconds,
+      canUseSypPayments,
     });
   } catch (err) {
     console.error("[api/settings] GET:", err);
-    return reply({ usdToSyp: null, sypUnit: "new" });
+    return reply({
+      usdToSyp: null,
+      rateUpdatedAt: null,
+      rateSource: "syr-rates",
+      sypUnit: "new",
+      rateStatus: "unavailable",
+      canUseSypPayments: false,
+      rateError: "provider_unavailable",
+    });
   }
 }

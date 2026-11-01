@@ -30,9 +30,9 @@ export function codeMatches(storedHash: string, purpose: OtpPurpose, userId: str
 
 /** Convert Syrian local mobile numbers to Green API's international WhatsApp chat ID format. */
 export function whatsappChatId(phone: string): string {
-  let digits = String(phone).replace(/\\D/g, "");
+  let digits = String(phone).replace(/\D/g, "");
   if (digits.startsWith("00")) digits = digits.slice(2);
-  if (/^0?9\\d{8}$/.test(digits)) digits = `963${digits.replace(/^0/, "")}`;
+  if (/^0?9\d{8}$/.test(digits)) digits = `963${digits.replace(/^0/, "")}`;
   return `${digits}@c.us`;
 }
 
@@ -50,7 +50,7 @@ export async function sendWhatsAppText(phone: string, message: string): Promise<
     return false;
   }
   try {
-    const res = await fetch(`${apiUrl.replace(/\\/+$/, "")}/waInstance${instanceId}/sendMessage/${token}`, {
+    const res = await fetch(`${apiUrl.replace(/\/+$/, "")}/waInstance${instanceId}/sendMessage/${token}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chatId: whatsappChatId(phone), message }),

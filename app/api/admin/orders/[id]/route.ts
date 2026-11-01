@@ -16,16 +16,17 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   if (error) return dbFail("order detail", error, "تعذر تحميل الطلب");
   if (!order) return fail("الطلب غير موجود", 404);
 
-  const [{ data: customer }, { data: ledger }, { data: commission }, signed] = await Promise.all([
+  const [{ data: customer }, { data: ledger }, { data: commission }, { data: claimedWorker }, signed] = await Promise.all([
     db.from("users").select("id, name, phone, role, city, license, tier, debt_limit, debt_balance, referred_by_code").eq("id", order.user_id).maybeSingle(),
     db.from("debt_ledger").select("id, tx_type, amount, balance_after, note, created_at").eq("order_id", order.id).order("created_at", { ascending: true }),
     db.from("marketer_commissions").select("id, commission_amount, status, marketer_id").eq("order_id", order.id).maybeSingle(),
+    order.claimed_by ? db.from("users").select("id,name,phone").eq("id", order.claimed_by).maybeSingle() : Promise.resolve({ data: null, error: null }),
     signStored("receipts", [order.receipt_url]),
   ]);
 
   const { receipt_url, ...rest } = order;
   return ok({
-    order: { ...rest, receipt_signed_url: receipt_url ? signed[receipt_url] ?? null : null },
+    order: { ...rest, receipt_signed_url: receipt_url ? signed[receipt_url] ?? null : null, claimed_worker: claimedWorker, can_update: !isWorker || order.claimed_by === guard.admin.id, can_claim: isWorker && order.status === "pending" && !order.claimed_by },
     customer: customer ? (isWorker
       ? { id: customer.id, name: customer.name, phone: customer.phone, role: customer.role, city: customer.city, license: customer.license }
       : customer) : null,

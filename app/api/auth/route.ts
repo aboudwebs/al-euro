@@ -19,6 +19,9 @@ import { notifyUser } from "@/lib/push";
 
 export const dynamic = "force-dynamic";
 
+// Temporary public-demo switch. Set to true to restore WhatsApp registration OTP.
+const REGISTRATION_OTP_ENABLED = false;
+
 const USER_FIELDS = "id, role, name, phone, city, license, specs, tier, debt_limit, debt_balance, cashback_balance, my_ref_code, is_active, created_at";
 
 const NO_STORE = { "Cache-Control": "no-store" };
@@ -101,6 +104,7 @@ export async function POST(req: Request) {
     const allowedRoles = mode === "login" ? (isMobileClient ? ["workshop", "marketer"] : ["workshop", "marketer", "admin", "worker"]) : ["workshop", "marketer"];
 
     if (mode === "send-otp") {
+      if (!REGISTRATION_OTP_ENABLED) return json({ ok: true, otpRequired: false });
       if (!phone || String(phone).trim().length < 8) {
         return json({ error: "يرجى إدخال رقم موبايل صالح" }, 400);
       }
@@ -173,10 +177,11 @@ export async function POST(req: Request) {
       return json({ ok: true, user: safeUser, ...(accessToken ? { accessToken } : {}) });
     }
 
-    if (!otpCode || !otpToken) {
-      return json({ error: "يرجى إدخال رمز التحقق المرسل إلى واتساب" }, 400);
-    }
-    try {
+    if (REGISTRATION_OTP_ENABLED) {
+      if (!otpCode || !otpToken) {
+        return json({ error: "يرجى إدخال رمز التحقق المرسل إلى واتساب" }, 400);
+      }
+      try {
       const decoded = JSON.parse(Buffer.from(String(otpToken), "base64").toString("utf-8"));
       const submittedCode = String(otpCode).trim();
       if (!/^\d{6}$/.test(submittedCode) || decoded.p !== cleanPhone || typeof decoded.e !== "number" || !Number.isFinite(decoded.e) || decoded.e <= Date.now() || decoded.e > Date.now() + 5 * 60 * 1000) {
@@ -186,8 +191,9 @@ export async function POST(req: Request) {
       if (!safeEqual(expectedSig, decoded.s)) {
         return json({ error: "رمز التحقق المدخل غير صحيح" }, 400);
       }
-    } catch {
-      return json({ error: "بيانات التحقق غير صالحة" }, 400);
+      } catch {
+        return json({ error: "بيانات التحقق غير صالحة" }, 400);
+      }
     }
 
     if (existingUser) return json({ error: "هذا الرقم مسجل مسبقاً بنفس نوع الحساب." }, 400);

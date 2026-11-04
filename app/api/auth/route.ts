@@ -22,7 +22,7 @@ export const dynamic = "force-dynamic";
 // Temporary public-demo switch. Set to true to restore WhatsApp registration OTP.
 const REGISTRATION_OTP_ENABLED = false;
 
-const USER_FIELDS = "id, role, name, phone, city, license, specs, tier, debt_limit, debt_balance, cashback_balance, my_ref_code, is_active, created_at";
+const USER_FIELDS = "id, role, name, phone, city, license, license_verification_status, specs, tier, debt_limit, debt_balance, cashback_balance, my_ref_code, is_active, created_at";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
@@ -98,7 +98,7 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { mode = "login", role, name, phone, password, license, city, spec, refCode, refSignature, client, otpCode, otpToken } = body ?? {};
+    const { mode = "login", role, name, phone, password, license, manualVerification, city, spec, refCode, refSignature, client, otpCode, otpToken } = body ?? {};
     const isMobileClient = client === "mobile";
 
     const allowedRoles = mode === "login" ? (isMobileClient ? ["workshop", "marketer"] : ["workshop", "marketer", "admin", "worker"]) : ["workshop", "marketer"];
@@ -198,8 +198,8 @@ export async function POST(req: Request) {
 
     if (existingUser) return json({ error: "هذا الرقم مسجل مسبقاً بنفس نوع الحساب." }, 400);
     if (!name || !String(name).trim()) return json({ error: "الاسم مطلوب لإنشاء الحساب" }, 400);
-    if (role === "workshop" && (!license || !city || !spec)) {
-      return json({ error: "يرجى إدخال رقم الترخيص والمدينة واختصاص الماركات للورشة" }, 400);
+    if (role === "workshop" && ((!String(license ?? "").trim() && manualVerification !== true) || !city || !spec)) {
+      return json({ error: "يرجى إدخال رقم الترخيص، أو اختيار التحقق اليدوي والتأكد من إدخال المدينة والاختصاص" }, 400);
     }
 
     const specsArray = spec
@@ -240,7 +240,8 @@ export async function POST(req: Request) {
         name: String(name).trim(),
         phone: cleanPhone,
         password_hash: passHash,
-        license: role === "workshop" ? String(license).trim() : null,
+        license: role === "workshop" ? (String(license ?? "").trim() || null) : null,
+        license_verification_status: role === "workshop" && !String(license ?? "").trim() ? "pending" : null,
         city: city ? String(city).trim() : null,
         specs: specsArray,
         my_ref_code: generatedRefCode,

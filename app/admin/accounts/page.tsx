@@ -17,7 +17,8 @@ function AccountCard({ a, onChanged }: { a: AdminAccount; onChanged: () => void 
   const [evidence, setEvidence] = useState(a.license_verification_evidence || "");
   const [verificationNotes, setVerificationNotes] = useState(a.license_verification_notes || "");
   const isWorkshop = a.role === "workshop";
-  const needsManualVerification = isWorkshop && !a.license;
+  const isManualVerificationAccount = isWorkshop && !a.license;
+  const needsManualVerification = isManualVerificationAccount && a.license_verification_status !== "verified";
   const dirty = isWorkshop && Number(limit) !== (Number(a.debt_limit) || 0);
 
   useEffect(() => {
@@ -52,8 +53,8 @@ function AccountCard({ a, onChanged }: { a: AdminAccount; onChanged: () => void 
         <div><dt className="text-xs text-white/45">المدينة</dt><dd className="text-white">{a.city || "—"}</dd></div>
         <div><dt className="text-xs text-white/45">تاريخ التسجيل</dt><dd className="text-white">{fmtDate(a.created_at)}</dd></div>
         {isWorkshop && <div><dt className="text-xs text-white/45">رقم الترخيص</dt><dd className="text-white">{a.license || "لا يوجد — تحقق يدوي"}</dd></div>}
-        {needsManualVerification && <div><dt className="text-xs text-white/45">حالة التحقق</dt><dd className="text-white">{a.license_verification_status === "verified" ? "تم التحقق" : a.license_verification_status === "rejected" ? "تعذر التحقق" : "بانتظار التحقق"}</dd></div>}
-        {needsManualVerification && a.license_verification_reviewed_at && <div><dt className="text-xs text-white/45">تاريخ المراجعة</dt><dd className="text-white">{fmtDate(a.license_verification_reviewed_at)}</dd></div>}
+        {isManualVerificationAccount && <div><dt className="text-xs text-white/45">حالة التحقق</dt><dd className="text-white">{a.license_verification_status === "verified" ? "تم التحقق" : a.license_verification_status === "rejected" ? "تعذر التحقق" : "بانتظار التحقق"}</dd></div>}
+        {isManualVerificationAccount && a.license_verification_reviewed_at && <div><dt className="text-xs text-white/45">تاريخ المراجعة</dt><dd className="text-white">{fmtDate(a.license_verification_reviewed_at)}</dd></div>}
         {isWorkshop && <div><dt className="text-xs text-white/45">الاختصاص</dt><dd className="text-white">{a.specs?.length ? a.specs.join("، ") : "—"}</dd></div>}
         {isWorkshop && <div><dt className="text-xs text-white/45">أُحيلت بواسطة</dt><dd className="text-white">{a.referred_by_code ? `${a.referred_by_name ?? "—"} (${a.referred_by_code})` : "—"}</dd></div>}
         {!isWorkshop && <div><dt className="text-xs text-white/45">كود الإحالة</dt><dd className="text-white" dir="ltr" style={{ textAlign: "right" }}>{a.my_ref_code || "—"}</dd></div>}
@@ -104,6 +105,8 @@ function AccountCard({ a, onChanged }: { a: AdminAccount; onChanged: () => void 
           <button type="button" disabled={busy} className="inline-flex items-center gap-1.5 rounded-full border border-[#FF453A]/40 bg-[#FF453A]/10 px-4 py-2 text-sm font-semibold text-[#FF6961] hover:bg-[#FF453A]/20" onClick={() => { if (confirm(`تعليق حساب «${a.name}»؟ لن يتمكن من تسجيل الدخول.`)) patch({ is_active: false }, "تم تعليق الحساب"); }}>
             <Pause size={15} />تعليق الحساب
           </button>
+        ) : needsManualVerification ? (
+          <span className="text-xs text-amber-200">لا يمكن التفعيل قبل إكمال التحقق اليدوي أعلاه.</span>
         ) : (
           <button type="button" disabled={busy} className="btn" onClick={() => patch({ is_active: true }, "تم تفعيل الحساب")}>
             <Check size={15} />تفعيل الحساب

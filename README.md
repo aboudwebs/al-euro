@@ -6,15 +6,15 @@ Next.js 14 (App Router) · TypeScript · Tailwind · Supabase. Arabic RTL, dark/
 1. Supabase -> SQL editor -> run **`supabase/admin_full_setup.sql`**. Before the last statement, replace `09XXXXXXXX` with the phone of a registered **marketer** account to promote it to `admin`.
 2. Then run **`supabase/loyalty_cashback_2026_10.sql`** to enable the 90-day loyalty season and server-side cashback. Run this after the base setup.
 3. Then run **`supabase/migrations/20261104133000_euro_loyalty_cashback_tiers.sql`** to apply the current Standard / Bronze / Silver / Gold / Platinum / Elite cashback thresholds.
-3. Set the environment variables from `.env.example` (Render: Environment tab).
-4. Build `npm install && npm run build`, start `npm start`.
-5. Sign in at `/admin/login` with the promoted account.
+4. Set the environment variables from `.env.example` (Render: Environment tab).
+5. Build `npm install && npm run build`, start `npm start`.
+6. Sign in at `/admin/login` with the promoted account.
 
 ## Admin dashboard (`/admin`)
 | Route | Purpose |
 | --- | --- |
 | `/admin` | KPIs, branch stock breakdown, low-stock alerts |
-| `/admin/accounts` | Activate / suspend workshops & marketers, automatically calculated loyalty tier (Bronze/Silver/Gold/Platinum/VIP), cashback balance and debt limit |
+| `/admin/accounts` | Activate / suspend workshops & marketers, automatically calculated loyalty tier (Standard/Bronze/Silver/Gold/Platinum/Elite), cashback balance and debt limit |
 | `/admin/payments` | Sham Cash receipt queue (zoomable receipt, approve / reject with reason) |
 | `/admin/orders` | Filterable orders, detail drawer, one-click status, `/admin/orders/[id]/print` invoice & packing slip |
 | `/admin/requests` | VIN / special requests: quote, reply, status |

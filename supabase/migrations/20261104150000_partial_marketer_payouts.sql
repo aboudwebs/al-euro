@@ -1,4 +1,5 @@
 -- Partial marketer payouts with optional delivery details.
+drop function if exists public.request_marketer_payout(uuid,text);
 alter table public.marketer_payout_requests
   alter column payout_details drop not null;
 

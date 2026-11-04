@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 // password_hash is never selected.
 const FIELDS =
-  "id, role, name, phone, license, city, specs, tier, debt_limit, debt_balance, cashback_balance, loyalty_season_spend, loyalty_season_started_at, my_ref_code, referred_by_code, is_active, created_at";
+  "id, role, name, phone, license, license_verification_status, license_verification_workshop_name, license_verification_address, license_verification_evidence, license_verification_notes, license_verification_reviewed_at, city, specs, tier, debt_limit, debt_balance, cashback_balance, loyalty_season_spend, loyalty_season_started_at, my_ref_code, referred_by_code, is_active, created_at";
 
 export async function GET(req: Request) {
   const guard = await requireAdmin();

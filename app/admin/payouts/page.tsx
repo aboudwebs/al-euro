@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Check, RefreshCw, X } from "lucide-react";
 import { api, Badge, Empty, ErrorBox, fmtDateTime, money, PageHead, Spinner, toast, useApi } from "@/components/admin/kit";
 
-type PayoutRequest = { id:string; marketer_id:string; amount:number; payout_details:string; status:"pending"|"paid"|"rejected"; admin_note:string|null; created_at:string; processed_at:string|null; commission_count:number; marketer:{id:string;name:string;phone:string}|null };
+type PayoutRequest = { id:string; marketer_id:string; amount:number; payout_details:string|null; status:"pending"|"paid"|"rejected"; admin_note:string|null; created_at:string; processed_at:string|null; commission_count:number; marketer:{id:string;name:string;phone:string}|null };
 export default function MarketerPayoutsPage(){
  const {data,error,loading,reload}=useApi<{requests:PayoutRequest[]}>("/api/admin/commissions/payout-requests");
  const [busy,setBusy]=useState<string|null>(null);
@@ -24,7 +24,7 @@ export default function MarketerPayoutsPage(){
  }
  const requests=data?.requests??[];
  return <>
-  <PageHead title="طلبات سحب العمولات" sub="راجع بيانات التحويل، ثم سجّل الدفع بعد تنفيذه فعلياً أو ارفض الطلب.">
+  <PageHead title="طلبات سحب العمولات" sub="راجع معلومات السحب اختيارية؛ إذا كانت فارغة فهذا يعني أن المسوّق سيستلم المبلغ حضورياً من الشركة. أكّد الدفع بعد تنفيذه فعلياً.">
    <button type="button" className="btn2" onClick={reload}><RefreshCw size={15}/>تحديث</button>
   </PageHead>
   {error&&<ErrorBox message={error} onRetry={reload}/>}
@@ -38,7 +38,7 @@ export default function MarketerPayoutsPage(){
     </header>
     <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
      <p className="mb-1 text-xs text-white/45">بيانات استلام التحويل</p>
-     <p className="whitespace-pre-wrap break-words text-sm text-white">{r.payout_details}</p>
+     <p className="whitespace-pre-wrap break-words text-sm text-white">{r.payout_details?.trim() || "استلام حضوري من مقر الشركة — لا توجد بيانات محفظة"}</p>
     </div>
     <p className="text-xs text-white/45">{fmtDateTime(r.created_at)} · {r.commission_count} عمولة مرتبطة</p>
     {r.admin_note&&<p className="text-xs text-white/65">ملاحظة الإدارة: {r.admin_note}</p>}

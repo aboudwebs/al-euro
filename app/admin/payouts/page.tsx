@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Check, RefreshCw, X } from "lucide-react";
 import { api, Badge, Empty, ErrorBox, fmtDateTime, money, PageHead, Spinner, toast, useApi } from "@/components/admin/kit";
 
-type PayoutRequest = { id:string; marketer_id:string; amount:number; payout_details:string|null; status:"pending"|"paid"|"rejected"; admin_note:string|null; created_at:string; processed_at:string|null; commission_count:number; marketer:{id:string;name:string;phone:string}|null };
+type PayoutRequest = { id:string; marketer_id:string; amount:number; payout_details:string|null; status:"pending"|"paid"|"rejected"; admin_note:string|null; created_at:string; processed_at:string|null; processed_by:string|null; processed_by_name:string|null; commission_count:number; marketer:{id:string;name:string;phone:string}|null };
 export default function MarketerPayoutsPage(){
  const {data,error,loading,reload}=useApi<{requests:PayoutRequest[]}>("/api/admin/commissions/payout-requests");
  const [busy,setBusy]=useState<string|null>(null);
@@ -42,6 +42,7 @@ export default function MarketerPayoutsPage(){
     </div>
     <p className="text-xs text-white/45">{fmtDateTime(r.created_at)} · {r.commission_count} عمولة مرتبطة</p>
     {r.admin_note&&<p className="text-xs text-white/65">ملاحظة الإدارة: {r.admin_note}</p>}
+    {r.processed_at&&<p className="text-xs text-white/45">تمت المعالجة: {fmtDateTime(r.processed_at)} · المسؤول: {r.processed_by_name??"—"}</p>}
     {r.status==="pending"&&<div className="flex flex-wrap gap-2">
      <button type="button" className="btn" disabled={busy===r.id} onClick={()=>process(r,"paid")}><Check size={15}/>تم التحويل فعلياً</button>
      <button type="button" className="btn2 !text-[#FF6961]" disabled={busy===r.id} onClick={()=>process(r,"rejected")}><X size={15}/>رفض الطلب</button>

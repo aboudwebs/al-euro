@@ -47,6 +47,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     updates.license_verification_evidence = evidence || null;
     updates.license_verification_notes = notes || null;
     updates.license_verification_reviewed_at = status === "pending" ? null : new Date().toISOString();
+    updates.license_verification_reviewed_by = status === "pending" ? null : guard.admin.id;
     if (status === "verified") updates.is_active = true;
     if (status === "rejected") updates.is_active = false;
   }

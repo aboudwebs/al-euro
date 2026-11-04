@@ -52,6 +52,12 @@ export type AccountInfo = {
   role: "workshop" | "marketer" | "admin";
   city: string | null;
   license: string | null;
+  license_verification_status?: "pending" | "verified" | "rejected" | null;
+  license_verification_workshop_name?: string | null;
+  license_verification_address?: string | null;
+  license_verification_evidence?: string | null;
+  license_verification_notes?: string | null;
+  license_verification_reviewed_at?: string | null;
   tier: Tier | null;
   debt_limit?: number | null;
   debt_balance?: number | null;

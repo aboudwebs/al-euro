@@ -8,7 +8,8 @@ alter table public.users
   add column if not exists license_verification_address text,
   add column if not exists license_verification_evidence text,
   add column if not exists license_verification_notes text,
-  add column if not exists license_verification_reviewed_at timestamptz;
+  add column if not exists license_verification_reviewed_at timestamptz,
+  add column if not exists license_verification_reviewed_by uuid references public.users(id) on delete set null;
 
 do $$
 begin

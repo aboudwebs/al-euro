@@ -12,7 +12,12 @@ type State = "all" | "active" | "inactive";
 function AccountCard({ a, onChanged }: { a: AdminAccount; onChanged: () => void }) {
   const [limit, setLimit] = useState(String(Number(a.debt_limit) || 0));
   const [busy, setBusy] = useState(false);
+  const [workshopName, setWorkshopName] = useState(a.license_verification_workshop_name || "");
+  const [workshopAddress, setWorkshopAddress] = useState(a.license_verification_address || "");
+  const [evidence, setEvidence] = useState(a.license_verification_evidence || "");
+  const [verificationNotes, setVerificationNotes] = useState(a.license_verification_notes || "");
   const isWorkshop = a.role === "workshop";
+  const needsManualVerification = isWorkshop && !a.license;
   const dirty = isWorkshop && Number(limit) !== (Number(a.debt_limit) || 0);
 
   useEffect(() => {
@@ -46,12 +51,38 @@ function AccountCard({ a, onChanged }: { a: AdminAccount; onChanged: () => void 
       <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
         <div><dt className="text-xs text-white/45">المدينة</dt><dd className="text-white">{a.city || "—"}</dd></div>
         <div><dt className="text-xs text-white/45">تاريخ التسجيل</dt><dd className="text-white">{fmtDate(a.created_at)}</dd></div>
-        {isWorkshop && <div><dt className="text-xs text-white/45">رقم الترخيص</dt><dd className="text-white">{a.license || "—"}</dd></div>}
+        {isWorkshop && <div><dt className="text-xs text-white/45">رقم الترخيص</dt><dd className="text-white">{a.license || "لا يوجد — تحقق يدوي"}</dd></div>}
+        {needsManualVerification && <div><dt className="text-xs text-white/45">حالة التحقق</dt><dd className="text-white">{a.license_verification_status === "verified" ? "تم التحقق" : a.license_verification_status === "rejected" ? "تعذر التحقق" : "بانتظار التحقق"}</dd></div>}
+        {needsManualVerification && a.license_verification_reviewed_at && <div><dt className="text-xs text-white/45">تاريخ المراجعة</dt><dd className="text-white">{fmtDate(a.license_verification_reviewed_at)}</dd></div>}
         {isWorkshop && <div><dt className="text-xs text-white/45">الاختصاص</dt><dd className="text-white">{a.specs?.length ? a.specs.join("، ") : "—"}</dd></div>}
         {isWorkshop && <div><dt className="text-xs text-white/45">أُحيلت بواسطة</dt><dd className="text-white">{a.referred_by_code ? `${a.referred_by_name ?? "—"} (${a.referred_by_code})` : "—"}</dd></div>}
         {!isWorkshop && <div><dt className="text-xs text-white/45">كود الإحالة</dt><dd className="text-white" dir="ltr" style={{ textAlign: "right" }}>{a.my_ref_code || "—"}</dd></div>}
         {isWorkshop && <div><dt className="text-xs text-white/45">الدين الحالي</dt><dd className={Number(a.debt_balance) > 0 ? "font-semibold text-[#FF9F0A]" : "text-white"}>{money(a.debt_balance)}</dd></div>}
       </dl>
+
+      {needsManualVerification && (
+        <div className="space-y-2 rounded-2xl border border-amber-400/30 bg-amber-400/5 p-3 text-sm">
+          <p className="font-semibold text-amber-200">التحقق اليدوي من هوية صاحب الورشة</p>
+          <p className="text-xs leading-6 text-white/65">يتواصل الدعم مع صاحب الحساب عبر الرقم المسجل، ويتحقق من اسم الورشة وموقعها ويطلب صورة الواجهة أو فيديو مباشر. سجّل نتيجة التحقق هنا. لا تفعّل الحساب قبل اكتمال الأدلة.</p>
+          <label className="block space-y-1 text-xs text-white/65">اسم الورشة
+            <input className="inp" value={workshopName} onChange={(e) => setWorkshopName(e.target.value)} placeholder="اسم الورشة كما يظهر على الواجهة" />
+          </label>
+          <label className="block space-y-1 text-xs text-white/65">العنوان الدقيق
+            <input className="inp" value={workshopAddress} onChange={(e) => setWorkshopAddress(e.target.value)} placeholder="المحافظة، المنطقة، الشارع" />
+          </label>
+          <label className="block space-y-1 text-xs text-white/65">أدلة التحقق
+            <textarea className="inp min-h-20" value={evidence} onChange={(e) => setEvidence(e.target.value)} placeholder="مثال: تمت مطابقة الواجهة واللافتة مع الموقع، وتم التحدث مع صاحب الورشة..." />
+          </label>
+          <label className="block space-y-1 text-xs text-white/65">ملاحظات / سبب الرفض
+            <textarea className="inp min-h-16" value={verificationNotes} onChange={(e) => setVerificationNotes(e.target.value)} placeholder="ملاحظات الدعم أو سبب تعذر التحقق" />
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" disabled={busy || !workshopName.trim() || !workshopAddress.trim() || !evidence.trim()} className="btn" onClick={() => patch({ license_verification_status: "verified", license_verification_workshop_name: workshopName, license_verification_address: workshopAddress, license_verification_evidence: evidence, license_verification_notes: verificationNotes }, "تم توثيق التحقق وتفعيل الورشة") }><Check size={15} />تأكيد الهوية وتفعيل الحساب</button>
+            <button type="button" disabled={busy || !verificationNotes.trim()} className="inline-flex items-center gap-1.5 rounded-full border border-[#FF453A]/40 bg-[#FF453A]/10 px-4 py-2 text-sm font-semibold text-[#FF6961]" onClick={() => patch({ license_verification_status: "rejected", license_verification_workshop_name: workshopName, license_verification_address: workshopAddress, license_verification_evidence: evidence, license_verification_notes: verificationNotes }, "تم تسجيل تعذر التحقق")}>تعذر التحقق</button>
+          </div>
+          {a.license_verification_notes && <p className="text-xs text-white/55">آخر ملاحظة: {a.license_verification_notes}</p>}
+        </div>
+      )}
 
       {isWorkshop && (
         <div className="grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-black/30 p-3 text-sm">

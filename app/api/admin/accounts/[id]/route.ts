@@ -24,6 +24,9 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   if ("is_active" in body) {
     if (typeof body.is_active !== "boolean") return fail("قيمة التفعيل غير صالحة");
+    if (body.is_active && target.role === "workshop" && !target.license && body.license_verification_status !== "verified" && target.license_verification_status !== "verified") {
+      return fail("يجب إكمال التحقق اليدوي من هوية الورشة قبل تفعيل الحساب", 403);
+    }
     updates.is_active = body.is_active;
   }
   if ("license_verification_status" in body) {

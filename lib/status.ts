@@ -45,11 +45,12 @@ export const LEDGER_TX = { debit: "debit", payment: "payment" } as const;
 export type LedgerTx = (typeof LEDGER_TX)[keyof typeof LEDGER_TX];
 
 export const TIER = {
+  Standard: "Standard",
   Bronze: "Bronze",
   Silver: "Silver",
   Gold: "Gold",
   Platinum: "Platinum",
-  VIP: "VIP",
+  Elite: "Elite",
 } as const;
 export type Tier = (typeof TIER)[keyof typeof TIER];
 export const TIERS_LIST = Object.values(TIER) as Tier[];
@@ -93,11 +94,12 @@ export const LEDGER_TX_LABEL: Record<LedgerTx, string> = {
 };
 
 export const TIER_LABEL: Record<Tier, string> = {
+  Standard: "عادي — بدون كاش باك",
   Bronze: "برونزية",
   Silver: "فضية",
   Gold: "ذهبية",
   Platinum: "بلاتينية",
-  VIP: "النخبة VIP",
+  Elite: "النخبة",
 };
 
 export const ROLE_LABEL = { workshop: "ورشة", marketer: "مسوّق", admin: "إدارة", worker: "موظف" } as const;

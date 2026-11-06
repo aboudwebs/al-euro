@@ -6,6 +6,8 @@ import {
   clearSession,
   getSession,
   hashPassword,
+  verifyPassword,
+  isLegacyPasswordHash,
   getSecret,
   safeEqual,
   setSession,
@@ -134,7 +136,6 @@ export async function POST(req: Request) {
     if (role === "worker" && !/^[0-9]{8,10}$/.test(cleanPhone)) {
       return json({ error: "معرّف الموظف يجب أن يتكون من 8 إلى 10 أرقام" }, 400);
     }
-    const passHash = hashPassword(String(password));
     const { data: existingUser, error: findError } = await db
       .from("users")
       .select(`${USER_FIELDS}, password_hash`)
@@ -146,7 +147,7 @@ export async function POST(req: Request) {
 
     if (mode === "login") {
       if (!existingUser) return json({ error: role === "worker" ? "معرّف الموظف أو كلمة المرور غير صحيح" : "لا يوجد حساب مسجل بهذا الرقم ونوع الحساب." }, 404);
-      if (!safeEqual(String(existingUser.password_hash ?? ""), passHash)) {
+      if (!verifyPassword(String(existingUser.password_hash ?? ""), String(password))) {
         return json({ error: "كلمة المرور غير صحيحة" }, 401);
       }
       if (!existingUser.is_active) {
@@ -154,6 +155,13 @@ export async function POST(req: Request) {
           pendingApproval: true,
           error: "حسابك قيد المراجعة من قِبل الإدارة، وسيتم تفعيله بعد التحقق من البيانات.",
         }, 403);
+      }
+
+      if (isLegacyPasswordHash(String(existingUser.password_hash ?? ""))) {
+        const upgradedHash = hashPassword(String(password));
+        const { error: rehashError } = await db.from("users").update({ password_hash: upgradedHash })
+          .eq("id", existingUser.id).eq("password_hash", existingUser.password_hash);
+        if (rehashError) console.error("[api/auth] legacy password rehash:", rehashError);
       }
 
       // The 30 days of an account-deletion request are over: finish it and refuse the sign-in (never throws).
@@ -176,6 +184,8 @@ export async function POST(req: Request) {
       const accessToken = isMobileClient ? signSession({ id: String(existingUser.id), role: existingUser.role, name: existingUser.name, phone: existingUser.phone, my_ref_code: existingUser.my_ref_code, iat: Date.now() }) : undefined;
       return json({ ok: true, user: safeUser, ...(accessToken ? { accessToken } : {}) });
     }
+
+    const passHash = hashPassword(String(password));
 
     if (REGISTRATION_OTP_ENABLED) {
       if (!otpCode || !otpToken) {

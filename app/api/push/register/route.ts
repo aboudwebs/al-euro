@@ -53,8 +53,8 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
-  const session = getSession();
-  if (!session) return NextResponse.json({ error: "يرجى تسجيل الدخول" }, { status: 401 });
+  const auth = await requireUser();
+  if (!auth.ok) return auth.response;
   try {
     let body: Record<string, unknown> = {};
     try { body = await req.json(); } catch { /* query-string token is used by native sign-out */ }
@@ -62,7 +62,7 @@ export async function DELETE(req: Request) {
     const token = typeof body?.token === "string" ? body.token.trim() : (queryToken ?? "").trim();
     if (!token) return NextResponse.json({ ok: true });
     const { error } = await getSupabaseAdmin().from("push_tokens")
-      .delete().eq("user_id", session.id).eq("token", token);
+      .delete().eq("user_id", auth.user.id).eq("token", token);
     if (error) {
       console.error("[api/push/register] delete", error);
       return NextResponse.json({ error: "تعذر إلغاء تسجيل الجهاز" }, { status: 500 });

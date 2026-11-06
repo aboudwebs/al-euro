@@ -32,6 +32,10 @@ export async function GET(req: Request) {
     for (const row of m ?? []) if (row.my_ref_code) marketers[row.my_ref_code] = row.name;
   }
 
-  const accounts = (data ?? []).map((u) => ({ ...u, referred_by_name: u.referred_by_code ? marketers[u.referred_by_code] ?? null : null }));
+  const accounts = (data ?? []).map((u) => {
+    const spend = Number(u.loyalty_season_spend) || 0;
+    const tier = u.role !== "workshop" ? u.tier : spend >= 50000 ? "VIP" : spend >= 30000 ? "Platinum" : spend >= 20000 ? "Gold" : spend >= 15000 ? "Silver" : spend >= 10000 ? "Bronze" : "Standard";
+    return { ...u, tier, referred_by_name: u.referred_by_code ? marketers[u.referred_by_code] ?? null : null };
+  });
   return ok({ accounts });
 }

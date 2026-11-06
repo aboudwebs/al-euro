@@ -25,7 +25,7 @@ export async function GET() {
     const userView = { ...user };
     const seasonStart = user.loyalty_season_started_at ? new Date(user.loyalty_season_started_at).getTime() : 0;
     if (!seasonStart || Date.now() >= seasonStart + 90 * 24 * 60 * 60 * 1000) {
-      userView.tier = "Bronze";
+      userView.tier = "Standard";
       userView.loyalty_season_spend = 0;
       userView.loyalty_season_started_at = null;
     }

@@ -27,5 +27,5 @@ export const SEED_PARTS:Part[]=[
 {id:"6",name:"حساس أوكسجين",brand:"BMW",pn:"11787589121",price:64,stock:0},
 {id:"7",name:"فلتر هواء",brand:"Mercedes-Benz",pn:"A2760940004",price:22,stock:30},
 {id:"8",name:"سير مجموعة",brand:"Audi",pn:"06E903137",price:38,stock:12}];
-export const TIERS=[{n:"برونزية",min:0,cb:"2%"},{n:"فضية",min:1000,cb:"4%"},{n:"ذهبية",min:2000,cb:"6%"},{n:"بلاتينية",min:3000,cb:"8%"},{n:"النخبة VIP",min:4000,cb:"10%"}];
+export const TIERS=[{n:"عادي",min:0,cb:"0%"},{n:"برونزية",min:10000,cb:"2%"},{n:"فضية",min:15000,cb:"5%"},{n:"ذهبية",min:20000,cb:"7%"},{n:"بلاتينية",min:30000,cb:"10%"},{n:"النخبة VIP",min:50000,cb:"15%"}];
 export const usd=(n:number)=>"$"+n.toLocaleString("en-US",{maximumFractionDigits:2});

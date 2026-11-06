@@ -246,6 +246,7 @@ export async function POST(req: Request) {
         specs: specsArray,
         my_ref_code: generatedRefCode,
         referred_by_code: validatedReferralCode,
+        tier: role === "workshop" ? "Standard" : undefined,
         is_active: role !== "workshop",
       }).select(USER_FIELDS).single();
 

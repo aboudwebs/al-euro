@@ -95,10 +95,12 @@ export function verifySession(token: string | undefined | null): Session | null 
 }
 
 /** Reads a signed session from the browser cookie or native-app Bearer header. */
-export function getSession(): Session | null {
-  const cookieToken = cookies().get(COOKIE_NAME)?.value;
+export async function getSession(): Promise<Session | null> {
+  const cookieStore = await cookies();
+  const cookieToken = cookieStore.get(COOKIE_NAME)?.value;
   if (cookieToken) return verifySession(cookieToken);
-  const authorization = headers().get("authorization") || "";
+  const headerStore = await headers();
+  const authorization = headerStore.get("authorization") || "";
   const match = authorization.match(/^Bearer\s+(.+)$/i);
   return verifySession(match?.[1] ?? null);
 }

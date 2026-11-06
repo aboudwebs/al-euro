@@ -94,11 +94,11 @@ export const LEDGER_TX_LABEL: Record<LedgerTx, string> = {
 };
 
 export const TIER_LABEL: Record<Tier, string> = {
-  Standard: "عادي — بدون كاش باك",
-  Bronze: "برونزية",
-  Silver: "فضية",
-  Gold: "ذهبية",
-  Platinum: "بلاتينية",
+  Standard: "عادي — 0% كاش باك",
+  Bronze: "برونزية — 2% كاش باك",
+  Silver: "فضية — 5% كاش باك",
+  Gold: "ذهبية — 7% كاش باك",
+  Platinum: "بلاتينية — 10% كاش باك",
   Elite: "النخبة Elite",
 };
 

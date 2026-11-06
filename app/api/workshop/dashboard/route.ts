@@ -24,11 +24,14 @@ export async function GET() {
     if (!user) return reply({ error: "حساب الورشة غير موجود" }, 404);
     const userView = { ...user };
     const seasonStart = user.loyalty_season_started_at ? new Date(user.loyalty_season_started_at).getTime() : 0;
-    if (!seasonStart || Date.now() >= seasonStart + 90 * 24 * 60 * 60 * 1000) {
+    const activeSeason = seasonStart > 0 && Date.now() < seasonStart + 90 * 24 * 60 * 60 * 1000;
+    const spend = activeSeason ? Number(user.loyalty_season_spend) || 0 : 0;
+    if (!activeSeason) {
       userView.tier = "Standard";
       userView.loyalty_season_spend = 0;
       userView.loyalty_season_started_at = null;
     }
+    userView.cashback_rate = spend >= 50000 ? 0.15 : spend >= 30000 ? 0.10 : spend >= 20000 ? 0.07 : spend >= 15000 ? 0.05 : spend >= 10000 ? 0.02 : 0;
     return reply({ user: userView, orders: orders ?? [], ledger: ledger ?? [] });
   } catch (error) {
     console.error("[api/workshop/dashboard]", error);

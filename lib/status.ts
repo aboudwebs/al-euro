@@ -45,6 +45,7 @@ export const LEDGER_TX = { debit: "debit", payment: "payment" } as const;
 export type LedgerTx = (typeof LEDGER_TX)[keyof typeof LEDGER_TX];
 
 export const TIER = {
+  Standard: "Standard",
   Bronze: "Bronze",
   Silver: "Silver",
   Gold: "Gold",
@@ -93,6 +94,7 @@ export const LEDGER_TX_LABEL: Record<LedgerTx, string> = {
 };
 
 export const TIER_LABEL: Record<Tier, string> = {
+  Standard: "عادي — بدون كاش باك",
   Bronze: "برونزية",
   Silver: "فضية",
   Gold: "ذهبية",

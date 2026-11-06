@@ -12,7 +12,7 @@ alter table public.users
 alter table public.users drop constraint if exists users_tier_check;
 alter table public.users
   add constraint users_tier_check
-  check (tier in ('Bronze', 'Silver', 'Gold', 'Platinum', 'VIP'));
+  check (tier in ('Standard', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Elite'));
 
 alter table public.debt_ledger add column if not exists idempotency_key uuid;
 create unique index if not exists debt_ledger_workshop_idempotency_unique
@@ -156,18 +156,20 @@ begin
       -- Cashback rate is based on the tier BEFORE this order.
       -- The tier reached after counting this order becomes active on the NEXT order.
       v_rate := case
-        when v_spend_before >= 4000 then 0.10
-        when v_spend_before >= 3000 then 0.08
-        when v_spend_before >= 2000 then 0.06
-        when v_spend_before >= 1000 then 0.04
-        else 0.02
+        when v_spend_before >= 50000 then 0.15
+        when v_spend_before >= 30000 then 0.10
+        when v_spend_before >= 20000 then 0.07
+        when v_spend_before >= 15000 then 0.05
+        when v_spend_before >= 10000 then 0.02
+        else 0.00
       end;
       v_tier := case
-        when v_spend_after >= 4000 then 'VIP'
-        when v_spend_after >= 3000 then 'Platinum'
-        when v_spend_after >= 2000 then 'Gold'
-        when v_spend_after >= 1000 then 'Silver'
-        else 'Bronze'
+        when v_spend_after >= 50000 then 'Elite'
+        when v_spend_after >= 30000 then 'Platinum'
+        when v_spend_after >= 20000 then 'Gold'
+        when v_spend_after >= 15000 then 'Silver'
+        when v_spend_after >= 10000 then 'Bronze'
+        else 'Standard'
       end;
       v_cashback := round(greatest(0, v_total - coalesce(o.cashback_used, 0)) * v_rate, 2);
       v_cashback_status := case

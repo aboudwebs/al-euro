@@ -7,10 +7,11 @@ export const dynamic = "force-dynamic";
 const FIELDS = "id, name, vin, make, model, year, notes";
 
 /** Body: any of { vin, name, make, model, year, notes }. Every query is limited to the signed-in user's own rows. */
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const auth = await requireUser();
   if (!auth.ok) return auth.response;
-  if (!isUuid(params.id)) return reply({ error: "معرّف المركبة غير صالح" }, 400);
+  if (!isUuid(id)) return reply({ error: "معرّف المركبة غير صالح" }, 400);
   const body = await readBody(req);
   if (!body) return reply({ error: "بيانات الطلب غير صالحة" }, 400);
   const parsed = parseVehicle(body, true);
@@ -20,7 +21,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   const { data, error } = await getSupabaseAdmin()
     .from("user_vehicles")
     .update({ ...parsed.value, updated_at: new Date().toISOString() })
-    .eq("id", params.id)
+    .eq("id", id)
     .eq("user_id", auth.user.id)
     .select(FIELDS)
     .maybeSingle();
@@ -30,15 +31,16 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   return reply({ ok: true, vehicle: vehicleJson(data as VehicleRow) });
 }
 
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const auth = await requireUser();
   if (!auth.ok) return auth.response;
-  if (!isUuid(params.id)) return reply({ error: "معرّف المركبة غير صالح" }, 400);
+  if (!isUuid(id)) return reply({ error: "معرّف المركبة غير صالح" }, 400);
 
   const { data, error } = await getSupabaseAdmin()
     .from("user_vehicles")
     .delete()
-    .eq("id", params.id)
+    .eq("id", id)
     .eq("user_id", auth.user.id)
     .select("id")
     .maybeSingle();

@@ -4,17 +4,18 @@ import { getSupabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const auth = await requireUser();
   if (!auth.ok) return auth.response;
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.id)) {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
     return NextResponse.json({ error: "معرّف الطلب غير صالح" }, { status: 400 });
   }
   let body: any = {};
   try { body = await req.json(); } catch { /* optional body */ }
   const note = typeof body?.note === "string" ? body.note.trim().slice(0, 300) : null;
   const { data, error } = await getSupabaseAdmin().rpc("customer_cancel_pending_order", {
-    p_order_id: params.id,
+    p_order_id: id,
     p_user_id: auth.user.id,
     p_note: note,
   });

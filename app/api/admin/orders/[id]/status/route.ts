@@ -6,10 +6,11 @@ import { ORDER_STATUS, ORDER_STATUSES } from "@/lib/status";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const guard = await requireStaffAccess("orders");
   if (!guard.ok) return guard.response;
-  if (!isUuid(params.id)) return fail("معرّف الطلب غير صالح");
+  if (!isUuid(id)) return fail("معرّف الطلب غير صالح");
 
   const body = await readJson(req);
   const status = body?.status;
@@ -27,7 +28,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const db = getSupabaseAdmin();
   const { data: order, error: orderReadError } = await db.from("orders")
     .select("id,user_id,user_role,pay_method")
-    .eq("id", params.id)
+    .eq("id", id)
     .maybeSingle();
   if (orderReadError) return dbFail("order notification lookup", orderReadError, "تعذر قراءة الطلب");
 
@@ -40,7 +41,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const loyaltyBefore = loyaltyBeforeResult?.data ?? null;
 
   const { data, error } = await db.rpc("admin_set_order_status_for_staff", {
-    p_order_id: params.id,
+    p_order_id: id,
     p_new_status: status,
     p_note: note || null,
     p_actor_id: guard.admin.id,

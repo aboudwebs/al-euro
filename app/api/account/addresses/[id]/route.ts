@@ -7,10 +7,11 @@ export const dynamic = "force-dynamic";
 const FIELDS = "id, label, governorate, area, street, details, phone, is_default";
 
 /** Body: any of { label, governorate, area, street, details, phone, isDefault }. Only the owner's address can change. */
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const auth = await requireUser();
   if (!auth.ok) return auth.response;
-  if (!isUuid(params.id)) return reply({ error: "معرّف العنوان غير صالح" }, 400);
+  if (!isUuid(id)) return reply({ error: "معرّف العنوان غير صالح" }, 400);
   const body = await readBody(req);
   if (!body) return reply({ error: "بيانات الطلب غير صالحة" }, 400);
   const parsed = parseAddress(body, true);
@@ -25,7 +26,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   const { data, error } = await db
     .from("user_addresses")
     .update(updates)
-    .eq("id", params.id)
+    .eq("id", id)
     .eq("user_id", auth.user.id)
     .select(FIELDS)
     .maybeSingle();
@@ -33,21 +34,22 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   if (!data) return reply({ error: "العنوان غير موجود" }, 404);
 
   if (body.isDefault === true) {
-    await db.from("user_addresses").update({ is_default: false }).eq("user_id", auth.user.id).neq("id", params.id);
+    await db.from("user_addresses").update({ is_default: false }).eq("user_id", auth.user.id).neq("id", id);
   }
   return reply({ ok: true, address: addressJson(data as AddressRow) });
 }
 
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const auth = await requireUser();
   if (!auth.ok) return auth.response;
-  if (!isUuid(params.id)) return reply({ error: "معرّف العنوان غير صالح" }, 400);
+  if (!isUuid(id)) return reply({ error: "معرّف العنوان غير صالح" }, 400);
 
   const db = getSupabaseAdmin();
   const { data, error } = await db
     .from("user_addresses")
     .delete()
-    .eq("id", params.id)
+    .eq("id", id)
     .eq("user_id", auth.user.id)
     .select("id, is_default")
     .maybeSingle();

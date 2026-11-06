@@ -35,6 +35,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Audit all dependencies
-        run: npm audit --audit-level=high
+        run: npm audit --audit-level=moderate
       - name: Build application
         run: npm run build

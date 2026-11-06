@@ -11,16 +11,17 @@ export const dynamic = "force-dynamic";
  * The admin reply is stored after a marker inside special_requests.notes (no extra column is needed).
  * Saving a price on a "new" request moves it to "priced" automatically.
  */
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
-  if (!isUuid(params.id)) return fail("معرّف الطلب غير صالح");
+  if (!isUuid(id)) return fail("معرّف الطلب غير صالح");
 
   const body = await readJson(req);
   if (!body) return fail("بيانات غير صالحة");
 
   const db = getSupabaseAdmin();
-  const { data: current, error: readError } = await db.from("special_requests").select("id, user_id, part_name, status, notes, quoted_price").eq("id", params.id).maybeSingle();
+  const { data: current, error: readError } = await db.from("special_requests").select("id, user_id, part_name, status, notes, quoted_price").eq("id", id).maybeSingle();
   if (readError) return dbFail("request read", readError);
   if (!current) return fail("الطلب غير موجود", 404);
 

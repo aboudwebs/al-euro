@@ -5,14 +5,15 @@ import { getSupabaseAdmin } from "@/lib/supabase";
 export const dynamic = "force-dynamic";
 
 /** One order with its customer, signed receipt URL, ledger rows and commission (for the drawer and the invoice). */
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const guard = await requireStaffAccess("orders");
   if (!guard.ok) return guard.response;
-  if (!isUuid(params.id)) return fail("معرّف الطلب غير صالح");
+  if (!isUuid(id)) return fail("معرّف الطلب غير صالح");
 
   const isWorker = guard.admin.role === "worker";
   const db = getSupabaseAdmin();
-  const { data: order, error } = await db.from("orders").select("*").eq("id", params.id).maybeSingle();
+  const { data: order, error } = await db.from("orders").select("*").eq("id", id).maybeSingle();
   if (error) return dbFail("order detail", error, "تعذر تحميل الطلب");
   if (!order) return fail("الطلب غير موجود", 404);
 

@@ -2,16 +2,17 @@ import { requireAdmin } from "@/lib/admin-guard";
 import { dbFail, fail, isUuid, ok } from "@/lib/admin-api";
 import { getSupabaseAdmin } from "@/lib/supabase";
 export const dynamic = "force-dynamic";
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
  const guard = await requireAdmin(); if (!guard.ok) return guard.response;
- if (!isUuid(params.id)) return fail("معرّف الموظف غير صالح");
+ if (!isUuid(id)) return fail("معرّف الموظف غير صالح");
  const db = getSupabaseAdmin();
- const { data: worker, error: we } = await db.from("users").select("id,name,phone,is_active,created_at").eq("id",params.id).eq("role","worker").maybeSingle();
+ const { data: worker, error: we } = await db.from("users").select("id,name,phone,is_active,created_at").eq("id",id).eq("role","worker").maybeSingle();
  if (we) return dbFail("worker identity",we,"تعذر تحميل الموظف");
  if (!worker) return fail("الموظف غير موجود",404);
  const [{data:orders,error:oe},{data:movements,error:me}] = await Promise.all([
-  db.from("orders").select("id,order_number,status,items,total_amount,created_at,claimed_at").eq("claimed_by",params.id).order("created_at",{ascending:true}),
-  db.from("inventory_movements").select("id,part_id,movement_type,quantity_before,quantity_after,quantity_delta,note,created_at").eq("actor_id",params.id).order("created_at",{ascending:true})
+  db.from("orders").select("id,order_number,status,items,total_amount,created_at,claimed_at").eq("claimed_by",id).order("created_at",{ascending:true}),
+  db.from("inventory_movements").select("id,part_id,movement_type,quantity_before,quantity_after,quantity_delta,note,created_at").eq("actor_id",id).order("created_at",{ascending:true})
  ]);
  if (oe) return dbFail("worker orders",oe,"تعذر تحميل سجل الطلبات");
  if (me) return dbFail("worker inventory",me,"تعذر تحميل سجل المخزون");

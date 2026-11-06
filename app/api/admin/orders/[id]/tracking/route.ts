@@ -9,10 +9,11 @@ export const dynamic = "force-dynamic";
  * Body: { tracking: string }  - the shipment tracking number shown to the customer in the app ("" clears it).
  * Needs the orders.tracking_number column from supabase/updates_2026_10.sql.
  */
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const guard = await requireStaffAccess("orders");
   if (!guard.ok) return guard.response;
-  if (!isUuid(params.id)) return fail("معرّف الطلب غير صالح");
+  if (!isUuid(id)) return fail("معرّف الطلب غير صالح");
 
   const body = await readJson(req);
   if (!body || typeof body.tracking !== "string") return fail("رقم التتبع غير صالح");
@@ -20,7 +21,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   if (tracking.length > 60) return fail("رقم التتبع طويل جداً (الحد 60 حرفاً)");
 
   const db = getSupabaseAdmin();
-  const { data: order, error: readError } = await db.from("orders").select("id, status, claimed_by").eq("id", params.id).maybeSingle();
+  const { data: order, error: readError } = await db.from("orders").select("id, status, claimed_by").eq("id", id).maybeSingle();
   if (readError) return dbFail("tracking read", readError);
   if (!order) return fail("الطلب غير موجود", 404);
   if (order.status === ORDER_STATUS.cancelled) return fail("لا يمكن إضافة رقم تتبع لطلب ملغي");
@@ -28,7 +29,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     return fail("لا يمكنك تعديل تتبع طلب استلمه موظف آخر", 403);
   }
 
-  let update = db.from("orders").update({ tracking_number: tracking || null }).eq("id", params.id);
+  let update = db.from("orders").update({ tracking_number: tracking || null }).eq("id", id);
   if (guard.admin.role === "worker") update = update.eq("claimed_by", guard.admin.id);
   const { data: updated, error } = await update.select("id").maybeSingle();
   if (!error && !updated) return fail("لم تعد تملك الطلبية أو تم تغيير المسؤول عنها", 403);

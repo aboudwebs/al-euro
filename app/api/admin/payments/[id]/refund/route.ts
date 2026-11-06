@@ -4,10 +4,11 @@ import { getSupabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
-  if (!isUuid(params.id)) return fail("معرّف الطلب غير صالح");
+  if (!isUuid(id)) return fail("معرّف الطلب غير صالح");
 
   const body = await readJson(req);
   const status = body?.status;
@@ -20,7 +21,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   }
 
   const { data, error } = await getSupabaseAdmin().rpc("admin_update_sham_refund_status", {
-    p_order_id: params.id,
+    p_order_id: id,
     p_new_status: status,
     p_note: note,
     p_actor_id: guard.admin.id,

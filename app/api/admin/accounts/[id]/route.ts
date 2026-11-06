@@ -6,16 +6,17 @@ import { notifyUser } from "@/lib/push";
 export const dynamic = "force-dynamic";
 
 /** Workshop tiers are calculated by delivered purchases; admins can change activation and debt limit only. */
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
-  if (!isUuid(params.id)) return fail("معرّف الحساب غير صالح");
+  if (!isUuid(id)) return fail("معرّف الحساب غير صالح");
 
   const body = await readJson(req);
   if (!body) return fail("بيانات غير صالحة");
 
   const db = getSupabaseAdmin();
-  const { data: target, error: findError } = await db.from("users").select("id, role, is_active, license, license_verification_status").eq("id", params.id).maybeSingle();
+  const { data: target, error: findError } = await db.from("users").select("id, role, is_active, license, license_verification_status").eq("id", id).maybeSingle();
   if (findError) return dbFail("account lookup", findError);
   if (!target) return fail("الحساب غير موجود", 404);
   if (target.role !== "workshop" && target.role !== "marketer") return fail("لا يمكن تعديل حسابات الإدارة من هنا", 403);

@@ -12,6 +12,21 @@ export async function GET() {
     if (!auth.ok) return auth.response;
     if (auth.user.role !== "marketer") return reply({ error: "هذه الصفحة مخصصة للمسوّقين" }, 403);
 
+    const referralBaseUrl = process.env.NEXT_PUBLIC_REFERRAL_URL;
+    if (!referralBaseUrl) {
+      console.error("[api/marketer/dashboard] NEXT_PUBLIC_REFERRAL_URL is not configured");
+      return reply({ error: "خدمة روابط الإحالة غير مهيأة على الخادم، تواصل مع الإدارة" }, 503);
+    }
+    let referralOrigin: string;
+    try {
+      const parsed = new URL(referralBaseUrl);
+      if (parsed.protocol !== "https:" || parsed.username || parsed.password) throw new Error("Invalid referral URL");
+      referralOrigin = parsed.origin;
+    } catch {
+      console.error("[api/marketer/dashboard] NEXT_PUBLIC_REFERRAL_URL is invalid");
+      return reply({ error: "إعداد رابط الإحالة غير صالح على الخادم" }, 503);
+    }
+
     const db = getSupabaseAdmin();
     const { data: marketer, error: userError } = await db.from("users")
       .select("id,name,my_ref_code").eq("id", auth.user.id).eq("role", "marketer").maybeSingle();
@@ -59,9 +74,13 @@ export async function GET() {
       totals.requested += allocated.pending + legacyRequested;
       totals.available += Math.max(0, amount - allocated.paid - allocated.pending - legacyPaid - legacyRequested);
     }
-    const referralSignature = crypto.createHmac("sha256", process.env.AUTH_SECRET || "").update(`workshop-referral:${marketer.my_ref_code}`).digest("hex");
-    const origin = new URL(process.env.NEXT_PUBLIC_REFERRAL_URL || process.env.NEXT_PUBLIC_SITE_URL || "https://al-euro-cdzo.onrender.com").origin;
-    const referralUrl = `${origin}/r?ref=${encodeURIComponent(marketer.my_ref_code)}&sig=${referralSignature}`;
+    const authSecret = process.env.AUTH_SECRET;
+    if (!authSecret) {
+      console.error("[api/marketer/dashboard] AUTH_SECRET is not configured");
+      return reply({ error: "إعدادات الأمان غير مكتملة على الخادم" }, 503);
+    }
+    const referralSignature = crypto.createHmac("sha256", authSecret).update(`workshop-referral:${marketer.my_ref_code}`).digest("hex");
+    const referralUrl = `${referralOrigin}/r?ref=${encodeURIComponent(marketer.my_ref_code)}&sig=${referralSignature}`;
     return reply({
       marketer: { name: marketer.name, code: marketer.my_ref_code, referralUrl },
       workshops: count ?? 0,

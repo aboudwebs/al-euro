@@ -70,6 +70,7 @@ export type AdminAccount = AccountInfo & {
   loyalty_season_spend: number | null;
   loyalty_season_started_at: string | null;
   my_ref_code: string | null;
+  marketer_commissions?: { available: number; held: number; requested: number; paid: number; total: number } | null;
   referred_by_name: string | null;
   is_active: boolean;
   created_at: string;

@@ -99,7 +99,7 @@ export const TIER_LABEL: Record<Tier, string> = {
   Silver: "فضية — 5% كاش باك",
   Gold: "ذهبية — 7% كاش باك",
   Platinum: "بلاتينية — 10% كاش باك",
-  Elite: "النخبة Elite",
+  Elite: "النخبة Elite — 15% كاش باك",
 };
 
 export const ROLE_LABEL = { workshop: "ورشة", marketer: "مسوّق", admin: "إدارة", worker: "موظف" } as const;

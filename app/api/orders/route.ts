@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { getSession } from "@/lib/session";
+import { requireUser } from "@/lib/account-api";
 import { PAY_METHOD } from "@/lib/status";
 import { removeImage, storeImage } from "@/lib/uploads";
 import { getStableInvoiceRate } from "@/lib/syr-rates";
@@ -328,17 +329,12 @@ export async function POST(req: Request) {
 /** The signed-in customer's own orders (status, and the reason when an order was rejected / cancelled). */
 export async function GET() {
   try {
-    let session: ReturnType<typeof getSession>;
-    try {
-      session = getSession();
-    } catch {
-      return reply({ error: "إعداد AUTH_SECRET مفقود على الخادم" }, 500);
-    }
-    if (!session) return reply({ error: "يرجى تسجيل الدخول" }, 401);
+    const auth = await requireUser();
+    if (!auth.ok) return auth.response;
 
     const db = getSupabaseAdmin();
     const list = (fields: string) =>
-      db.from("orders").select(fields).eq("user_id", session.id).order("created_at", { ascending: false }).limit(30);
+      db.from("orders").select(fields).eq("user_id", auth.user.id).order("created_at", { ascending: false }).limit(30);
     // tracking_number / delivery_address come from supabase/updates_2026_10.sql; without it the list still loads.
     let { data, error } = await list(`${LIST_FIELDS}, tracking_number, delivery_address`);
     if (error?.code === "42703") ({ data, error } = await list(LIST_FIELDS));

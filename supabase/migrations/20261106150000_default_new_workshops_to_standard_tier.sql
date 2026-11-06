@@ -6,7 +6,7 @@ alter table public.users
 
 update public.users
 set tier = case
-  when coalesce(loyalty_season_spend, 0) >= 50000 then 'VIP'
+  when coalesce(loyalty_season_spend, 0) >= 50000 then 'Elite'
   when coalesce(loyalty_season_spend, 0) >= 30000 then 'Platinum'
   when coalesce(loyalty_season_spend, 0) >= 20000 then 'Gold'
   when coalesce(loyalty_season_spend, 0) >= 15000 then 'Silver'

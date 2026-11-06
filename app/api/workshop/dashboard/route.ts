@@ -22,7 +22,7 @@ export async function GET() {
       return reply({ error: "تعذر تحميل بيانات لوحة الورشة" }, 500);
     }
     if (!user) return reply({ error: "حساب الورشة غير موجود" }, 404);
-    const userView = { ...user };
+    const userView: typeof user & { cashback_rate: number } = { ...user, cashback_rate: 0 };
     const seasonStart = user.loyalty_season_started_at ? new Date(user.loyalty_season_started_at).getTime() : 0;
     const activeSeason = seasonStart > 0 && Date.now() < seasonStart + 90 * 24 * 60 * 60 * 1000;
     const spend = activeSeason ? Number(user.loyalty_season_spend) || 0 : 0;

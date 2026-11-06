@@ -6,6 +6,7 @@ alter table public.users
 
 update public.users
 set tier = case
+  when loyalty_season_started_at is null or now() >= loyalty_season_started_at + interval '90 days' then 'Standard'
   when coalesce(loyalty_season_spend, 0) >= 50000 then 'Elite'
   when coalesce(loyalty_season_spend, 0) >= 30000 then 'Platinum'
   when coalesce(loyalty_season_spend, 0) >= 20000 then 'Gold'

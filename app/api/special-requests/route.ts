@@ -24,7 +24,7 @@ function text(form: FormData, key: string, max: number): string {
 export async function POST(req: Request) {
   let uploadedPath: string | null = null;
   try {
-    let session: ReturnType<typeof getSession>;
+    let session: Awaited<ReturnType<typeof getSession>>;
     try {
       session = await getSession();
     } catch {
@@ -145,7 +145,7 @@ export async function POST(req: Request) {
 /** The signed-in customer's own special requests, with the admin's quote and reply. */
 export async function GET() {
   try {
-    let session: ReturnType<typeof getSession>;
+    let session: Awaited<ReturnType<typeof getSession>>;
     try {
       session = await getSession();
     } catch {

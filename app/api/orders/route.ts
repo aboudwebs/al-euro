@@ -35,7 +35,7 @@ function reply(body: unknown, status = 200) {
 export async function POST(req: Request) {
   let uploadedPath: string | null = null;
   try {
-    let session: ReturnType<typeof getSession>;
+    let session: Awaited<ReturnType<typeof getSession>>;
     try {
       session = await getSession();
     } catch {

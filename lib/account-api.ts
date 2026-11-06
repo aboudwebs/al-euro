@@ -54,7 +54,7 @@ export type AccountUser = {
  * exist and be active). Admin accounts are not served by these endpoints.
  */
 export async function requireUser(): Promise<{ ok: true; user: AccountUser } | { ok: false; response: NextResponse }> {
-  let session: ReturnType<typeof getSession>;
+  let session: Awaited<ReturnType<typeof getSession>>;
   try {
     session = await getSession();
   } catch {

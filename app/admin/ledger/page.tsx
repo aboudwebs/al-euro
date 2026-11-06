@@ -83,9 +83,9 @@ export default function LedgerPage() {
                 return (
                   <li key={w.id}>
                     <button type="button" onClick={() => setSelected(on ? null : w.id)} aria-pressed={on} className={`card block w-full text-start transition-all ${on ? "!border-[#0A84FF]" : ""}`}>
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-semibold text-white">{w.name}</span>
-                        <b className={bal > 0 ? "text-[#FF9F0A]" : "text-[#30D158]"}>{money(bal)}</b>
+                      <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                        <span className="min-w-0 break-words font-semibold text-white">{w.name}</span>
+                        <b dir="ltr" className="shrink-0 text-sm tabular-nums">{money(bal)}</b>
                       </div>
                       <div className="mt-1 flex items-center justify-between text-xs text-white/50">
                         <span>{w.city || "—"}{w.is_active ? "" : " · غير مفعّل"}</span>
@@ -102,7 +102,7 @@ export default function LedgerPage() {
           <div className="space-y-4 lg:col-span-3">
             {current ? (
               <form onSubmit={pay} className="card space-y-3">
-                <h2 className="flex items-center gap-2 font-semibold text-white"><Wallet size={18} className="text-gold" />تسجيل تسديد من «{current.name}»</h2>
+                <h2 className="flex min-w-0 items-start gap-2 break-words font-semibold leading-6 text-white"><Wallet size={18} className="mt-1 shrink-0 text-gold" /><span className="min-w-0">تسجيل تسديد من «{current.name}»</span></h2>
                 <p className="text-sm text-white/65">الدين الحالي: <b className="text-white">{money(current.debt_balance)}</b>. عند التسديد تتحول العمولات المعلّقة المرتبطة بهذه الورشة إلى «مستحقة».</p>
                 <div className="grid gap-2 sm:grid-cols-3">
                   <label className="space-y-1 text-xs text-white/65">المبلغ ($)
@@ -112,9 +112,9 @@ export default function LedgerPage() {
                     <input className="inp" maxLength={300} value={note} onChange={(e) => setNote(e.target.value)} placeholder="مثال: دفعة نقدية بتاريخ ..." />
                   </label>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <button type="submit" className="btn" disabled={busy || !(Number(current.debt_balance) > 0)}>تسجيل التسديد</button>
-                  <button type="button" className="btn2" onClick={() => setAmount(String(Number(current.debt_balance) || 0))} disabled={!(Number(current.debt_balance) > 0)}>تسديد كامل الدين</button>
+                <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
+                  <button type="submit" className="btn w-full sm:w-auto" disabled={busy || !(Number(current.debt_balance) > 0)}>تسجيل التسديد</button>
+                  <button type="button" className="btn2 w-full sm:w-auto" onClick={() => setAmount(String(Number(current.debt_balance) || 0))} disabled={!(Number(current.debt_balance) > 0)}>تسديد كامل الدين</button>
                 </div>
               </form>
             ) : (
@@ -126,27 +126,53 @@ export default function LedgerPage() {
               {!entries.length ? (
                 <p className="py-8 text-center text-sm text-white/55">لا توجد قيود بعد.</p>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[560px] text-sm">
-                    <thead><tr className="border-b border-white/10 text-xs text-white/45"><th className="px-4 py-2 text-start font-normal">التاريخ</th>{!current && <th className="px-2 text-start font-normal">الورشة</th>}<th className="px-2 text-start font-normal">النوع</th><th className="px-2 text-start font-normal">المبلغ</th><th className="px-2 text-start font-normal">الرصيد بعد</th><th className="px-4 text-start font-normal">ملاحظة</th></tr></thead>
-                    <tbody>
-                      {entries.map((e) => (
-                        <tr key={e.id} className="border-b border-white/[0.07] last:border-0">
-                          <td className="px-4 py-2.5 text-white/70">{fmtDateTime(e.created_at)}</td>
-                          {!current && <td className="px-2 text-white">{e.workshop_name ?? "—"}</td>}
-                          <td className="px-2">
-                            <Badge tone={e.tx_type === "payment" ? "ok" : "warn"}>
-                              {e.tx_type === "payment" ? <ArrowDownLeft size={12} className="me-1" /> : <ArrowUpRight size={12} className="me-1" />}{LEDGER_TX_LABEL[e.tx_type]}
-                            </Badge>
-                          </td>
-                          <td className={`px-2 font-semibold ${e.tx_type === "payment" ? "text-[#30D158]" : "text-[#FF9F0A]"}`}>{e.tx_type === "payment" ? "−" : "+"}{money(e.amount)}</td>
-                          <td className="px-2 text-white">{money(e.balance_after)}</td>
-                          <td className="px-4 text-white/65">{e.order_number ? `طلب #${e.order_number} ` : ""}{e.note ?? ""}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <>
+                  <ul className="space-y-2 p-3 sm:hidden">
+                    {entries.map((e) => (
+                      <li key={e.id} className="min-w-0 rounded-2xl border border-white/10 bg-black/[0.12] p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <Badge tone={e.tx_type === "payment" ? "ok" : "warn"}>
+                            {e.tx_type === "payment" ? <ArrowDownLeft size={12} className="me-1" /> : <ArrowUpRight size={12} className="me-1" />}{LEDGER_TX_LABEL[e.tx_type]}
+                          </Badge>
+                          <span className="text-xs text-white/55">{fmtDateTime(e.created_at)}</span>
+                        </div>
+                        {!current && <p className="mt-2 break-words text-sm font-medium text-white">{e.workshop_name ?? "—"}</p>}
+                        <div className="mt-3 grid grid-cols-2 gap-3">
+                          <div className="min-w-0">
+                            <p className="text-xs text-white/50">المبلغ</p>
+                            <p dir="ltr" className={`mt-1 break-words text-start font-semibold tabular-nums ${e.tx_type === "payment" ? "text-[#30D158]" : "text-[#FF9F0A]"}`}>{e.tx_type === "payment" ? "−" : "+"}{money(e.amount)}</p>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs text-white/50">الرصيد بعد الحركة</p>
+                            <p dir="ltr" className="mt-1 break-words text-start font-semibold tabular-nums text-white">{money(e.balance_after)}</p>
+                          </div>
+                        </div>
+                        {(e.order_number || e.note) && <p className="mt-3 break-words border-t border-white/10 pt-2 text-sm leading-6 text-white/65">{e.order_number ? `طلب #${e.order_number} ` : ""}{e.note ?? ""}</p>}
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="hidden overflow-x-auto sm:block">
+                    <table className="w-full min-w-[560px] text-sm">
+                      <thead><tr className="border-b border-white/10 text-xs text-white/45"><th className="px-4 py-2 text-start font-normal">التاريخ</th>{!current && <th className="px-2 text-start font-normal">الورشة</th>}<th className="px-2 text-start font-normal">النوع</th><th className="px-2 text-start font-normal">المبلغ</th><th className="px-2 text-start font-normal">الرصيد بعد</th><th className="px-4 text-start font-normal">ملاحظة</th></tr></thead>
+                      <tbody>
+                        {entries.map((e) => (
+                          <tr key={e.id} className="border-b border-white/[0.07] last:border-0">
+                            <td className="px-4 py-2.5 text-white/70">{fmtDateTime(e.created_at)}</td>
+                            {!current && <td className="px-2 text-white">{e.workshop_name ?? "—"}</td>}
+                            <td className="px-2">
+                              <Badge tone={e.tx_type === "payment" ? "ok" : "warn"}>
+                                {e.tx_type === "payment" ? <ArrowDownLeft size={12} className="me-1" /> : <ArrowUpRight size={12} className="me-1" />}{LEDGER_TX_LABEL[e.tx_type]}
+                              </Badge>
+                            </td>
+                            <td className={`px-2 font-semibold ${e.tx_type === "payment" ? "text-[#30D158]" : "text-[#FF9F0A]"}`}>{e.tx_type === "payment" ? "−" : "+"}{money(e.amount)}</td>
+                            <td className="px-2 text-white">{money(e.balance_after)}</td>
+                            <td className="px-4 text-white/65">{e.order_number ? `طلب #${e.order_number} ` : ""}{e.note ?? ""}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
             </div>
           </div>

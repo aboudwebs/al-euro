@@ -27,7 +27,7 @@ const PASSWORD_HASH_ITERATIONS = 310_000;
 export function hashPassword(password: string): string {
   const salt = crypto.randomBytes(16);
   const derived = crypto.pbkdf2Sync(password, salt, PASSWORD_HASH_ITERATIONS, 32, "sha256");
-  return `${PASSWORD_HASH_PREFIX}${PASSWORD_HASH_ITERATIONS}${salt.toString("hex")}${derived.toString("hex")}`;
+  return PASSWORD_HASH_PREFIX + PASSWORD_HASH_ITERATIONS + "$" + salt.toString("hex") + "$" + derived.toString("hex");
 }
 
 /** Supports the old AUTH_SECRET HMAC hashes and upgrades them after a successful login. */

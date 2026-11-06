@@ -1,4 +1,4 @@
--- EURO final loyalty cashback tiers (90-day season, including VIP 15%).
+-- EURO final loyalty cashback tiers (90-day season, including Elite 15%).
 -- Apply AFTER loyalty_cashback_2026_10.sql. Safe to re-run.
 
 begin;
@@ -8,7 +8,7 @@ alter table public.users drop constraint if exists users_tier_check;
 -- Recalculate the displayed tier from each workshop's current season spend.
 update public.users
 set tier = case
-  when coalesce(loyalty_season_spend, 0) >= 50000 then 'VIP'
+  when coalesce(loyalty_season_spend, 0) >= 50000 then 'Elite'
   when coalesce(loyalty_season_spend, 0) >= 30000 then 'Platinum'
   when coalesce(loyalty_season_spend, 0) >= 20000 then 'Gold'
   when coalesce(loyalty_season_spend, 0) >= 15000 then 'Silver'
@@ -19,7 +19,7 @@ where role = 'workshop';
 
 alter table public.users
   add constraint users_tier_check
-  check (tier in ('Standard', 'Bronze', 'Silver', 'Gold', 'Platinum', 'VIP'));
+  check (tier in ('Standard', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Elite'));
 
 -- Cashback is based on the tier BEFORE the delivered order.
 -- Spend from the delivered order is added afterwards, so any upgrade applies
@@ -127,7 +127,7 @@ begin
         else 0.00
       end;
       v_tier := case
-        when v_spend_after >= 50000 then 'VIP'
+        when v_spend_after >= 50000 then 'Elite'
         when v_spend_after >= 30000 then 'Platinum'
         when v_spend_after >= 20000 then 'Gold'
         when v_spend_after >= 15000 then 'Silver'

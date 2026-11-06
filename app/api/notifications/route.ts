@@ -18,11 +18,11 @@ export async function GET() {
 }
 
 export async function POST() {
-  const session = getSession();
-  if (!session) return NextResponse.json({ error: "يرجى تسجيل الدخول" }, { status: 401 });
+  const auth = await requireUser();
+  if (!auth.ok) return auth.response;
   const { error } = await getSupabaseAdmin().from("user_notifications")
     .update({ read_at: new Date().toISOString() })
-    .eq("user_id", session.id).is("read_at", null);
+    .eq("user_id", auth.user.id).is("read_at", null);
   if (error) {
     console.error("[api/notifications] mark read", error);
     return NextResponse.json({ error: "تعذر تحديث الإشعارات" }, { status: 500 });

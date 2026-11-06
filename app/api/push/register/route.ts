@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/session";
+import { requireUser } from "@/lib/account-api";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { createHash } from "node:crypto";
 import { notifyUser } from "@/lib/push";
@@ -7,8 +7,8 @@ import { notifyUser } from "@/lib/push";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
-  const session = getSession();
-  if (!session) return NextResponse.json({ error: "يرجى تسجيل الدخول" }, { status: 401 });
+  const auth = await requireUser();
+  if (!auth.ok) return auth.response;
   try {
     const body = await req.json();
     const token = typeof body?.token === "string" ? body.token.trim() : "";
@@ -17,7 +17,7 @@ export async function POST(req: Request) {
     }
     const db = getSupabaseAdmin();
     const { data: existingTokens, error: lookupError } = await db.from("push_tokens")
-      .select("token").eq("user_id", session.id);
+      .select("token").eq("user_id", auth.user.id);
     if (lookupError) {
       console.error("[api/push/register] lookup", lookupError);
       return NextResponse.json({ error: "تعذر التحقق من الجهاز" }, { status: 500 });

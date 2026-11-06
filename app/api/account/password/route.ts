@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { hashPassword, safeEqual } from "@/lib/session";
+import { hashPassword, verifyPassword } from "@/lib/session";
 import { readBody, reply, requireUser } from "@/lib/account-api";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +13,7 @@ export async function POST(req: Request) {
   const next = typeof body?.newPassword === "string" ? body.newPassword : "";
   if (!current) return reply({ error: "أدخل كلمة المرور الحالية" }, 400);
   if (next.length < 4 || next.length > 128) return reply({ error: "كلمة المرور الجديدة يجب أن تكون بين 4 و128 حرفاً" }, 400);
-  if (!safeEqual(String(auth.user.password_hash ?? ""), hashPassword(current))) {
+  if (!verifyPassword(String(auth.user.password_hash ?? ""), current)) {
     return reply({ error: "كلمة المرور الحالية غير صحيحة" }, 403);
   }
   const { error } = await getSupabaseAdmin().from("users").update({ password_hash: hashPassword(next) }).eq("id", auth.user.id);

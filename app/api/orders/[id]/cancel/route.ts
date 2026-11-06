@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/session";
+import { requireUser } from "@/lib/account-api";
 import { getSupabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
-  const session = getSession();
-  if (!session) return NextResponse.json({ error: "يرجى تسجيل الدخول" }, { status: 401 });
+  const auth = await requireUser();
+  if (!auth.ok) return auth.response;
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.id)) {
     return NextResponse.json({ error: "معرّف الطلب غير صالح" }, { status: 400 });
   }
@@ -15,7 +15,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const note = typeof body?.note === "string" ? body.note.trim().slice(0, 300) : null;
   const { data, error } = await getSupabaseAdmin().rpc("customer_cancel_pending_order", {
     p_order_id: params.id,
-    p_user_id: session.id,
+    p_user_id: auth.user.id,
     p_note: note,
   });
   if (error) {

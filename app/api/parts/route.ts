@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { getSession } from "@/lib/session";
+import { requireUser } from "@/lib/account-api";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +9,8 @@ const NO_STORE = { "Cache-Control": "no-store" };
 /** Live catalog for signed-in customers: active rows of the `parts` table. */
 export async function GET() {
   try {
-    if (!getSession()) return NextResponse.json({ error: "يرجى تسجيل الدخول" }, { status: 401, headers: NO_STORE });
+    const auth = await requireUser();
+    if (!auth.ok) return auth.response;
 
     const db = getSupabaseAdmin();
     const FIELDS = "id, name, brand, model, years, oem_number, alt_grade, price, stock, branch, image_url";

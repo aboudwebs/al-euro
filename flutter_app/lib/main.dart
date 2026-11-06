@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
-const apiBase = String.fromEnvironment('EURO_API_URL', defaultValue: 'https://al-euro-cdzo.onrender.com');
+const apiBase = String.fromEnvironment('EURO_API_URL', defaultValue: 'https://control-panel-euro-cars.onrender.com');
 const bg = Color(0xFF07090E), panel = Color(0xFF11151E), border = Color(0xFF293141), blue = Color(0xFF0A84FF), red = Color(0xFF8D2637), muted = Color(0xFF9AA6B7);
 const secure = FlutterSecureStorage();
 

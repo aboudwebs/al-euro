@@ -50,7 +50,7 @@ export const TIER = {
   Silver: "Silver",
   Gold: "Gold",
   Platinum: "Platinum",
-  VIP: "VIP",
+  Elite: "Elite",
 } as const;
 export type Tier = (typeof TIER)[keyof typeof TIER];
 export const TIERS_LIST = Object.values(TIER) as Tier[];
@@ -99,7 +99,7 @@ export const TIER_LABEL: Record<Tier, string> = {
   Silver: "فضية",
   Gold: "ذهبية",
   Platinum: "بلاتينية",
-  VIP: "النخبة VIP",
+  Elite: "النخبة Elite",
 };
 
 export const ROLE_LABEL = { workshop: "ورشة", marketer: "مسوّق", admin: "إدارة", worker: "موظف" } as const;

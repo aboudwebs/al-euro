@@ -65,7 +65,7 @@ export async function GET(req: Request) {
 
   const accounts = (data ?? []).map((u) => {
     const spend = Number(u.loyalty_season_spend) || 0;
-    const tier = u.role !== "workshop" ? u.tier : spend >= 50000 ? "VIP" : spend >= 30000 ? "Platinum" : spend >= 20000 ? "Gold" : spend >= 15000 ? "Silver" : spend >= 10000 ? "Bronze" : "Standard";
+    const tier = u.role !== "workshop" ? u.tier : spend >= 50000 ? "Elite" : spend >= 30000 ? "Platinum" : spend >= 20000 ? "Gold" : spend >= 15000 ? "Silver" : spend >= 10000 ? "Bronze" : "Standard";
     const commissions = commissionTotals[u.id] ?? { available: 0, held: 0, requested: 0, paid: 0 };
     return { ...u, tier, marketer_commissions: u.role === "marketer" ? {
       available: Math.round(commissions.available * 100) / 100,

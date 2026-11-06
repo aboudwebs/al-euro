@@ -60,7 +60,7 @@ export async function GET() {
       totals.available += Math.max(0, amount - allocated.paid - allocated.pending - legacyPaid - legacyRequested);
     }
     const referralSignature = crypto.createHmac("sha256", process.env.AUTH_SECRET || "").update(`workshop-referral:${marketer.my_ref_code}`).digest("hex");
-    const origin = new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://al-euro-cdzo.onrender.com").origin;
+    const origin = new URL(process.env.NEXT_PUBLIC_REFERRAL_URL || process.env.NEXT_PUBLIC_SITE_URL || "https://al-euro-cdzo.onrender.com").origin;
     const referralUrl = `${origin}/r?ref=${encodeURIComponent(marketer.my_ref_code)}&sig=${referralSignature}`;
     return reply({
       marketer: { name: marketer.name, code: marketer.my_ref_code, referralUrl },

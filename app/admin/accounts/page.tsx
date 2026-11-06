@@ -34,7 +34,7 @@ function AccountCard({ a, onChanged }: { a: AdminAccount; onChanged: () => void 
     onChanged();
   }
 
-  const tier = (a.tier as Tier) || "Bronze";
+  const tier = (a.tier as Tier) || "Standard";
 
   return (
     <article className="card space-y-3">

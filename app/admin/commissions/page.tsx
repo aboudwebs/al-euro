@@ -9,6 +9,7 @@ type Filter = "all" | CommissionStatus;
 
 export default function CommissionsPage() {
   const [filter, setFilter] = useState<Filter>("available");
+  const [expanded, setExpanded] = useState<string | null>(null);
   const { data, error, loading, reload } = useApi<{ commissions: AdminCommission[]; totals: Record<CommissionStatus, number> }>(`/api/admin/commissions${filter === "all" ? "" : `?status=${filter}`}`);
   const list = data?.commissions ?? [];
   return (
@@ -36,23 +37,40 @@ export default function CommissionsPage() {
       {data && !list.length && <Empty>لا توجد عمولات في هذا التصنيف.</Empty>}
 
       {list.length > 0 && (
-        <div className="card overflow-x-auto !p-0">
-          <table className="w-full min-w-[680px] text-sm">
-            <thead><tr className="border-b border-white/10 text-xs text-white/45"><th className="px-2 text-start font-normal">المسوّق</th><th className="px-2 text-start font-normal">الورشة</th><th className="px-2 text-start font-normal">الطلب</th><th className="px-2 text-start font-normal">مبلغ الطلب</th><th className="px-2 text-start font-normal">العمولة</th><th className="px-2 text-start font-normal">الحالة</th><th className="px-2 text-start font-normal">التاريخ</th></tr></thead>
-            <tbody>
-              {list.map((c) => (
-                <tr key={c.id} className="border-b border-white/[0.07] last:border-0">
-                  <td className="px-2 font-medium text-white">{c.marketer_name}</td>
-                  <td className="px-2 text-white/80">{c.workshop_name}</td>
-                  <td className="px-2 text-white/80">{c.order_number ? `#${c.order_number}` : "—"}</td>
-                  <td className="px-2 text-white/80">{money(c.order_amount)}</td>
-                  <td className="px-2 font-semibold text-gold">{money(c.commission_amount)}</td>
-                  <td className="px-2"><Badge tone={COMMISSION_TONE[c.status]}>{COMMISSION_STATUS_LABEL[c.status]}</Badge></td>
-                  <td className="px-2 text-white/60">{fmtDate(c.created_at)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 2xl:grid-cols-3">
+          {list.map((c) => {
+            const isOpen = expanded === c.id;
+            return (
+              <article key={c.id} className="min-w-0 rounded-2xl border border-white/10 bg-[#111a25] p-4 shadow-sm">
+                <div className="flex min-w-0 items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="break-words text-sm font-semibold text-white">{c.marketer_name}</p>
+                    <p className="mt-1 break-words text-xs text-white/50">{c.workshop_name}</p>
+                  </div>
+                  <Badge tone={COMMISSION_TONE[c.status]}>{COMMISSION_STATUS_LABEL[c.status]}</Badge>
+                </div>
+                <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <p className="text-xs text-white/50">قيمة العمولة</p>
+                    <p className="mt-1 text-xl font-bold tabular-nums text-gold">{money(c.commission_amount)}</p>
+                  </div>
+                  <button type="button" className="btn2 !px-3 !py-2 text-xs" aria-expanded={isOpen} onClick={() => setExpanded(isOpen ? null : c.id)}>
+                    {isOpen ? "إخفاء التفاصيل" : "عرض التفاصيل"}
+                  </button>
+                </div>
+                {isOpen && (
+                  <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-white/10 pt-3 text-sm">
+                    <div className="min-w-0"><p className="text-xs text-white/45">المسوّق</p><p className="mt-1 break-words text-white">{c.marketer_name}</p></div>
+                    <div className="min-w-0"><p className="text-xs text-white/45">الورشة</p><p className="mt-1 break-words text-white">{c.workshop_name}</p></div>
+                    <div><p className="text-xs text-white/45">رقم الطلب</p><p className="mt-1 text-white">{c.order_number ? `#${c.order_number}` : "—"}</p></div>
+                    <div><p className="text-xs text-white/45">مبلغ الطلب</p><p className="mt-1 text-white">{money(c.order_amount)}</p></div>
+                    <div><p className="text-xs text-white/45">تاريخ تسجيل العمولة</p><p className="mt-1 text-white/80">{fmtDate(c.created_at)}</p></div>
+                    <div><p className="text-xs text-white/45">الحالة</p><div className="mt-1"><Badge tone={COMMISSION_TONE[c.status]}>{COMMISSION_STATUS_LABEL[c.status]}</Badge></div></div>
+                  </div>
+                )}
+              </article>
+            );
+          })}
         </div>
       )}
     </>

@@ -13,7 +13,7 @@ function reply(body: unknown, status = 200) {
 }
 
 function currentUserId(): string | null {
-  const session = getSession();
+  const session = await getSession();
   return session && SAFE_ID.test(session.id) ? session.id : null;
 }
 

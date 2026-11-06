@@ -63,7 +63,7 @@ export async function POST(req: Request) {
     if (error || !user) return dbError("phone update", error, "تعذر تغيير الرقم");
 
     const session = { id: String(user.id), role: user.role, name: user.name, phone: user.phone, my_ref_code: user.my_ref_code };
-    setSession(session);
+    await setSession(session);
     return reply({ ok: true, user, accessToken: signSession({ ...session, iat: Date.now() }) });
   }
 

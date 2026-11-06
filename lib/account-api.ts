@@ -56,7 +56,7 @@ export type AccountUser = {
 export async function requireUser(): Promise<{ ok: true; user: AccountUser } | { ok: false; response: NextResponse }> {
   let session: ReturnType<typeof getSession>;
   try {
-    session = getSession();
+    session = await getSession();
   } catch {
     return { ok: false, response: reply({ error: "إعداد AUTH_SECRET مفقود على الخادم" }, 500) };
   }

@@ -26,7 +26,7 @@ export async function POST(req: Request) {
   try {
     let session: ReturnType<typeof getSession>;
     try {
-      session = getSession();
+      session = await getSession();
     } catch {
       return reply({ error: "إعداد AUTH_SECRET مفقود على الخادم" }, 500);
     }
@@ -147,7 +147,7 @@ export async function GET() {
   try {
     let session: ReturnType<typeof getSession>;
     try {
-      session = getSession();
+      session = await getSession();
     } catch {
       return reply({ error: "إعداد AUTH_SECRET مفقود على الخادم" }, 500);
     }

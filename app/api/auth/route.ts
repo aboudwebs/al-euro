@@ -67,12 +67,12 @@ async function sendWhatsAppOtp(phone: string, code: string) {
 
 export async function GET() {
   try {
-    const token = cookies().get(COOKIE_NAME)?.value;
+    const token = (await cookies()).get(COOKIE_NAME)?.value;
     if (!token) return json({ user: null });
 
     const session = verifySession(token);
     if (!session) {
-      clearSession();
+      await clearSession();
       return json({ user: null });
     }
 
@@ -83,7 +83,7 @@ export async function GET() {
       .single();
 
     if (error || !user || !user.is_active) {
-      clearSession();
+      await clearSession();
       return json({ user: null });
     }
 
@@ -169,7 +169,7 @@ export async function POST(req: Request) {
         return json({ error: "لا يوجد حساب مسجل بهذا الرقم ونوع الحساب." }, 404);
       }
 
-      setSession({
+      await setSession({
         id: String(existingUser.id),
         role: existingUser.role,
         name: existingUser.name,
@@ -297,7 +297,7 @@ export async function POST(req: Request) {
       });
     }
 
-    setSession({
+    await setSession({
       id: String(newUser.id),
       role: newUser.role,
       name: newUser.name,
@@ -313,11 +313,11 @@ export async function POST(req: Request) {
 
 export async function PUT(req: Request) {
   try {
-    const token = cookies().get(COOKIE_NAME)?.value;
+    const token = (await cookies()).get(COOKIE_NAME)?.value;
     if (!token) return json({ error: "يرجى تسجيل الدخول أولاً" }, 401);
-    const session = getSession();
+    const session = await getSession();
     if (!session) {
-      clearSession();
+      await clearSession();
       return json({ error: "الجلسة غير صالحة، سجّل الدخول مجدداً" }, 401);
     }
 
@@ -365,7 +365,7 @@ export async function PUT(req: Request) {
       });
     }
 
-    setSession({
+    await setSession({
       id: String(user.id),
       role: user.role,
       name: user.name,
@@ -379,6 +379,6 @@ export async function PUT(req: Request) {
 }
 
 export async function DELETE() {
-  clearSession();
+  await clearSession();
   return json({ ok: true });
 }

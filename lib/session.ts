@@ -103,9 +103,10 @@ export function getSession(): Session | null {
   return verifySession(match?.[1] ?? null);
 }
 
-export function setSession(session: Omit<Session, "iat">) {
+export async function setSession(session: Omit<Session, "iat">) {
   const token = signSession({ ...session, iat: Date.now() });
-  cookies().set(COOKIE_NAME, token, {
+  const cookieStore = await cookies();
+  cookieStore.set(COOKIE_NAME, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -114,6 +115,7 @@ export function setSession(session: Omit<Session, "iat">) {
   });
 }
 
-export function clearSession() {
-  cookies().delete(COOKIE_NAME);
+export async function clearSession() {
+  const cookieStore = await cookies();
+  cookieStore.delete(COOKIE_NAME);
 }

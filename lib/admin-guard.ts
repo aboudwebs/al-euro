@@ -29,7 +29,7 @@ export async function requireStaffAccess(scope: StaffScope): Promise<
   | { ok: false; response: NextResponse }
 > {
   let session: ReturnType<typeof getSession>;
-  try { session = getSession(); } catch { return deny("إعداد الخادم غير مكتمل", 500); }
+  try { session = await getSession(); } catch { return deny("إعداد الخادم غير مكتمل", 500); }
   if (!session) return deny("يرجى تسجيل الدخول", 401);
   if (session.role !== "admin" && session.role !== "worker") return deny("غير مصرح", 403);
   if (session.role === "worker" && !["orders", "parts"].includes(scope)) return deny("غير مصرح", 403);
@@ -49,7 +49,7 @@ export async function requireStaffAccess(scope: StaffScope): Promise<
 export async function requireAdmin(): Promise<GuardResult> {
   let session: ReturnType<typeof getSession>;
   try {
-    session = getSession();
+    session = await getSession();
   } catch {
     return deny("إعداد الخادم غير مكتمل", 500);
   }

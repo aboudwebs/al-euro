@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    if (!getSession()) return reply({ error: "يرجى تسجيل الدخول" }, 401);
+    if (!await getSession()) return reply({ error: "يرجى تسجيل الدخول" }, 401);
     const live = await getStableInvoiceRate();
     if (!live) {
       return reply({

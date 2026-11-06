@@ -1,6 +1,6 @@
 # اليورو (Al-Euro) — Auto spare-parts platform
 
-Next.js 14 (App Router) · TypeScript · Tailwind · Supabase. Arabic RTL, dark/light themes.
+Next.js 15.5.29 (App Router) · TypeScript · Tailwind · Supabase. Arabic RTL, dark/light themes.
 
 ## Deploy (once)
 1. Supabase -> SQL editor -> run **`supabase/admin_full_setup.sql`**. Before the last statement, replace `09XXXXXXXX` with the phone of a registered **marketer** account to promote it to `admin`.

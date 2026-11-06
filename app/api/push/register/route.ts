@@ -24,7 +24,7 @@ export async function POST(req: Request) {
     }
     const isNewDevice = (existingTokens ?? []).some((row) => row.token !== token);
     const { error } = await db.from("push_tokens").upsert({
-      user_id: session.id,
+      user_id: auth.user.id,
       token,
       platform: "android",
       updated_at: new Date().toISOString(),
@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     if (isNewDevice) {
       const tokenFingerprint = createHash("sha256").update(token).digest("hex").slice(0, 32);
       await notifyUser({
-        userId: String(session.id),
+        userId: String(auth.user.id),
         type: "security_new_device",
         title: "تسجيل دخول من جهاز جديد",
         body: "تم تسجيل الدخول إلى حسابك من جهاز جديد",

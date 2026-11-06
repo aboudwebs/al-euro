@@ -2,7 +2,7 @@ name: Build EURO CARS Flutter Android
 on:
   workflow_dispatch:
   push:
-    branches: [feat/flutter-native-app]
+    branches: [main, feat/flutter-native-app]
     paths:
       - 'flutter_app/**'
       - '.github/workflows/flutter-android.yml'

@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/session";
+import { requireUser } from "@/lib/account-api";
 import { getSupabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const session = getSession();
-  if (!session) return NextResponse.json({ error: "يرجى تسجيل الدخول" }, { status: 401 });
+  const auth = await requireUser();
+  if (!auth.ok) return auth.response;
   const { data, error } = await getSupabaseAdmin().from("user_notifications")
     .select("id,type,title,body,order_id,read_at,created_at")
-    .eq("user_id", session.id).order("created_at", { ascending: false }).limit(50);
+    .eq("user_id", auth.user.id).order("created_at", { ascending: false }).limit(50);
   if (error) {
     console.error("[api/notifications]", error);
     return NextResponse.json({ error: "تعذر تحميل الإشعارات" }, { status: 500 });

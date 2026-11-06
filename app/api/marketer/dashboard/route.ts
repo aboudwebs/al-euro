@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
-import { getSession } from "@/lib/session";
+import { requireUser } from "@/lib/account-api";
 import { getSupabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -8,13 +8,13 @@ const reply = (body: unknown, status = 200) => NextResponse.json(body, { status,
 
 export async function GET() {
   try {
-    const session = getSession();
-    if (!session) return reply({ error: "يرجى تسجيل الدخول" }, 401);
-    if (session.role !== "marketer") return reply({ error: "هذه الصفحة مخصصة للمسوّقين" }, 403);
+    const auth = await requireUser();
+    if (!auth.ok) return auth.response;
+    if (auth.user.role !== "marketer") return reply({ error: "هذه الصفحة مخصصة للمسوّقين" }, 403);
 
     const db = getSupabaseAdmin();
     const { data: marketer, error: userError } = await db.from("users")
-      .select("id,name,my_ref_code").eq("id", session.id).eq("role", "marketer").maybeSingle();
+      .select("id,name,my_ref_code").eq("id", auth.user.id).eq("role", "marketer").maybeSingle();
     if (userError) return reply({ error: "تعذر تحميل حساب المسوّق" }, 500);
     if (!marketer) return reply({ error: "حساب المسوّق غير موجود" }, 404);
     if (!marketer.my_ref_code) return reply({ error: "لم يتم إنشاء كود دعوة لحسابك بعد" }, 409);

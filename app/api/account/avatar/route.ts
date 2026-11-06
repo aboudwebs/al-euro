@@ -12,7 +12,7 @@ function reply(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
 }
 
-function currentUserId(): string | null {
+async function currentUserId(): Promise<string | null> {
   const session = await getSession();
   return session && SAFE_ID.test(session.id) ? session.id : null;
 }
@@ -24,7 +24,7 @@ function isJpeg(bytes: Uint8Array) {
 /** Streams the signed-in user's own avatar. The bucket is private; only this route can read it. */
 export async function GET() {
   try {
-    const id = currentUserId();
+    const id = await currentUserId();
     if (!id) return reply({ error: "يرجى تسجيل الدخول أولاً" }, 401);
 
     const { data, error } = await getSupabaseAdmin().storage.from(BUCKET).download(`${id}.jpg`);
@@ -47,7 +47,7 @@ export async function GET() {
 /** Body: the cropped JPEG as raw bytes (Content-Type: image/jpeg). */
 export async function PUT(req: Request) {
   try {
-    const id = currentUserId();
+    const id = await currentUserId();
     if (!id) return reply({ error: "يرجى تسجيل الدخول أولاً" }, 401);
 
     const bytes = new Uint8Array(await req.arrayBuffer());

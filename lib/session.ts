@@ -21,8 +21,34 @@ export function getSecret(): string {
   return secret;
 }
 
+const PASSWORD_HASH_PREFIX = "pbkdf2$sha256$";
+const PASSWORD_HASH_ITERATIONS = 310_000;
+
 export function hashPassword(password: string): string {
-  return crypto.createHmac("sha256", getSecret()).update(password).digest("hex");
+  const salt = crypto.randomBytes(16);
+  const derived = crypto.pbkdf2Sync(password, salt, PASSWORD_HASH_ITERATIONS, 32, "sha256");
+  return `${PASSWORD_HASH_PREFIX}${PASSWORD_HASH_ITERATIONS}${salt.toString("hex")}${derived.toString("hex")}`;
+}
+
+/** Supports the old AUTH_SECRET HMAC hashes and upgrades them after a successful login. */
+export function verifyPassword(storedHash: string, password: string): boolean {
+  if (!storedHash.startsWith(PASSWORD_HASH_PREFIX)) {
+    return safeEqual(storedHash, crypto.createHmac("sha256", getSecret()).update(password).digest("hex"));
+  }
+  try {
+    const [, , iterationsRaw, saltHex, hashHex] = storedHash.split("$");
+    const iterations = Number(iterationsRaw);
+    if (!Number.isInteger(iterations) || iterations < 100_000 || iterations > 1_000_000 ||
+        !/^[0-9a-f]{32}$/i.test(saltHex ?? "") || !/^[0-9a-f]{64}$/i.test(hashHex ?? "")) return false;
+    const actual = crypto.pbkdf2Sync(password, Buffer.from(saltHex, "hex"), iterations, 32, "sha256").toString("hex");
+    return safeEqual(actual, hashHex);
+  } catch {
+    return false;
+  }
+}
+
+export function isLegacyPasswordHash(storedHash: string): boolean {
+  return !storedHash.startsWith(PASSWORD_HASH_PREFIX);
 }
 
 export function safeEqual(a: string, b: string): boolean {

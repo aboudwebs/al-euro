@@ -85,6 +85,26 @@ function AccountCard({ a, onChanged }: { a: AdminAccount; onChanged: () => void 
         </div>
       )}
 
+      {!isWorkshop && (
+        <div className="space-y-3 rounded-2xl border border-white/10 bg-black/30 p-3 text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="font-semibold text-white">ملخص عمولات المسوّق</p>
+            <span className="text-xs text-white/50" dir="ltr">كود: {a.my_ref_code || "—"}</span>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><p className="text-xs text-white/45">عمولات متاحة</p><p className="mt-1 font-semibold text-[#30D158]">{money(a.marketer_commissions?.available)}</p></div>
+            <div><p className="text-xs text-white/45">عمولات معلّقة</p><p className="mt-1 font-semibold text-[#FF9F0A]">{money(a.marketer_commissions?.held)}</p></div>
+            <div><p className="text-xs text-white/45">بطلب تحويل</p><p className="mt-1 font-semibold text-white">{money(a.marketer_commissions?.requested)}</p></div>
+            <div><p className="text-xs text-white/45">عمولات مدفوعة</p><p className="mt-1 font-semibold text-white">{money(a.marketer_commissions?.paid)}</p></div>
+          </div>
+          <div className="flex items-center justify-between border-t border-white/10 pt-2">
+            <span className="text-xs text-white/55">إجمالي العمولات المسجّلة</span>
+            <strong className="text-white">{money(a.marketer_commissions?.total)}</strong>
+          </div>
+          <p className="text-xs leading-5 text-white/45">المعلّقة مرتبطة بديون الورش المُحالة، والمتاحة جاهزة لطلب التحويل.</p>
+        </div>
+      )}
+
       {isWorkshop && (
         <div className="grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-black/30 p-3 text-sm">
           <div><p className="text-xs text-white/45">مرتبة الولاء الحالية</p><p className="font-semibold text-white">{TIER_LABEL[tier]}</p></div>

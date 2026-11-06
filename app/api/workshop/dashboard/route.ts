@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/session";
+import { requireUser } from "@/lib/account-api";
 import { getSupabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -7,15 +7,15 @@ const reply = (body: unknown, status = 200) => NextResponse.json(body, { status,
 
 export async function GET() {
   try {
-    const session = getSession();
-    if (!session) return reply({ error: "يرجى تسجيل الدخول" }, 401);
-    if (session.role !== "workshop") return reply({ error: "هذه الصفحة مخصصة للورشات" }, 403);
+    const auth = await requireUser();
+    if (!auth.ok) return auth.response;
+    if (auth.user.role !== "workshop") return reply({ error: "هذه الصفحة مخصصة للورشات" }, 403);
 
     const db = getSupabaseAdmin();
     const [{ data: user, error: userError }, { data: orders, error: ordersError }, { data: ledger, error: ledgerError }] = await Promise.all([
-      db.from("users").select("id,name,tier,debt_limit,debt_balance,cashback_balance,loyalty_season_spend,loyalty_season_started_at").eq("id", session.id).eq("role", "workshop").maybeSingle(),
-      db.from("orders").select("id,order_number,total_amount,pay_method,status,created_at,items").eq("user_id", session.id).order("created_at", { ascending: false }).limit(100),
-      db.from("debt_ledger").select("id,order_id,tx_type,amount,balance_after,note,created_at").eq("workshop_id", session.id).order("created_at", { ascending: false }).limit(100)
+      db.from("users").select("id,name,tier,debt_limit,debt_balance,cashback_balance,loyalty_season_spend,loyalty_season_started_at").eq("id", auth.user.id).eq("role", "workshop").maybeSingle(),
+      db.from("orders").select("id,order_number,total_amount,pay_method,status,created_at,items").eq("user_id", auth.user.id).order("created_at", { ascending: false }).limit(100),
+      db.from("debt_ledger").select("id,order_id,tx_type,amount,balance_after,note,created_at").eq("workshop_id", auth.user.id).order("created_at", { ascending: false }).limit(100)
     ]);
     if (userError || ordersError || ledgerError) {
       console.error("[api/workshop/dashboard]", userError || ordersError || ledgerError);

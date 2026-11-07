@@ -43,6 +43,8 @@ class _EuroAuthScreenState extends State<EuroAuthScreen> {
   final spec = TextEditingController();
   final otp = TextEditingController();
 
+  User? get currentFirebaseUser => _firebaseEnabled ? FirebaseAuth.instance.currentUser : null;
+
   void showError(Object value) {
     if (mounted) setState(() => error = value.toString().replaceFirst('Exception: ', ''));
   }
@@ -191,10 +193,10 @@ class _EuroAuthScreenState extends State<EuroAuthScreen> {
       timeout: const Duration(seconds: 60),
       verificationCompleted: (credential) async {
         try {
-          final current = FirebaseAuth.instance.currentUser;
+          final current = currentFirebaseUser;
           if (current == null) return;
           await current.linkWithCredential(credential);
-          final refreshed = FirebaseAuth.instance.currentUser;
+          final refreshed = currentFirebaseUser;
           if (registering) {
             if (mounted) setState(() => stage = 'register');
           } else {
@@ -225,10 +227,10 @@ class _EuroAuthScreenState extends State<EuroAuthScreen> {
         verificationId: verificationId!,
         smsCode: otp.text.trim(),
       );
-      final current = FirebaseAuth.instance.currentUser;
+      final current = currentFirebaseUser;
       if (current == null) throw Exception('انتهت جلسة التحقق، أعد المحاولة');
       await current.linkWithCredential(credential);
-      final refreshed = FirebaseAuth.instance.currentUser;
+      final refreshed = currentFirebaseUser;
       if (registering) {
         if (mounted) setState(() => stage = 'register');
       } else {
@@ -275,7 +277,7 @@ class _EuroAuthScreenState extends State<EuroAuthScreen> {
     }
     setState(() { busy = true; error = null; });
     try {
-      final user = FirebaseAuth.instance.currentUser;
+      final user = currentFirebaseUser;
       if (user == null || user.phoneNumber == null) {
         throw Exception('يجب توثيق رقم الهاتف أولاً');
       }
@@ -395,7 +397,7 @@ class _EuroAuthScreenState extends State<EuroAuthScreen> {
                       const Text('سنرسل رمز تحقق لمرة واحدة. بعد نجاح التوثيق لن تحتاج لإعادته عند كل تسجيل دخول.', style: TextStyle(color: _muted)),
                       const SizedBox(height: 16),
                       field(phone, 'رقم الهاتف بالصيغة الدولية (+963...)', keyboard: TextInputType.phone),
-                      actionButton('إرسال رمز التحقق', () => _startPhoneVerification(FirebaseAuth.instance.currentUser), outlined: true),
+                      actionButton('إرسال رمز التحقق', () => _startPhoneVerification(currentFirebaseUser), outlined: true),
                       const SizedBox(height: 12),
                       field(otp, 'رمز SMS المكوّن من 6 أرقام', keyboard: TextInputType.number),
                       actionButton('تأكيد الرقم', verifyPhoneCode),
@@ -405,7 +407,7 @@ class _EuroAuthScreenState extends State<EuroAuthScreen> {
                       const SizedBox(height: 8),
                       const Text('اختر نوع الحساب، ثم أكمل بيانات التسجيل.', style: TextStyle(color: _muted)),
                       const SizedBox(height: 16),
-                      if (FirebaseAuth.instance.currentUser == null) ...[
+                      if (currentFirebaseUser == null) ...[
                         field(email, 'البريد الإلكتروني', keyboard: TextInputType.emailAddress),
                         const SizedBox(height: 10),
                         field(password, 'كلمة المرور (6 أحرف على الأقل)', secret: true),
@@ -436,14 +438,14 @@ class _EuroAuthScreenState extends State<EuroAuthScreen> {
                         field(spec, 'اختصاص الورشة'),
                       ],
                       const SizedBox(height: 16),
-                      if (FirebaseAuth.instance.currentUser == null) ...[
+                      if (currentFirebaseUser == null) ...[
                         actionButton('متابعة عبر البريد والتحقق بالهاتف', emailRegister, outlined: true),
                         const SizedBox(height: 8),
                         actionButton('إنشاء عبر Google', () => socialLogin('google.com'), outlined: true),
                         const SizedBox(height: 8),
                         actionButton('إنشاء عبر Apple', () => socialLogin('apple.com'), outlined: true),
                       ],
-                      if (FirebaseAuth.instance.currentUser?.phoneNumber != null) ...[
+                      if (currentFirebaseUser?.phoneNumber != null) ...[
                         const SizedBox(height: 14),
                         actionButton('تأكيد وإنشاء الحساب', completeRegistration),
                       ],

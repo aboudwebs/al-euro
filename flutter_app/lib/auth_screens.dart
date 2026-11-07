@@ -31,8 +31,6 @@ class _EuroAuthScreenState extends State<EuroAuthScreen> {
   bool registering = false;
   String? error;
   String? verificationId;
-  String? verifiedPhone;
-  String? initialEmail;
   final phone = TextEditingController();
   final password = TextEditingController();
   final phonePassword = TextEditingController();
@@ -164,7 +162,6 @@ class _EuroAuthScreenState extends State<EuroAuthScreen> {
 
   Future<void> _continueFirebaseUser(User? user) async {
     if (user == null) throw Exception('تعذر الحصول على حساب Firebase');
-    initialEmail = user.email;
     if (user.phoneNumber == null || user.phoneNumber!.isEmpty) {
       await _startPhoneVerification(user);
       return;
@@ -187,7 +184,6 @@ class _EuroAuthScreenState extends State<EuroAuthScreen> {
       if (mounted) setState(() { stage = 'phone'; error = 'أدخل رقم الهاتف بالصيغة الدولية، مثال: +963...'; });
       return;
     }
-    verifiedPhone = number;
     await FirebaseAuth.instance.verifyPhoneNumber(
       phoneNumber: number,
       timeout: const Duration(seconds: 60),
@@ -248,8 +244,6 @@ class _EuroAuthScreenState extends State<EuroAuthScreen> {
     final token = await user.getIdToken(true);
     final data = await post('/api/auth/firebase', {'idToken': token});
     if (data['registrationRequired'] == true) {
-      verifiedPhone = data['verifiedPhone']?.toString();
-      initialEmail = data['email']?.toString() ?? user.email;
       if (mounted) setState(() { stage = 'register'; error = null; });
       return;
     }

@@ -44,14 +44,14 @@ jobs:
               p = settings_kts
               text = p.read_text()
               if "com.google.gms.google-services" not in text:
-                  text, count = re.subn(r"plugins\\s*\\{", 'plugins {\\n    id("com.google.gms.google-services") version "4.4.4" apply false', text, count=1)
+                  text, count = re.subn(r"plugins\s*\{", 'plugins {\n    id("com.google.gms.google-services") version "4.4.4" apply false', text, count=1)
                   if not count: raise SystemExit("Could not locate Android Gradle plugins block")
                   p.write_text(text)
           elif settings_groovy.exists():
               p = settings_groovy
               text = p.read_text()
               if "com.google.gms.google-services" not in text:
-                  text, count = re.subn(r"plugins\\s*\\{", "plugins {\\n    id 'com.google.gms.google-services' version '4.4.4' apply false", text, count=1)
+                  text, count = re.subn(r"plugins\s*\{", "plugins {\n    id 'com.google.gms.google-services' version '4.4.4' apply false", text, count=1)
                   if not count: raise SystemExit("Could not locate Android Gradle plugins block")
                   p.write_text(text)
           else:
@@ -61,9 +61,20 @@ jobs:
           text = p.read_text()
           if "com.google.gms.google-services" not in text:
               plugin = '    id("com.google.gms.google-services")' if p.suffix == ".kts" else "    id 'com.google.gms.google-services'"
-              text, count = re.subn(r"plugins\\s*\\{", lambda m: m.group(0) + "\\n" + plugin, text, count=1)
+              text, count = re.subn(r"plugins\s*\{", lambda m: m.group(0) + "\n" + plugin, text, count=1)
               if not count: raise SystemExit("Could not locate app Gradle plugins block")
               p.write_text(text)
+          # Firebase Auth requires Android API 23 or newer.
+          if p.suffix == ".kts":
+              text = re.sub(r"minSdk\\s*=\\s*flutter\\.minSdkVersion", "minSdk = 23", text)
+          else:
+              text = re.sub(r"minSdkVersion\\s+flutter\\.minSdkVersion", "minSdkVersion 23", text)
+          p.write_text(text)
+
+          manifest = Path("flutter_app/android/app/src/main/AndroidManifest.xml")
+          if manifest.exists():
+              manifest_text = manifest.read_text().replace(' android:taskAffinity=""', "")
+              manifest.write_text(manifest_text)
           PY
           echo "EURO_FIREBASE_ENABLED=true" >> "$GITHUB_ENV"
       - name: Resolve packages

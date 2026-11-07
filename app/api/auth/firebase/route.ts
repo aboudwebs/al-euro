@@ -40,13 +40,14 @@ export async function POST(req: Request) {
     if (!idToken || idToken.length > 12_000) return reply({ error: "رمز تسجيل الدخول غير صالح" }, 400);
 
     const phone = typeof body?.phone === "string" ? body.phone.trim() : "";
-    if (!phone || !verifyRegistrationOtp(phone, body?.otpCode, body?.otpToken)) {
+    const whatsappVerified = Boolean(phone) && verifyRegistrationOtp(phone, body?.otpCode, body?.otpToken);
+    if (phone && !whatsappVerified) {
       return reply({ error: "رمز واتساب غير صحيح أو انتهت صلاحيته. اطلب رمزاً جديداً." }, 400);
     }
 
     let identity;
     try {
-      identity = await verifyFirebaseIdentityToken(idToken, phone);
+      identity = await verifyFirebaseIdentityToken(idToken, whatsappVerified ? phone : "");
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
       if (message.includes("غير مدعومة") || message.includes("توثيق رقم الهاتف")) {
@@ -73,6 +74,14 @@ export async function POST(req: Request) {
     if (linked) {
       userId = String(linked.user_id);
     } else {
+      if (!whatsappVerified && !identity.phone) {
+        return reply({
+          registrationRequired: true,
+          provider: identity.provider,
+          email: identity.email,
+          emailVerified: identity.emailVerified,
+        }, 200);
+      }
       const phone = normalizedPhone(identity.phone);
       if (!phone) return reply({ error: "رقم الهاتف الموثّق غير صالح" }, 400);
 
@@ -126,7 +135,7 @@ export async function POST(req: Request) {
       return reply({ error: "حساب EURO المرتبط غير موجود" }, 404);
     }
 
-    if (normalizedPhone(user.phone) !== normalizedPhone(identity.phone)) {
+    if (identity.phone && user.phone && normalizedPhone(user.phone) !== normalizedPhone(identity.phone)) {
       return reply({ error: "رقم الهاتف الموثّق لا يطابق رقم الحساب. تواصل مع الإدارة." }, 403);
     }
     if (!user.is_active) {
@@ -139,12 +148,14 @@ export async function POST(req: Request) {
       return reply({ error: "هذه الطريقة مخصصة لحسابات الورشات والمسوّقين" }, 403);
     }
 
-    const { error: verificationUpdateError } = await db.from("users")
-      .update({ phone_verified_at: new Date().toISOString(), phone_verification_required: false })
-      .eq("id", user.id);
-    if (verificationUpdateError) {
-      console.error("[api/auth/firebase] phone verification update:", verificationUpdateError);
-      return reply({ error: "تحديث قاعدة بيانات التحقق مطلوب قبل إكمال الدخول" }, 503);
+    if (whatsappVerified || (identity.provider === "phone" && identity.phone)) {
+      const { error: verificationUpdateError } = await db.from("users")
+        .update({ phone_verified_at: new Date().toISOString(), phone_verification_required: false })
+        .eq("id", user.id);
+      if (verificationUpdateError) {
+        console.error("[api/auth/firebase] phone verification update:", verificationUpdateError);
+        return reply({ error: "تحديث قاعدة بيانات التحقق مطلوب قبل إكمال الدخول" }, 503);
+      }
     }
 
     const accessToken = signSession({

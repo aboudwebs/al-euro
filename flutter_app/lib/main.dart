@@ -83,18 +83,22 @@ class _GateState extends State<Gate> {
   Future<void> login(String value, Map<String, dynamic> account) async {
     await secure.write(key: 'token', value: value);
     await secure.write(key: 'user', value: jsonEncode(account));
-    if (mounted) setState(() {
-      token = value;
-      user = account;
-    });
+    if (mounted) {
+      setState(() {
+        token = value;
+        user = account;
+      });
+    }
   }
 
   Future<void> logout() async {
     await secure.deleteAll();
-    if (mounted) setState(() {
-      token = null;
-      user = null;
-    });
+    if (mounted) {
+      setState(() {
+        token = null;
+        user = null;
+      });
+    }
   }
 
   @override
@@ -537,8 +541,2274 @@ class _ShopState extends State<Shop> {
       children: [
         const Text('سلة الطلب', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
         ...selected.map((part) => ListTile(
-          title: Text(part['name'].toString() + ' × ' + (cart[part['id'].toString()] ?? 0).toString()),
-          subtitle: Text(part['price'].toString() + ' \\$'),
+          title: Text('${part['name']} × ${cart[part['id'].toString()] ?? 0}'),
+          subtitle: Text('${part['price']} \\,
+        )),
+        ListTile(
+          title: const Text('الإجمالي'),
+          trailing: Text('${total.toStringAsFixed(2)} \\, style: const TextStyle(color: blue)),
+        ),
+        if (selected.isEmpty)
+          const Text('أضف القطع من الكتالوج أولاً', style: TextStyle(color: muted)),
+        if (!marketer) ...[
+          const SizedBox(height: 10),
+          Text('رصيد الكاش باك المتاح: ${cashbackBalance.toStringAsFixed(2)} \\, style: const TextStyle(color: blue, fontWeight: FontWeight.bold)),
+          TextField(
+            controller: cashbackCtl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(labelText: 'استخدام كاش باك من الرصيد', suffixText: 'USD'),
+          ),
+          TextButton(
+            onPressed: () => setState(() => cashbackCtl.text = math.min(cashbackBalance, total).toStringAsFixed(2)),
+            child: const Text('استخدام كامل الرصيد المتاح للطلب'),
+          ),
+          ListTile(
+            title: const Text('المتبقي بعد الكاش باك'),
+            trailing: Text('${remaining.toStringAsFixed(2)} \\,
+          ),
+        ],
+        const SizedBox(height: 14),
+        const Text('عنوان الشحن', style: TextStyle(fontWeight: FontWeight.bold)),
+        if (addresses.isNotEmpty && !addingAddress)
+          DropdownButtonFormField<String>(
+            initialValue: selectedAddressId,
+            decoration: const InputDecoration(labelText: 'اختر عنوان التوصيل'),
+            items: addresses.map((address) {
+              final addressParts = [address['governorate'], address['area'], address['street']]
+                  .where((value) => value != null && value.toString().trim().isNotEmpty)
+                  .join('، ');
+              return DropdownMenuItem<String>(
+                value: address['id'].toString(),
+                child: Text('${address['label']} · $addressParts', overflow: TextOverflow.ellipsis),
+              );
+            }).toList(),
+            onChanged: (value) => setState(() => selectedAddressId = value),
+          ),
+        if (addresses.isEmpty || addingAddress) ...[
+          TextField(controller: addressLabelCtl, decoration: const InputDecoration(labelText: 'اسم العنوان (مثال: الورشة)')),
+          const SizedBox(height: 8),
+          TextField(controller: governorateCtl, decoration: const InputDecoration(labelText: 'المحافظة')),
+          const SizedBox(height: 8),
+          TextField(controller: areaCtl, decoration: const InputDecoration(labelText: 'المنطقة')),
+          const SizedBox(height: 8),
+          TextField(controller: streetCtl, decoration: const InputDecoration(labelText: 'الشارع')),
+          const SizedBox(height: 8),
+          TextField(controller: addressDetailsCtl, decoration: const InputDecoration(labelText: 'تفاصيل إضافية')),
+          const SizedBox(height: 8),
+          FilledButton(onPressed: busy ? null : saveAddress, child: const Text('حفظ عنوان الشحن')),
+        ],
+        if (addresses.isNotEmpty && !addingAddress)
+          TextButton.icon(
+            onPressed: () => setState(() => addingAddress = true),
+            icon: const Icon(Icons.add_location_alt_outlined),
+            label: const Text('إضافة عنوان جديد'),
+          ),
+        if (!marketer) ...[
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: busy ? null : pickReceipt,
+            icon: const Icon(Icons.receipt_long),
+            label: Text(receiptPath == null ? 'اختيار صورة إيصال شام كاش' : 'تم اختيار صورة الإيصال · تغيير الصورة'),
+          ),
+          if (receiptPath != null)
+            const Text('سيتم إرفاق الإيصال عند اختيار شام كاش فقط.', style: TextStyle(color: muted, fontSize: 12)),
+        ],
+        const SizedBox(height: 12),
+        FilledButton(
+          onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('cod'),
+          child: const Text('الدفع عند الاستلام'),
+        ),
+        if (!marketer && total > 0 && cashbackUsed >= total)
+          FilledButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('cashback'),
+            child: const Text('تأكيد الطلب بالكاش باك بالكامل'),
+          ),
+        if (!marketer)
+          OutlinedButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('sham'),
+            child: const Text('شام كاش'),
+          ),
+        if (!marketer)
+          OutlinedButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('debt'),
+            child: const Text('دفتر الدين للورشة'),
+          ),
+      ],
+    );
+  }
+
+  Widget ordersPage() => RefreshIndicator(
+        onRefresh: loadOrders,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            const Text('طلباتي', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            if (orders.isEmpty)
+              const Text('لا توجد طلبات لعرضها', style: TextStyle(color: muted)),
+            ...orders.map((order) => Card(
+                  color: panel,
+                  child: ListTile(
+                    leading: const Icon(Icons.receipt_long, color: blue),
+                    title: Text('طلب #${order['order_number'] ?? order['id'] ?? '—'}'),
+                    subtitle: Text('${order['status'] ?? '—'}'),
+                    trailing: Text('${order['total_amount'] ?? ''} \\$'),
+                  ),
+                )),
+          ],
+        ),
+      );
+
+  Widget accountPage() {
+    final workshop = Map<String, dynamic>.from(account['user'] ?? {});
+    final isMarketer = widget.user['role'] == 'marketer';
+    final cashbackRate = (double.tryParse('${workshop['cashback_rate'] ?? 0}') ?? 0) * 100;
+    return RefreshIndicator(
+      onRefresh: loadAccount,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text('أهلاً \\${widget.user['name'] ?? ''}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          Text('${widget.user['phone'] ?? ''}', style: const TextStyle(color: muted)),
+          const SizedBox(height: 18),
+          if (isMarketer) ...[
+            _metric('كود الإحالة', '${widget.user['my_ref_code'] ?? '—'}'),
+            _metric('العمولات المتاحة', '${account['commissions']?['available'] ?? 0} \\$'),
+            _metric('العمولات المعلّقة', '${account['commissions']?['held'] ?? 0} \\$'),
+          ] else ...[
+            _metric('التصنيف', '${workshop['tier'] ?? widget.user['tier'] ?? 'Standard'}'),
+            _metric('نسبة الكاش باك الحالية', '${cashbackRate.toStringAsFixed(0)}%'),
+            _metric('رصيد الكاش باك', '${workshop['cashback_balance'] ?? 0} \\$'),
+            _metric('حد الدين', '${workshop['debt_limit'] ?? widget.user['debt_limit'] ?? 0} \\$'),
+            _metric('الرصيد المستحق', '${workshop['debt_balance'] ?? widget.user['debt_balance'] ?? 0} \\$'),
+          ],
+          OutlinedButton.icon(onPressed: loadAccount, icon: const Icon(Icons.refresh), label: const Text('تحديث بيانات الحساب')),
+          OutlinedButton.icon(onPressed: widget.onLogout, icon: const Icon(Icons.logout), label: const Text('تسجيل الخروج')),
+        ],
+      ),
+    );
+  }
+
+  Widget _metric(String label, String value) => Card(
+        color: panel,
+        child: ListTile(
+          title: Text(label, style: const TextStyle(color: muted)),
+          trailing: Text(value, style: const TextStyle(color: blue, fontWeight: FontWeight.bold)),
+        ),
+      );
+}
+),
+        )),
+        ListTile(
+          title: const Text('الإجمالي'),
+          trailing: Text(total.toStringAsFixed(2) + ' \\$', style: const TextStyle(color: blue)),
+        ),
+        if (selected.isEmpty)
+          const Text('أضف القطع من الكتالوج أولاً', style: TextStyle(color: muted)),
+        if (!marketer) ...[
+          const SizedBox(height: 10),
+          Text('رصيد الكاش باك المتاح: ' + cashbackBalance.toStringAsFixed(2) + ' \\$', style: const TextStyle(color: blue, fontWeight: FontWeight.bold)),
+          TextField(
+            controller: cashbackCtl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(labelText: 'استخدام كاش باك من الرصيد', suffixText: 'USD'),
+          ),
+          TextButton(
+            onPressed: () => setState(() => cashbackCtl.text = math.min(cashbackBalance, total).toStringAsFixed(2)),
+            child: const Text('استخدام كامل الرصيد المتاح للطلب'),
+          ),
+          ListTile(
+            title: const Text('المتبقي بعد الكاش باك'),
+            trailing: Text(remaining.toStringAsFixed(2) + ' \\$'),
+          ),
+        ],
+        const SizedBox(height: 14),
+        const Text('عنوان الشحن', style: TextStyle(fontWeight: FontWeight.bold)),
+        if (addresses.isNotEmpty && !addingAddress)
+          DropdownButtonFormField<String>(
+            value: selectedAddressId,
+            decoration: const InputDecoration(labelText: 'اختر عنوان التوصيل'),
+            items: addresses.map((address) {
+              final addressParts = [address['governorate'], address['area'], address['street']]
+                  .where((value) => value != null && value.toString().trim().isNotEmpty)
+                  .join('، ');
+              return DropdownMenuItem<String>(
+                value: address['id'].toString(),
+                child: Text(address['label'].toString() + ' · ' + addressParts, overflow: TextOverflow.ellipsis),
+              );
+            }).toList(),
+            onChanged: (value) => setState(() => selectedAddressId = value),
+          ),
+        if (addresses.isEmpty || addingAddress) ...[
+          TextField(controller: addressLabelCtl, decoration: const InputDecoration(labelText: 'اسم العنوان (مثال: الورشة)')),
+          const SizedBox(height: 8),
+          TextField(controller: governorateCtl, decoration: const InputDecoration(labelText: 'المحافظة')),
+          const SizedBox(height: 8),
+          TextField(controller: areaCtl, decoration: const InputDecoration(labelText: 'المنطقة')),
+          const SizedBox(height: 8),
+          TextField(controller: streetCtl, decoration: const InputDecoration(labelText: 'الشارع')),
+          const SizedBox(height: 8),
+          TextField(controller: addressDetailsCtl, decoration: const InputDecoration(labelText: 'تفاصيل إضافية')),
+          const SizedBox(height: 8),
+          FilledButton(onPressed: busy ? null : saveAddress, child: const Text('حفظ عنوان الشحن')),
+        ],
+        if (addresses.isNotEmpty && !addingAddress)
+          TextButton.icon(
+            onPressed: () => setState(() => addingAddress = true),
+            icon: const Icon(Icons.add_location_alt_outlined),
+            label: const Text('إضافة عنوان جديد'),
+          ),
+        if (!marketer) ...[
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: busy ? null : pickReceipt,
+            icon: const Icon(Icons.receipt_long),
+            label: Text(receiptPath == null ? 'اختيار صورة إيصال شام كاش' : 'تم اختيار صورة الإيصال · تغيير الصورة'),
+          ),
+          if (receiptPath != null)
+            const Text('سيتم إرفاق الإيصال عند اختيار شام كاش فقط.', style: TextStyle(color: muted, fontSize: 12)),
+        ],
+        const SizedBox(height: 12),
+        FilledButton(
+          onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('cod'),
+          child: const Text('الدفع عند الاستلام'),
+        ),
+        if (!marketer && total > 0 && cashbackUsed >= total)
+          FilledButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('cashback'),
+            child: const Text('تأكيد الطلب بالكاش باك بالكامل'),
+          ),
+        if (!marketer)
+          OutlinedButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('sham'),
+            child: const Text('شام كاش'),
+          ),
+        if (!marketer)
+          OutlinedButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('debt'),
+            child: const Text('دفتر الدين للورشة'),
+          ),
+      ],
+    );
+  }
+
+  Widget ordersPage() => RefreshIndicator(
+        onRefresh: loadOrders,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            const Text('طلباتي', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            if (orders.isEmpty)
+              const Text('لا توجد طلبات لعرضها', style: TextStyle(color: muted)),
+            ...orders.map((order) => Card(
+                  color: panel,
+                  child: ListTile(
+                    leading: const Icon(Icons.receipt_long, color: blue),
+                    title: Text('طلب #${order['order_number'] ?? order['id'] ?? '—'}'),
+                    subtitle: Text('${order['status'] ?? '—'}'),
+                    trailing: Text('${order['total_amount'] ?? ''} \\$'),
+                  ),
+                )),
+          ],
+        ),
+      );
+
+  Widget accountPage() {
+    final workshop = Map<String, dynamic>.from(account['user'] ?? {});
+    final isMarketer = widget.user['role'] == 'marketer';
+    final cashbackRate = (double.tryParse('${workshop['cashback_rate'] ?? 0}') ?? 0) * 100;
+    return RefreshIndicator(
+      onRefresh: loadAccount,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text('أهلاً \\${widget.user['name'] ?? ''}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          Text('${widget.user['phone'] ?? ''}', style: const TextStyle(color: muted)),
+          const SizedBox(height: 18),
+          if (isMarketer) ...[
+            _metric('كود الإحالة', '${widget.user['my_ref_code'] ?? '—'}'),
+            _metric('العمولات المتاحة', '${account['commissions']?['available'] ?? 0} \\$'),
+            _metric('العمولات المعلّقة', '${account['commissions']?['held'] ?? 0} \\$'),
+          ] else ...[
+            _metric('التصنيف', '${workshop['tier'] ?? widget.user['tier'] ?? 'Standard'}'),
+            _metric('نسبة الكاش باك الحالية', '${cashbackRate.toStringAsFixed(0)}%'),
+            _metric('رصيد الكاش باك', '${workshop['cashback_balance'] ?? 0} \\$'),
+            _metric('حد الدين', '${workshop['debt_limit'] ?? widget.user['debt_limit'] ?? 0} \\$'),
+            _metric('الرصيد المستحق', '${workshop['debt_balance'] ?? widget.user['debt_balance'] ?? 0} \\$'),
+          ],
+          OutlinedButton.icon(onPressed: loadAccount, icon: const Icon(Icons.refresh), label: const Text('تحديث بيانات الحساب')),
+          OutlinedButton.icon(onPressed: widget.onLogout, icon: const Icon(Icons.logout), label: const Text('تسجيل الخروج')),
+        ],
+      ),
+    );
+  }
+
+  Widget _metric(String label, String value) => Card(
+        color: panel,
+        child: ListTile(
+          title: Text(label, style: const TextStyle(color: muted)),
+          trailing: Text(value, style: const TextStyle(color: blue, fontWeight: FontWeight.bold)),
+        ),
+      );
+}
+, style: const TextStyle(color: blue)),
+        ),
+        if (selected.isEmpty)
+          const Text('أضف القطع من الكتالوج أولاً', style: TextStyle(color: muted)),
+        if (!marketer) ...[
+          const SizedBox(height: 10),
+          Text('رصيد الكاش باك المتاح: ' + cashbackBalance.toStringAsFixed(2) + ' \\$', style: const TextStyle(color: blue, fontWeight: FontWeight.bold)),
+          TextField(
+            controller: cashbackCtl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(labelText: 'استخدام كاش باك من الرصيد', suffixText: 'USD'),
+          ),
+          TextButton(
+            onPressed: () => setState(() => cashbackCtl.text = math.min(cashbackBalance, total).toStringAsFixed(2)),
+            child: const Text('استخدام كامل الرصيد المتاح للطلب'),
+          ),
+          ListTile(
+            title: const Text('المتبقي بعد الكاش باك'),
+            trailing: Text(remaining.toStringAsFixed(2) + ' \\$'),
+          ),
+        ],
+        const SizedBox(height: 14),
+        const Text('عنوان الشحن', style: TextStyle(fontWeight: FontWeight.bold)),
+        if (addresses.isNotEmpty && !addingAddress)
+          DropdownButtonFormField<String>(
+            value: selectedAddressId,
+            decoration: const InputDecoration(labelText: 'اختر عنوان التوصيل'),
+            items: addresses.map((address) {
+              final addressParts = [address['governorate'], address['area'], address['street']]
+                  .where((value) => value != null && value.toString().trim().isNotEmpty)
+                  .join('، ');
+              return DropdownMenuItem<String>(
+                value: address['id'].toString(),
+                child: Text(address['label'].toString() + ' · ' + addressParts, overflow: TextOverflow.ellipsis),
+              );
+            }).toList(),
+            onChanged: (value) => setState(() => selectedAddressId = value),
+          ),
+        if (addresses.isEmpty || addingAddress) ...[
+          TextField(controller: addressLabelCtl, decoration: const InputDecoration(labelText: 'اسم العنوان (مثال: الورشة)')),
+          const SizedBox(height: 8),
+          TextField(controller: governorateCtl, decoration: const InputDecoration(labelText: 'المحافظة')),
+          const SizedBox(height: 8),
+          TextField(controller: areaCtl, decoration: const InputDecoration(labelText: 'المنطقة')),
+          const SizedBox(height: 8),
+          TextField(controller: streetCtl, decoration: const InputDecoration(labelText: 'الشارع')),
+          const SizedBox(height: 8),
+          TextField(controller: addressDetailsCtl, decoration: const InputDecoration(labelText: 'تفاصيل إضافية')),
+          const SizedBox(height: 8),
+          FilledButton(onPressed: busy ? null : saveAddress, child: const Text('حفظ عنوان الشحن')),
+        ],
+        if (addresses.isNotEmpty && !addingAddress)
+          TextButton.icon(
+            onPressed: () => setState(() => addingAddress = true),
+            icon: const Icon(Icons.add_location_alt_outlined),
+            label: const Text('إضافة عنوان جديد'),
+          ),
+        if (!marketer) ...[
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: busy ? null : pickReceipt,
+            icon: const Icon(Icons.receipt_long),
+            label: Text(receiptPath == null ? 'اختيار صورة إيصال شام كاش' : 'تم اختيار صورة الإيصال · تغيير الصورة'),
+          ),
+          if (receiptPath != null)
+            const Text('سيتم إرفاق الإيصال عند اختيار شام كاش فقط.', style: TextStyle(color: muted, fontSize: 12)),
+        ],
+        const SizedBox(height: 12),
+        FilledButton(
+          onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('cod'),
+          child: const Text('الدفع عند الاستلام'),
+        ),
+        if (!marketer && total > 0 && cashbackUsed >= total)
+          FilledButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('cashback'),
+            child: const Text('تأكيد الطلب بالكاش باك بالكامل'),
+          ),
+        if (!marketer)
+          OutlinedButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('sham'),
+            child: const Text('شام كاش'),
+          ),
+        if (!marketer)
+          OutlinedButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('debt'),
+            child: const Text('دفتر الدين للورشة'),
+          ),
+      ],
+    );
+  }
+
+  Widget ordersPage() => RefreshIndicator(
+        onRefresh: loadOrders,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            const Text('طلباتي', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            if (orders.isEmpty)
+              const Text('لا توجد طلبات لعرضها', style: TextStyle(color: muted)),
+            ...orders.map((order) => Card(
+                  color: panel,
+                  child: ListTile(
+                    leading: const Icon(Icons.receipt_long, color: blue),
+                    title: Text('طلب #${order['order_number'] ?? order['id'] ?? '—'}'),
+                    subtitle: Text('${order['status'] ?? '—'}'),
+                    trailing: Text('${order['total_amount'] ?? ''} \\$'),
+                  ),
+                )),
+          ],
+        ),
+      );
+
+  Widget accountPage() {
+    final workshop = Map<String, dynamic>.from(account['user'] ?? {});
+    final isMarketer = widget.user['role'] == 'marketer';
+    final cashbackRate = (double.tryParse('${workshop['cashback_rate'] ?? 0}') ?? 0) * 100;
+    return RefreshIndicator(
+      onRefresh: loadAccount,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text('أهلاً \\${widget.user['name'] ?? ''}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          Text('${widget.user['phone'] ?? ''}', style: const TextStyle(color: muted)),
+          const SizedBox(height: 18),
+          if (isMarketer) ...[
+            _metric('كود الإحالة', '${widget.user['my_ref_code'] ?? '—'}'),
+            _metric('العمولات المتاحة', '${account['commissions']?['available'] ?? 0} \\$'),
+            _metric('العمولات المعلّقة', '${account['commissions']?['held'] ?? 0} \\$'),
+          ] else ...[
+            _metric('التصنيف', '${workshop['tier'] ?? widget.user['tier'] ?? 'Standard'}'),
+            _metric('نسبة الكاش باك الحالية', '${cashbackRate.toStringAsFixed(0)}%'),
+            _metric('رصيد الكاش باك', '${workshop['cashback_balance'] ?? 0} \\$'),
+            _metric('حد الدين', '${workshop['debt_limit'] ?? widget.user['debt_limit'] ?? 0} \\$'),
+            _metric('الرصيد المستحق', '${workshop['debt_balance'] ?? widget.user['debt_balance'] ?? 0} \\$'),
+          ],
+          OutlinedButton.icon(onPressed: loadAccount, icon: const Icon(Icons.refresh), label: const Text('تحديث بيانات الحساب')),
+          OutlinedButton.icon(onPressed: widget.onLogout, icon: const Icon(Icons.logout), label: const Text('تسجيل الخروج')),
+        ],
+      ),
+    );
+  }
+
+  Widget _metric(String label, String value) => Card(
+        color: panel,
+        child: ListTile(
+          title: Text(label, style: const TextStyle(color: muted)),
+          trailing: Text(value, style: const TextStyle(color: blue, fontWeight: FontWeight.bold)),
+        ),
+      );
+}
+),
+        )),
+        ListTile(
+          title: const Text('الإجمالي'),
+          trailing: Text(total.toStringAsFixed(2) + ' \\$', style: const TextStyle(color: blue)),
+        ),
+        if (selected.isEmpty)
+          const Text('أضف القطع من الكتالوج أولاً', style: TextStyle(color: muted)),
+        if (!marketer) ...[
+          const SizedBox(height: 10),
+          Text('رصيد الكاش باك المتاح: ' + cashbackBalance.toStringAsFixed(2) + ' \\$', style: const TextStyle(color: blue, fontWeight: FontWeight.bold)),
+          TextField(
+            controller: cashbackCtl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(labelText: 'استخدام كاش باك من الرصيد', suffixText: 'USD'),
+          ),
+          TextButton(
+            onPressed: () => setState(() => cashbackCtl.text = math.min(cashbackBalance, total).toStringAsFixed(2)),
+            child: const Text('استخدام كامل الرصيد المتاح للطلب'),
+          ),
+          ListTile(
+            title: const Text('المتبقي بعد الكاش باك'),
+            trailing: Text(remaining.toStringAsFixed(2) + ' \\$'),
+          ),
+        ],
+        const SizedBox(height: 14),
+        const Text('عنوان الشحن', style: TextStyle(fontWeight: FontWeight.bold)),
+        if (addresses.isNotEmpty && !addingAddress)
+          DropdownButtonFormField<String>(
+            value: selectedAddressId,
+            decoration: const InputDecoration(labelText: 'اختر عنوان التوصيل'),
+            items: addresses.map((address) {
+              final addressParts = [address['governorate'], address['area'], address['street']]
+                  .where((value) => value != null && value.toString().trim().isNotEmpty)
+                  .join('، ');
+              return DropdownMenuItem<String>(
+                value: address['id'].toString(),
+                child: Text(address['label'].toString() + ' · ' + addressParts, overflow: TextOverflow.ellipsis),
+              );
+            }).toList(),
+            onChanged: (value) => setState(() => selectedAddressId = value),
+          ),
+        if (addresses.isEmpty || addingAddress) ...[
+          TextField(controller: addressLabelCtl, decoration: const InputDecoration(labelText: 'اسم العنوان (مثال: الورشة)')),
+          const SizedBox(height: 8),
+          TextField(controller: governorateCtl, decoration: const InputDecoration(labelText: 'المحافظة')),
+          const SizedBox(height: 8),
+          TextField(controller: areaCtl, decoration: const InputDecoration(labelText: 'المنطقة')),
+          const SizedBox(height: 8),
+          TextField(controller: streetCtl, decoration: const InputDecoration(labelText: 'الشارع')),
+          const SizedBox(height: 8),
+          TextField(controller: addressDetailsCtl, decoration: const InputDecoration(labelText: 'تفاصيل إضافية')),
+          const SizedBox(height: 8),
+          FilledButton(onPressed: busy ? null : saveAddress, child: const Text('حفظ عنوان الشحن')),
+        ],
+        if (addresses.isNotEmpty && !addingAddress)
+          TextButton.icon(
+            onPressed: () => setState(() => addingAddress = true),
+            icon: const Icon(Icons.add_location_alt_outlined),
+            label: const Text('إضافة عنوان جديد'),
+          ),
+        if (!marketer) ...[
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: busy ? null : pickReceipt,
+            icon: const Icon(Icons.receipt_long),
+            label: Text(receiptPath == null ? 'اختيار صورة إيصال شام كاش' : 'تم اختيار صورة الإيصال · تغيير الصورة'),
+          ),
+          if (receiptPath != null)
+            const Text('سيتم إرفاق الإيصال عند اختيار شام كاش فقط.', style: TextStyle(color: muted, fontSize: 12)),
+        ],
+        const SizedBox(height: 12),
+        FilledButton(
+          onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('cod'),
+          child: const Text('الدفع عند الاستلام'),
+        ),
+        if (!marketer && total > 0 && cashbackUsed >= total)
+          FilledButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('cashback'),
+            child: const Text('تأكيد الطلب بالكاش باك بالكامل'),
+          ),
+        if (!marketer)
+          OutlinedButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('sham'),
+            child: const Text('شام كاش'),
+          ),
+        if (!marketer)
+          OutlinedButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('debt'),
+            child: const Text('دفتر الدين للورشة'),
+          ),
+      ],
+    );
+  }
+
+  Widget ordersPage() => RefreshIndicator(
+        onRefresh: loadOrders,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            const Text('طلباتي', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            if (orders.isEmpty)
+              const Text('لا توجد طلبات لعرضها', style: TextStyle(color: muted)),
+            ...orders.map((order) => Card(
+                  color: panel,
+                  child: ListTile(
+                    leading: const Icon(Icons.receipt_long, color: blue),
+                    title: Text('طلب #${order['order_number'] ?? order['id'] ?? '—'}'),
+                    subtitle: Text('${order['status'] ?? '—'}'),
+                    trailing: Text('${order['total_amount'] ?? ''} \\$'),
+                  ),
+                )),
+          ],
+        ),
+      );
+
+  Widget accountPage() {
+    final workshop = Map<String, dynamic>.from(account['user'] ?? {});
+    final isMarketer = widget.user['role'] == 'marketer';
+    final cashbackRate = (double.tryParse('${workshop['cashback_rate'] ?? 0}') ?? 0) * 100;
+    return RefreshIndicator(
+      onRefresh: loadAccount,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text('أهلاً \\${widget.user['name'] ?? ''}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          Text('${widget.user['phone'] ?? ''}', style: const TextStyle(color: muted)),
+          const SizedBox(height: 18),
+          if (isMarketer) ...[
+            _metric('كود الإحالة', '${widget.user['my_ref_code'] ?? '—'}'),
+            _metric('العمولات المتاحة', '${account['commissions']?['available'] ?? 0} \\$'),
+            _metric('العمولات المعلّقة', '${account['commissions']?['held'] ?? 0} \\$'),
+          ] else ...[
+            _metric('التصنيف', '${workshop['tier'] ?? widget.user['tier'] ?? 'Standard'}'),
+            _metric('نسبة الكاش باك الحالية', '${cashbackRate.toStringAsFixed(0)}%'),
+            _metric('رصيد الكاش باك', '${workshop['cashback_balance'] ?? 0} \\$'),
+            _metric('حد الدين', '${workshop['debt_limit'] ?? widget.user['debt_limit'] ?? 0} \\$'),
+            _metric('الرصيد المستحق', '${workshop['debt_balance'] ?? widget.user['debt_balance'] ?? 0} \\$'),
+          ],
+          OutlinedButton.icon(onPressed: loadAccount, icon: const Icon(Icons.refresh), label: const Text('تحديث بيانات الحساب')),
+          OutlinedButton.icon(onPressed: widget.onLogout, icon: const Icon(Icons.logout), label: const Text('تسجيل الخروج')),
+        ],
+      ),
+    );
+  }
+
+  Widget _metric(String label, String value) => Card(
+        color: panel,
+        child: ListTile(
+          title: Text(label, style: const TextStyle(color: muted)),
+          trailing: Text(value, style: const TextStyle(color: blue, fontWeight: FontWeight.bold)),
+        ),
+      );
+}
+, style: const TextStyle(color: blue, fontWeight: FontWeight.bold)),
+          TextField(
+            controller: cashbackCtl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(labelText: 'استخدام كاش باك من الرصيد', suffixText: 'USD'),
+          ),
+          TextButton(
+            onPressed: () => setState(() => cashbackCtl.text = math.min(cashbackBalance, total).toStringAsFixed(2)),
+            child: const Text('استخدام كامل الرصيد المتاح للطلب'),
+          ),
+          ListTile(
+            title: const Text('المتبقي بعد الكاش باك'),
+            trailing: Text(remaining.toStringAsFixed(2) + ' \\$'),
+          ),
+        ],
+        const SizedBox(height: 14),
+        const Text('عنوان الشحن', style: TextStyle(fontWeight: FontWeight.bold)),
+        if (addresses.isNotEmpty && !addingAddress)
+          DropdownButtonFormField<String>(
+            value: selectedAddressId,
+            decoration: const InputDecoration(labelText: 'اختر عنوان التوصيل'),
+            items: addresses.map((address) {
+              final addressParts = [address['governorate'], address['area'], address['street']]
+                  .where((value) => value != null && value.toString().trim().isNotEmpty)
+                  .join('، ');
+              return DropdownMenuItem<String>(
+                value: address['id'].toString(),
+                child: Text(address['label'].toString() + ' · ' + addressParts, overflow: TextOverflow.ellipsis),
+              );
+            }).toList(),
+            onChanged: (value) => setState(() => selectedAddressId = value),
+          ),
+        if (addresses.isEmpty || addingAddress) ...[
+          TextField(controller: addressLabelCtl, decoration: const InputDecoration(labelText: 'اسم العنوان (مثال: الورشة)')),
+          const SizedBox(height: 8),
+          TextField(controller: governorateCtl, decoration: const InputDecoration(labelText: 'المحافظة')),
+          const SizedBox(height: 8),
+          TextField(controller: areaCtl, decoration: const InputDecoration(labelText: 'المنطقة')),
+          const SizedBox(height: 8),
+          TextField(controller: streetCtl, decoration: const InputDecoration(labelText: 'الشارع')),
+          const SizedBox(height: 8),
+          TextField(controller: addressDetailsCtl, decoration: const InputDecoration(labelText: 'تفاصيل إضافية')),
+          const SizedBox(height: 8),
+          FilledButton(onPressed: busy ? null : saveAddress, child: const Text('حفظ عنوان الشحن')),
+        ],
+        if (addresses.isNotEmpty && !addingAddress)
+          TextButton.icon(
+            onPressed: () => setState(() => addingAddress = true),
+            icon: const Icon(Icons.add_location_alt_outlined),
+            label: const Text('إضافة عنوان جديد'),
+          ),
+        if (!marketer) ...[
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: busy ? null : pickReceipt,
+            icon: const Icon(Icons.receipt_long),
+            label: Text(receiptPath == null ? 'اختيار صورة إيصال شام كاش' : 'تم اختيار صورة الإيصال · تغيير الصورة'),
+          ),
+          if (receiptPath != null)
+            const Text('سيتم إرفاق الإيصال عند اختيار شام كاش فقط.', style: TextStyle(color: muted, fontSize: 12)),
+        ],
+        const SizedBox(height: 12),
+        FilledButton(
+          onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('cod'),
+          child: const Text('الدفع عند الاستلام'),
+        ),
+        if (!marketer && total > 0 && cashbackUsed >= total)
+          FilledButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('cashback'),
+            child: const Text('تأكيد الطلب بالكاش باك بالكامل'),
+          ),
+        if (!marketer)
+          OutlinedButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('sham'),
+            child: const Text('شام كاش'),
+          ),
+        if (!marketer)
+          OutlinedButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('debt'),
+            child: const Text('دفتر الدين للورشة'),
+          ),
+      ],
+    );
+  }
+
+  Widget ordersPage() => RefreshIndicator(
+        onRefresh: loadOrders,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            const Text('طلباتي', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            if (orders.isEmpty)
+              const Text('لا توجد طلبات لعرضها', style: TextStyle(color: muted)),
+            ...orders.map((order) => Card(
+                  color: panel,
+                  child: ListTile(
+                    leading: const Icon(Icons.receipt_long, color: blue),
+                    title: Text('طلب #${order['order_number'] ?? order['id'] ?? '—'}'),
+                    subtitle: Text('${order['status'] ?? '—'}'),
+                    trailing: Text('${order['total_amount'] ?? ''} \\$'),
+                  ),
+                )),
+          ],
+        ),
+      );
+
+  Widget accountPage() {
+    final workshop = Map<String, dynamic>.from(account['user'] ?? {});
+    final isMarketer = widget.user['role'] == 'marketer';
+    final cashbackRate = (double.tryParse('${workshop['cashback_rate'] ?? 0}') ?? 0) * 100;
+    return RefreshIndicator(
+      onRefresh: loadAccount,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text('أهلاً \\${widget.user['name'] ?? ''}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          Text('${widget.user['phone'] ?? ''}', style: const TextStyle(color: muted)),
+          const SizedBox(height: 18),
+          if (isMarketer) ...[
+            _metric('كود الإحالة', '${widget.user['my_ref_code'] ?? '—'}'),
+            _metric('العمولات المتاحة', '${account['commissions']?['available'] ?? 0} \\$'),
+            _metric('العمولات المعلّقة', '${account['commissions']?['held'] ?? 0} \\$'),
+          ] else ...[
+            _metric('التصنيف', '${workshop['tier'] ?? widget.user['tier'] ?? 'Standard'}'),
+            _metric('نسبة الكاش باك الحالية', '${cashbackRate.toStringAsFixed(0)}%'),
+            _metric('رصيد الكاش باك', '${workshop['cashback_balance'] ?? 0} \\$'),
+            _metric('حد الدين', '${workshop['debt_limit'] ?? widget.user['debt_limit'] ?? 0} \\$'),
+            _metric('الرصيد المستحق', '${workshop['debt_balance'] ?? widget.user['debt_balance'] ?? 0} \\$'),
+          ],
+          OutlinedButton.icon(onPressed: loadAccount, icon: const Icon(Icons.refresh), label: const Text('تحديث بيانات الحساب')),
+          OutlinedButton.icon(onPressed: widget.onLogout, icon: const Icon(Icons.logout), label: const Text('تسجيل الخروج')),
+        ],
+      ),
+    );
+  }
+
+  Widget _metric(String label, String value) => Card(
+        color: panel,
+        child: ListTile(
+          title: Text(label, style: const TextStyle(color: muted)),
+          trailing: Text(value, style: const TextStyle(color: blue, fontWeight: FontWeight.bold)),
+        ),
+      );
+}
+),
+        )),
+        ListTile(
+          title: const Text('الإجمالي'),
+          trailing: Text(total.toStringAsFixed(2) + ' \\$', style: const TextStyle(color: blue)),
+        ),
+        if (selected.isEmpty)
+          const Text('أضف القطع من الكتالوج أولاً', style: TextStyle(color: muted)),
+        if (!marketer) ...[
+          const SizedBox(height: 10),
+          Text('رصيد الكاش باك المتاح: ' + cashbackBalance.toStringAsFixed(2) + ' \\$', style: const TextStyle(color: blue, fontWeight: FontWeight.bold)),
+          TextField(
+            controller: cashbackCtl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(labelText: 'استخدام كاش باك من الرصيد', suffixText: 'USD'),
+          ),
+          TextButton(
+            onPressed: () => setState(() => cashbackCtl.text = math.min(cashbackBalance, total).toStringAsFixed(2)),
+            child: const Text('استخدام كامل الرصيد المتاح للطلب'),
+          ),
+          ListTile(
+            title: const Text('المتبقي بعد الكاش باك'),
+            trailing: Text(remaining.toStringAsFixed(2) + ' \\$'),
+          ),
+        ],
+        const SizedBox(height: 14),
+        const Text('عنوان الشحن', style: TextStyle(fontWeight: FontWeight.bold)),
+        if (addresses.isNotEmpty && !addingAddress)
+          DropdownButtonFormField<String>(
+            value: selectedAddressId,
+            decoration: const InputDecoration(labelText: 'اختر عنوان التوصيل'),
+            items: addresses.map((address) {
+              final addressParts = [address['governorate'], address['area'], address['street']]
+                  .where((value) => value != null && value.toString().trim().isNotEmpty)
+                  .join('، ');
+              return DropdownMenuItem<String>(
+                value: address['id'].toString(),
+                child: Text(address['label'].toString() + ' · ' + addressParts, overflow: TextOverflow.ellipsis),
+              );
+            }).toList(),
+            onChanged: (value) => setState(() => selectedAddressId = value),
+          ),
+        if (addresses.isEmpty || addingAddress) ...[
+          TextField(controller: addressLabelCtl, decoration: const InputDecoration(labelText: 'اسم العنوان (مثال: الورشة)')),
+          const SizedBox(height: 8),
+          TextField(controller: governorateCtl, decoration: const InputDecoration(labelText: 'المحافظة')),
+          const SizedBox(height: 8),
+          TextField(controller: areaCtl, decoration: const InputDecoration(labelText: 'المنطقة')),
+          const SizedBox(height: 8),
+          TextField(controller: streetCtl, decoration: const InputDecoration(labelText: 'الشارع')),
+          const SizedBox(height: 8),
+          TextField(controller: addressDetailsCtl, decoration: const InputDecoration(labelText: 'تفاصيل إضافية')),
+          const SizedBox(height: 8),
+          FilledButton(onPressed: busy ? null : saveAddress, child: const Text('حفظ عنوان الشحن')),
+        ],
+        if (addresses.isNotEmpty && !addingAddress)
+          TextButton.icon(
+            onPressed: () => setState(() => addingAddress = true),
+            icon: const Icon(Icons.add_location_alt_outlined),
+            label: const Text('إضافة عنوان جديد'),
+          ),
+        if (!marketer) ...[
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: busy ? null : pickReceipt,
+            icon: const Icon(Icons.receipt_long),
+            label: Text(receiptPath == null ? 'اختيار صورة إيصال شام كاش' : 'تم اختيار صورة الإيصال · تغيير الصورة'),
+          ),
+          if (receiptPath != null)
+            const Text('سيتم إرفاق الإيصال عند اختيار شام كاش فقط.', style: TextStyle(color: muted, fontSize: 12)),
+        ],
+        const SizedBox(height: 12),
+        FilledButton(
+          onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('cod'),
+          child: const Text('الدفع عند الاستلام'),
+        ),
+        if (!marketer && total > 0 && cashbackUsed >= total)
+          FilledButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('cashback'),
+            child: const Text('تأكيد الطلب بالكاش باك بالكامل'),
+          ),
+        if (!marketer)
+          OutlinedButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('sham'),
+            child: const Text('شام كاش'),
+          ),
+        if (!marketer)
+          OutlinedButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('debt'),
+            child: const Text('دفتر الدين للورشة'),
+          ),
+      ],
+    );
+  }
+
+  Widget ordersPage() => RefreshIndicator(
+        onRefresh: loadOrders,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            const Text('طلباتي', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            if (orders.isEmpty)
+              const Text('لا توجد طلبات لعرضها', style: TextStyle(color: muted)),
+            ...orders.map((order) => Card(
+                  color: panel,
+                  child: ListTile(
+                    leading: const Icon(Icons.receipt_long, color: blue),
+                    title: Text('طلب #${order['order_number'] ?? order['id'] ?? '—'}'),
+                    subtitle: Text('${order['status'] ?? '—'}'),
+                    trailing: Text('${order['total_amount'] ?? ''} \\$'),
+                  ),
+                )),
+          ],
+        ),
+      );
+
+  Widget accountPage() {
+    final workshop = Map<String, dynamic>.from(account['user'] ?? {});
+    final isMarketer = widget.user['role'] == 'marketer';
+    final cashbackRate = (double.tryParse('${workshop['cashback_rate'] ?? 0}') ?? 0) * 100;
+    return RefreshIndicator(
+      onRefresh: loadAccount,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text('أهلاً \\${widget.user['name'] ?? ''}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          Text('${widget.user['phone'] ?? ''}', style: const TextStyle(color: muted)),
+          const SizedBox(height: 18),
+          if (isMarketer) ...[
+            _metric('كود الإحالة', '${widget.user['my_ref_code'] ?? '—'}'),
+            _metric('العمولات المتاحة', '${account['commissions']?['available'] ?? 0} \\$'),
+            _metric('العمولات المعلّقة', '${account['commissions']?['held'] ?? 0} \\$'),
+          ] else ...[
+            _metric('التصنيف', '${workshop['tier'] ?? widget.user['tier'] ?? 'Standard'}'),
+            _metric('نسبة الكاش باك الحالية', '${cashbackRate.toStringAsFixed(0)}%'),
+            _metric('رصيد الكاش باك', '${workshop['cashback_balance'] ?? 0} \\$'),
+            _metric('حد الدين', '${workshop['debt_limit'] ?? widget.user['debt_limit'] ?? 0} \\$'),
+            _metric('الرصيد المستحق', '${workshop['debt_balance'] ?? widget.user['debt_balance'] ?? 0} \\$'),
+          ],
+          OutlinedButton.icon(onPressed: loadAccount, icon: const Icon(Icons.refresh), label: const Text('تحديث بيانات الحساب')),
+          OutlinedButton.icon(onPressed: widget.onLogout, icon: const Icon(Icons.logout), label: const Text('تسجيل الخروج')),
+        ],
+      ),
+    );
+  }
+
+  Widget _metric(String label, String value) => Card(
+        color: panel,
+        child: ListTile(
+          title: Text(label, style: const TextStyle(color: muted)),
+          trailing: Text(value, style: const TextStyle(color: blue, fontWeight: FontWeight.bold)),
+        ),
+      );
+}
+, style: const TextStyle(color: blue)),
+        ),
+        if (selected.isEmpty)
+          const Text('أضف القطع من الكتالوج أولاً', style: TextStyle(color: muted)),
+        if (!marketer) ...[
+          const SizedBox(height: 10),
+          Text('رصيد الكاش باك المتاح: ' + cashbackBalance.toStringAsFixed(2) + ' \\$', style: const TextStyle(color: blue, fontWeight: FontWeight.bold)),
+          TextField(
+            controller: cashbackCtl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(labelText: 'استخدام كاش باك من الرصيد', suffixText: 'USD'),
+          ),
+          TextButton(
+            onPressed: () => setState(() => cashbackCtl.text = math.min(cashbackBalance, total).toStringAsFixed(2)),
+            child: const Text('استخدام كامل الرصيد المتاح للطلب'),
+          ),
+          ListTile(
+            title: const Text('المتبقي بعد الكاش باك'),
+            trailing: Text(remaining.toStringAsFixed(2) + ' \\$'),
+          ),
+        ],
+        const SizedBox(height: 14),
+        const Text('عنوان الشحن', style: TextStyle(fontWeight: FontWeight.bold)),
+        if (addresses.isNotEmpty && !addingAddress)
+          DropdownButtonFormField<String>(
+            value: selectedAddressId,
+            decoration: const InputDecoration(labelText: 'اختر عنوان التوصيل'),
+            items: addresses.map((address) {
+              final addressParts = [address['governorate'], address['area'], address['street']]
+                  .where((value) => value != null && value.toString().trim().isNotEmpty)
+                  .join('، ');
+              return DropdownMenuItem<String>(
+                value: address['id'].toString(),
+                child: Text(address['label'].toString() + ' · ' + addressParts, overflow: TextOverflow.ellipsis),
+              );
+            }).toList(),
+            onChanged: (value) => setState(() => selectedAddressId = value),
+          ),
+        if (addresses.isEmpty || addingAddress) ...[
+          TextField(controller: addressLabelCtl, decoration: const InputDecoration(labelText: 'اسم العنوان (مثال: الورشة)')),
+          const SizedBox(height: 8),
+          TextField(controller: governorateCtl, decoration: const InputDecoration(labelText: 'المحافظة')),
+          const SizedBox(height: 8),
+          TextField(controller: areaCtl, decoration: const InputDecoration(labelText: 'المنطقة')),
+          const SizedBox(height: 8),
+          TextField(controller: streetCtl, decoration: const InputDecoration(labelText: 'الشارع')),
+          const SizedBox(height: 8),
+          TextField(controller: addressDetailsCtl, decoration: const InputDecoration(labelText: 'تفاصيل إضافية')),
+          const SizedBox(height: 8),
+          FilledButton(onPressed: busy ? null : saveAddress, child: const Text('حفظ عنوان الشحن')),
+        ],
+        if (addresses.isNotEmpty && !addingAddress)
+          TextButton.icon(
+            onPressed: () => setState(() => addingAddress = true),
+            icon: const Icon(Icons.add_location_alt_outlined),
+            label: const Text('إضافة عنوان جديد'),
+          ),
+        if (!marketer) ...[
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: busy ? null : pickReceipt,
+            icon: const Icon(Icons.receipt_long),
+            label: Text(receiptPath == null ? 'اختيار صورة إيصال شام كاش' : 'تم اختيار صورة الإيصال · تغيير الصورة'),
+          ),
+          if (receiptPath != null)
+            const Text('سيتم إرفاق الإيصال عند اختيار شام كاش فقط.', style: TextStyle(color: muted, fontSize: 12)),
+        ],
+        const SizedBox(height: 12),
+        FilledButton(
+          onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('cod'),
+          child: const Text('الدفع عند الاستلام'),
+        ),
+        if (!marketer && total > 0 && cashbackUsed >= total)
+          FilledButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('cashback'),
+            child: const Text('تأكيد الطلب بالكاش باك بالكامل'),
+          ),
+        if (!marketer)
+          OutlinedButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('sham'),
+            child: const Text('شام كاش'),
+          ),
+        if (!marketer)
+          OutlinedButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('debt'),
+            child: const Text('دفتر الدين للورشة'),
+          ),
+      ],
+    );
+  }
+
+  Widget ordersPage() => RefreshIndicator(
+        onRefresh: loadOrders,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            const Text('طلباتي', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            if (orders.isEmpty)
+              const Text('لا توجد طلبات لعرضها', style: TextStyle(color: muted)),
+            ...orders.map((order) => Card(
+                  color: panel,
+                  child: ListTile(
+                    leading: const Icon(Icons.receipt_long, color: blue),
+                    title: Text('طلب #${order['order_number'] ?? order['id'] ?? '—'}'),
+                    subtitle: Text('${order['status'] ?? '—'}'),
+                    trailing: Text('${order['total_amount'] ?? ''} \\$'),
+                  ),
+                )),
+          ],
+        ),
+      );
+
+  Widget accountPage() {
+    final workshop = Map<String, dynamic>.from(account['user'] ?? {});
+    final isMarketer = widget.user['role'] == 'marketer';
+    final cashbackRate = (double.tryParse('${workshop['cashback_rate'] ?? 0}') ?? 0) * 100;
+    return RefreshIndicator(
+      onRefresh: loadAccount,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text('أهلاً \\${widget.user['name'] ?? ''}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          Text('${widget.user['phone'] ?? ''}', style: const TextStyle(color: muted)),
+          const SizedBox(height: 18),
+          if (isMarketer) ...[
+            _metric('كود الإحالة', '${widget.user['my_ref_code'] ?? '—'}'),
+            _metric('العمولات المتاحة', '${account['commissions']?['available'] ?? 0} \\$'),
+            _metric('العمولات المعلّقة', '${account['commissions']?['held'] ?? 0} \\$'),
+          ] else ...[
+            _metric('التصنيف', '${workshop['tier'] ?? widget.user['tier'] ?? 'Standard'}'),
+            _metric('نسبة الكاش باك الحالية', '${cashbackRate.toStringAsFixed(0)}%'),
+            _metric('رصيد الكاش باك', '${workshop['cashback_balance'] ?? 0} \\$'),
+            _metric('حد الدين', '${workshop['debt_limit'] ?? widget.user['debt_limit'] ?? 0} \\$'),
+            _metric('الرصيد المستحق', '${workshop['debt_balance'] ?? widget.user['debt_balance'] ?? 0} \\$'),
+          ],
+          OutlinedButton.icon(onPressed: loadAccount, icon: const Icon(Icons.refresh), label: const Text('تحديث بيانات الحساب')),
+          OutlinedButton.icon(onPressed: widget.onLogout, icon: const Icon(Icons.logout), label: const Text('تسجيل الخروج')),
+        ],
+      ),
+    );
+  }
+
+  Widget _metric(String label, String value) => Card(
+        color: panel,
+        child: ListTile(
+          title: Text(label, style: const TextStyle(color: muted)),
+          trailing: Text(value, style: const TextStyle(color: blue, fontWeight: FontWeight.bold)),
+        ),
+      );
+}
+),
+        )),
+        ListTile(
+          title: const Text('الإجمالي'),
+          trailing: Text(total.toStringAsFixed(2) + ' \\$', style: const TextStyle(color: blue)),
+        ),
+        if (selected.isEmpty)
+          const Text('أضف القطع من الكتالوج أولاً', style: TextStyle(color: muted)),
+        if (!marketer) ...[
+          const SizedBox(height: 10),
+          Text('رصيد الكاش باك المتاح: ' + cashbackBalance.toStringAsFixed(2) + ' \\$', style: const TextStyle(color: blue, fontWeight: FontWeight.bold)),
+          TextField(
+            controller: cashbackCtl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(labelText: 'استخدام كاش باك من الرصيد', suffixText: 'USD'),
+          ),
+          TextButton(
+            onPressed: () => setState(() => cashbackCtl.text = math.min(cashbackBalance, total).toStringAsFixed(2)),
+            child: const Text('استخدام كامل الرصيد المتاح للطلب'),
+          ),
+          ListTile(
+            title: const Text('المتبقي بعد الكاش باك'),
+            trailing: Text(remaining.toStringAsFixed(2) + ' \\$'),
+          ),
+        ],
+        const SizedBox(height: 14),
+        const Text('عنوان الشحن', style: TextStyle(fontWeight: FontWeight.bold)),
+        if (addresses.isNotEmpty && !addingAddress)
+          DropdownButtonFormField<String>(
+            value: selectedAddressId,
+            decoration: const InputDecoration(labelText: 'اختر عنوان التوصيل'),
+            items: addresses.map((address) {
+              final addressParts = [address['governorate'], address['area'], address['street']]
+                  .where((value) => value != null && value.toString().trim().isNotEmpty)
+                  .join('، ');
+              return DropdownMenuItem<String>(
+                value: address['id'].toString(),
+                child: Text(address['label'].toString() + ' · ' + addressParts, overflow: TextOverflow.ellipsis),
+              );
+            }).toList(),
+            onChanged: (value) => setState(() => selectedAddressId = value),
+          ),
+        if (addresses.isEmpty || addingAddress) ...[
+          TextField(controller: addressLabelCtl, decoration: const InputDecoration(labelText: 'اسم العنوان (مثال: الورشة)')),
+          const SizedBox(height: 8),
+          TextField(controller: governorateCtl, decoration: const InputDecoration(labelText: 'المحافظة')),
+          const SizedBox(height: 8),
+          TextField(controller: areaCtl, decoration: const InputDecoration(labelText: 'المنطقة')),
+          const SizedBox(height: 8),
+          TextField(controller: streetCtl, decoration: const InputDecoration(labelText: 'الشارع')),
+          const SizedBox(height: 8),
+          TextField(controller: addressDetailsCtl, decoration: const InputDecoration(labelText: 'تفاصيل إضافية')),
+          const SizedBox(height: 8),
+          FilledButton(onPressed: busy ? null : saveAddress, child: const Text('حفظ عنوان الشحن')),
+        ],
+        if (addresses.isNotEmpty && !addingAddress)
+          TextButton.icon(
+            onPressed: () => setState(() => addingAddress = true),
+            icon: const Icon(Icons.add_location_alt_outlined),
+            label: const Text('إضافة عنوان جديد'),
+          ),
+        if (!marketer) ...[
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: busy ? null : pickReceipt,
+            icon: const Icon(Icons.receipt_long),
+            label: Text(receiptPath == null ? 'اختيار صورة إيصال شام كاش' : 'تم اختيار صورة الإيصال · تغيير الصورة'),
+          ),
+          if (receiptPath != null)
+            const Text('سيتم إرفاق الإيصال عند اختيار شام كاش فقط.', style: TextStyle(color: muted, fontSize: 12)),
+        ],
+        const SizedBox(height: 12),
+        FilledButton(
+          onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('cod'),
+          child: const Text('الدفع عند الاستلام'),
+        ),
+        if (!marketer && total > 0 && cashbackUsed >= total)
+          FilledButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('cashback'),
+            child: const Text('تأكيد الطلب بالكاش باك بالكامل'),
+          ),
+        if (!marketer)
+          OutlinedButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('sham'),
+            child: const Text('شام كاش'),
+          ),
+        if (!marketer)
+          OutlinedButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('debt'),
+            child: const Text('دفتر الدين للورشة'),
+          ),
+      ],
+    );
+  }
+
+  Widget ordersPage() => RefreshIndicator(
+        onRefresh: loadOrders,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            const Text('طلباتي', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            if (orders.isEmpty)
+              const Text('لا توجد طلبات لعرضها', style: TextStyle(color: muted)),
+            ...orders.map((order) => Card(
+                  color: panel,
+                  child: ListTile(
+                    leading: const Icon(Icons.receipt_long, color: blue),
+                    title: Text('طلب #${order['order_number'] ?? order['id'] ?? '—'}'),
+                    subtitle: Text('${order['status'] ?? '—'}'),
+                    trailing: Text('${order['total_amount'] ?? ''} \\$'),
+                  ),
+                )),
+          ],
+        ),
+      );
+
+  Widget accountPage() {
+    final workshop = Map<String, dynamic>.from(account['user'] ?? {});
+    final isMarketer = widget.user['role'] == 'marketer';
+    final cashbackRate = (double.tryParse('${workshop['cashback_rate'] ?? 0}') ?? 0) * 100;
+    return RefreshIndicator(
+      onRefresh: loadAccount,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text('أهلاً \\${widget.user['name'] ?? ''}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          Text('${widget.user['phone'] ?? ''}', style: const TextStyle(color: muted)),
+          const SizedBox(height: 18),
+          if (isMarketer) ...[
+            _metric('كود الإحالة', '${widget.user['my_ref_code'] ?? '—'}'),
+            _metric('العمولات المتاحة', '${account['commissions']?['available'] ?? 0} \\$'),
+            _metric('العمولات المعلّقة', '${account['commissions']?['held'] ?? 0} \\$'),
+          ] else ...[
+            _metric('التصنيف', '${workshop['tier'] ?? widget.user['tier'] ?? 'Standard'}'),
+            _metric('نسبة الكاش باك الحالية', '${cashbackRate.toStringAsFixed(0)}%'),
+            _metric('رصيد الكاش باك', '${workshop['cashback_balance'] ?? 0} \\$'),
+            _metric('حد الدين', '${workshop['debt_limit'] ?? widget.user['debt_limit'] ?? 0} \\$'),
+            _metric('الرصيد المستحق', '${workshop['debt_balance'] ?? widget.user['debt_balance'] ?? 0} \\$'),
+          ],
+          OutlinedButton.icon(onPressed: loadAccount, icon: const Icon(Icons.refresh), label: const Text('تحديث بيانات الحساب')),
+          OutlinedButton.icon(onPressed: widget.onLogout, icon: const Icon(Icons.logout), label: const Text('تسجيل الخروج')),
+        ],
+      ),
+    );
+  }
+
+  Widget _metric(String label, String value) => Card(
+        color: panel,
+        child: ListTile(
+          title: Text(label, style: const TextStyle(color: muted)),
+          trailing: Text(value, style: const TextStyle(color: blue, fontWeight: FontWeight.bold)),
+        ),
+      );
+}
+),
+          ),
+        ],
+        const SizedBox(height: 14),
+        const Text('عنوان الشحن', style: TextStyle(fontWeight: FontWeight.bold)),
+        if (addresses.isNotEmpty && !addingAddress)
+          DropdownButtonFormField<String>(
+            value: selectedAddressId,
+            decoration: const InputDecoration(labelText: 'اختر عنوان التوصيل'),
+            items: addresses.map((address) {
+              final addressParts = [address['governorate'], address['area'], address['street']]
+                  .where((value) => value != null && value.toString().trim().isNotEmpty)
+                  .join('، ');
+              return DropdownMenuItem<String>(
+                value: address['id'].toString(),
+                child: Text(address['label'].toString() + ' · ' + addressParts, overflow: TextOverflow.ellipsis),
+              );
+            }).toList(),
+            onChanged: (value) => setState(() => selectedAddressId = value),
+          ),
+        if (addresses.isEmpty || addingAddress) ...[
+          TextField(controller: addressLabelCtl, decoration: const InputDecoration(labelText: 'اسم العنوان (مثال: الورشة)')),
+          const SizedBox(height: 8),
+          TextField(controller: governorateCtl, decoration: const InputDecoration(labelText: 'المحافظة')),
+          const SizedBox(height: 8),
+          TextField(controller: areaCtl, decoration: const InputDecoration(labelText: 'المنطقة')),
+          const SizedBox(height: 8),
+          TextField(controller: streetCtl, decoration: const InputDecoration(labelText: 'الشارع')),
+          const SizedBox(height: 8),
+          TextField(controller: addressDetailsCtl, decoration: const InputDecoration(labelText: 'تفاصيل إضافية')),
+          const SizedBox(height: 8),
+          FilledButton(onPressed: busy ? null : saveAddress, child: const Text('حفظ عنوان الشحن')),
+        ],
+        if (addresses.isNotEmpty && !addingAddress)
+          TextButton.icon(
+            onPressed: () => setState(() => addingAddress = true),
+            icon: const Icon(Icons.add_location_alt_outlined),
+            label: const Text('إضافة عنوان جديد'),
+          ),
+        if (!marketer) ...[
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: busy ? null : pickReceipt,
+            icon: const Icon(Icons.receipt_long),
+            label: Text(receiptPath == null ? 'اختيار صورة إيصال شام كاش' : 'تم اختيار صورة الإيصال · تغيير الصورة'),
+          ),
+          if (receiptPath != null)
+            const Text('سيتم إرفاق الإيصال عند اختيار شام كاش فقط.', style: TextStyle(color: muted, fontSize: 12)),
+        ],
+        const SizedBox(height: 12),
+        FilledButton(
+          onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('cod'),
+          child: const Text('الدفع عند الاستلام'),
+        ),
+        if (!marketer && total > 0 && cashbackUsed >= total)
+          FilledButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('cashback'),
+            child: const Text('تأكيد الطلب بالكاش باك بالكامل'),
+          ),
+        if (!marketer)
+          OutlinedButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('sham'),
+            child: const Text('شام كاش'),
+          ),
+        if (!marketer)
+          OutlinedButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('debt'),
+            child: const Text('دفتر الدين للورشة'),
+          ),
+      ],
+    );
+  }
+
+  Widget ordersPage() => RefreshIndicator(
+        onRefresh: loadOrders,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            const Text('طلباتي', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            if (orders.isEmpty)
+              const Text('لا توجد طلبات لعرضها', style: TextStyle(color: muted)),
+            ...orders.map((order) => Card(
+                  color: panel,
+                  child: ListTile(
+                    leading: const Icon(Icons.receipt_long, color: blue),
+                    title: Text('طلب #${order['order_number'] ?? order['id'] ?? '—'}'),
+                    subtitle: Text('${order['status'] ?? '—'}'),
+                    trailing: Text('${order['total_amount'] ?? ''} \\$'),
+                  ),
+                )),
+          ],
+        ),
+      );
+
+  Widget accountPage() {
+    final workshop = Map<String, dynamic>.from(account['user'] ?? {});
+    final isMarketer = widget.user['role'] == 'marketer';
+    final cashbackRate = (double.tryParse('${workshop['cashback_rate'] ?? 0}') ?? 0) * 100;
+    return RefreshIndicator(
+      onRefresh: loadAccount,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text('أهلاً \\${widget.user['name'] ?? ''}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          Text('${widget.user['phone'] ?? ''}', style: const TextStyle(color: muted)),
+          const SizedBox(height: 18),
+          if (isMarketer) ...[
+            _metric('كود الإحالة', '${widget.user['my_ref_code'] ?? '—'}'),
+            _metric('العمولات المتاحة', '${account['commissions']?['available'] ?? 0} \\$'),
+            _metric('العمولات المعلّقة', '${account['commissions']?['held'] ?? 0} \\$'),
+          ] else ...[
+            _metric('التصنيف', '${workshop['tier'] ?? widget.user['tier'] ?? 'Standard'}'),
+            _metric('نسبة الكاش باك الحالية', '${cashbackRate.toStringAsFixed(0)}%'),
+            _metric('رصيد الكاش باك', '${workshop['cashback_balance'] ?? 0} \\$'),
+            _metric('حد الدين', '${workshop['debt_limit'] ?? widget.user['debt_limit'] ?? 0} \\$'),
+            _metric('الرصيد المستحق', '${workshop['debt_balance'] ?? widget.user['debt_balance'] ?? 0} \\$'),
+          ],
+          OutlinedButton.icon(onPressed: loadAccount, icon: const Icon(Icons.refresh), label: const Text('تحديث بيانات الحساب')),
+          OutlinedButton.icon(onPressed: widget.onLogout, icon: const Icon(Icons.logout), label: const Text('تسجيل الخروج')),
+        ],
+      ),
+    );
+  }
+
+  Widget _metric(String label, String value) => Card(
+        color: panel,
+        child: ListTile(
+          title: Text(label, style: const TextStyle(color: muted)),
+          trailing: Text(value, style: const TextStyle(color: blue, fontWeight: FontWeight.bold)),
+        ),
+      );
+}
+),
+        )),
+        ListTile(
+          title: const Text('الإجمالي'),
+          trailing: Text(total.toStringAsFixed(2) + ' \\$', style: const TextStyle(color: blue)),
+        ),
+        if (selected.isEmpty)
+          const Text('أضف القطع من الكتالوج أولاً', style: TextStyle(color: muted)),
+        if (!marketer) ...[
+          const SizedBox(height: 10),
+          Text('رصيد الكاش باك المتاح: ' + cashbackBalance.toStringAsFixed(2) + ' \\$', style: const TextStyle(color: blue, fontWeight: FontWeight.bold)),
+          TextField(
+            controller: cashbackCtl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(labelText: 'استخدام كاش باك من الرصيد', suffixText: 'USD'),
+          ),
+          TextButton(
+            onPressed: () => setState(() => cashbackCtl.text = math.min(cashbackBalance, total).toStringAsFixed(2)),
+            child: const Text('استخدام كامل الرصيد المتاح للطلب'),
+          ),
+          ListTile(
+            title: const Text('المتبقي بعد الكاش باك'),
+            trailing: Text(remaining.toStringAsFixed(2) + ' \\$'),
+          ),
+        ],
+        const SizedBox(height: 14),
+        const Text('عنوان الشحن', style: TextStyle(fontWeight: FontWeight.bold)),
+        if (addresses.isNotEmpty && !addingAddress)
+          DropdownButtonFormField<String>(
+            value: selectedAddressId,
+            decoration: const InputDecoration(labelText: 'اختر عنوان التوصيل'),
+            items: addresses.map((address) {
+              final addressParts = [address['governorate'], address['area'], address['street']]
+                  .where((value) => value != null && value.toString().trim().isNotEmpty)
+                  .join('، ');
+              return DropdownMenuItem<String>(
+                value: address['id'].toString(),
+                child: Text(address['label'].toString() + ' · ' + addressParts, overflow: TextOverflow.ellipsis),
+              );
+            }).toList(),
+            onChanged: (value) => setState(() => selectedAddressId = value),
+          ),
+        if (addresses.isEmpty || addingAddress) ...[
+          TextField(controller: addressLabelCtl, decoration: const InputDecoration(labelText: 'اسم العنوان (مثال: الورشة)')),
+          const SizedBox(height: 8),
+          TextField(controller: governorateCtl, decoration: const InputDecoration(labelText: 'المحافظة')),
+          const SizedBox(height: 8),
+          TextField(controller: areaCtl, decoration: const InputDecoration(labelText: 'المنطقة')),
+          const SizedBox(height: 8),
+          TextField(controller: streetCtl, decoration: const InputDecoration(labelText: 'الشارع')),
+          const SizedBox(height: 8),
+          TextField(controller: addressDetailsCtl, decoration: const InputDecoration(labelText: 'تفاصيل إضافية')),
+          const SizedBox(height: 8),
+          FilledButton(onPressed: busy ? null : saveAddress, child: const Text('حفظ عنوان الشحن')),
+        ],
+        if (addresses.isNotEmpty && !addingAddress)
+          TextButton.icon(
+            onPressed: () => setState(() => addingAddress = true),
+            icon: const Icon(Icons.add_location_alt_outlined),
+            label: const Text('إضافة عنوان جديد'),
+          ),
+        if (!marketer) ...[
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: busy ? null : pickReceipt,
+            icon: const Icon(Icons.receipt_long),
+            label: Text(receiptPath == null ? 'اختيار صورة إيصال شام كاش' : 'تم اختيار صورة الإيصال · تغيير الصورة'),
+          ),
+          if (receiptPath != null)
+            const Text('سيتم إرفاق الإيصال عند اختيار شام كاش فقط.', style: TextStyle(color: muted, fontSize: 12)),
+        ],
+        const SizedBox(height: 12),
+        FilledButton(
+          onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('cod'),
+          child: const Text('الدفع عند الاستلام'),
+        ),
+        if (!marketer && total > 0 && cashbackUsed >= total)
+          FilledButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('cashback'),
+            child: const Text('تأكيد الطلب بالكاش باك بالكامل'),
+          ),
+        if (!marketer)
+          OutlinedButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('sham'),
+            child: const Text('شام كاش'),
+          ),
+        if (!marketer)
+          OutlinedButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('debt'),
+            child: const Text('دفتر الدين للورشة'),
+          ),
+      ],
+    );
+  }
+
+  Widget ordersPage() => RefreshIndicator(
+        onRefresh: loadOrders,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            const Text('طلباتي', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            if (orders.isEmpty)
+              const Text('لا توجد طلبات لعرضها', style: TextStyle(color: muted)),
+            ...orders.map((order) => Card(
+                  color: panel,
+                  child: ListTile(
+                    leading: const Icon(Icons.receipt_long, color: blue),
+                    title: Text('طلب #${order['order_number'] ?? order['id'] ?? '—'}'),
+                    subtitle: Text('${order['status'] ?? '—'}'),
+                    trailing: Text('${order['total_amount'] ?? ''} \\$'),
+                  ),
+                )),
+          ],
+        ),
+      );
+
+  Widget accountPage() {
+    final workshop = Map<String, dynamic>.from(account['user'] ?? {});
+    final isMarketer = widget.user['role'] == 'marketer';
+    final cashbackRate = (double.tryParse('${workshop['cashback_rate'] ?? 0}') ?? 0) * 100;
+    return RefreshIndicator(
+      onRefresh: loadAccount,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text('أهلاً \\${widget.user['name'] ?? ''}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          Text('${widget.user['phone'] ?? ''}', style: const TextStyle(color: muted)),
+          const SizedBox(height: 18),
+          if (isMarketer) ...[
+            _metric('كود الإحالة', '${widget.user['my_ref_code'] ?? '—'}'),
+            _metric('العمولات المتاحة', '${account['commissions']?['available'] ?? 0} \\$'),
+            _metric('العمولات المعلّقة', '${account['commissions']?['held'] ?? 0} \\$'),
+          ] else ...[
+            _metric('التصنيف', '${workshop['tier'] ?? widget.user['tier'] ?? 'Standard'}'),
+            _metric('نسبة الكاش باك الحالية', '${cashbackRate.toStringAsFixed(0)}%'),
+            _metric('رصيد الكاش باك', '${workshop['cashback_balance'] ?? 0} \\$'),
+            _metric('حد الدين', '${workshop['debt_limit'] ?? widget.user['debt_limit'] ?? 0} \\$'),
+            _metric('الرصيد المستحق', '${workshop['debt_balance'] ?? widget.user['debt_balance'] ?? 0} \\$'),
+          ],
+          OutlinedButton.icon(onPressed: loadAccount, icon: const Icon(Icons.refresh), label: const Text('تحديث بيانات الحساب')),
+          OutlinedButton.icon(onPressed: widget.onLogout, icon: const Icon(Icons.logout), label: const Text('تسجيل الخروج')),
+        ],
+      ),
+    );
+  }
+
+  Widget _metric(String label, String value) => Card(
+        color: panel,
+        child: ListTile(
+          title: Text(label, style: const TextStyle(color: muted)),
+          trailing: Text(value, style: const TextStyle(color: blue, fontWeight: FontWeight.bold)),
+        ),
+      );
+}
+, style: const TextStyle(color: blue)),
+        ),
+        if (selected.isEmpty)
+          const Text('أضف القطع من الكتالوج أولاً', style: TextStyle(color: muted)),
+        if (!marketer) ...[
+          const SizedBox(height: 10),
+          Text('رصيد الكاش باك المتاح: ' + cashbackBalance.toStringAsFixed(2) + ' \\$', style: const TextStyle(color: blue, fontWeight: FontWeight.bold)),
+          TextField(
+            controller: cashbackCtl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(labelText: 'استخدام كاش باك من الرصيد', suffixText: 'USD'),
+          ),
+          TextButton(
+            onPressed: () => setState(() => cashbackCtl.text = math.min(cashbackBalance, total).toStringAsFixed(2)),
+            child: const Text('استخدام كامل الرصيد المتاح للطلب'),
+          ),
+          ListTile(
+            title: const Text('المتبقي بعد الكاش باك'),
+            trailing: Text(remaining.toStringAsFixed(2) + ' \\$'),
+          ),
+        ],
+        const SizedBox(height: 14),
+        const Text('عنوان الشحن', style: TextStyle(fontWeight: FontWeight.bold)),
+        if (addresses.isNotEmpty && !addingAddress)
+          DropdownButtonFormField<String>(
+            value: selectedAddressId,
+            decoration: const InputDecoration(labelText: 'اختر عنوان التوصيل'),
+            items: addresses.map((address) {
+              final addressParts = [address['governorate'], address['area'], address['street']]
+                  .where((value) => value != null && value.toString().trim().isNotEmpty)
+                  .join('، ');
+              return DropdownMenuItem<String>(
+                value: address['id'].toString(),
+                child: Text(address['label'].toString() + ' · ' + addressParts, overflow: TextOverflow.ellipsis),
+              );
+            }).toList(),
+            onChanged: (value) => setState(() => selectedAddressId = value),
+          ),
+        if (addresses.isEmpty || addingAddress) ...[
+          TextField(controller: addressLabelCtl, decoration: const InputDecoration(labelText: 'اسم العنوان (مثال: الورشة)')),
+          const SizedBox(height: 8),
+          TextField(controller: governorateCtl, decoration: const InputDecoration(labelText: 'المحافظة')),
+          const SizedBox(height: 8),
+          TextField(controller: areaCtl, decoration: const InputDecoration(labelText: 'المنطقة')),
+          const SizedBox(height: 8),
+          TextField(controller: streetCtl, decoration: const InputDecoration(labelText: 'الشارع')),
+          const SizedBox(height: 8),
+          TextField(controller: addressDetailsCtl, decoration: const InputDecoration(labelText: 'تفاصيل إضافية')),
+          const SizedBox(height: 8),
+          FilledButton(onPressed: busy ? null : saveAddress, child: const Text('حفظ عنوان الشحن')),
+        ],
+        if (addresses.isNotEmpty && !addingAddress)
+          TextButton.icon(
+            onPressed: () => setState(() => addingAddress = true),
+            icon: const Icon(Icons.add_location_alt_outlined),
+            label: const Text('إضافة عنوان جديد'),
+          ),
+        if (!marketer) ...[
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: busy ? null : pickReceipt,
+            icon: const Icon(Icons.receipt_long),
+            label: Text(receiptPath == null ? 'اختيار صورة إيصال شام كاش' : 'تم اختيار صورة الإيصال · تغيير الصورة'),
+          ),
+          if (receiptPath != null)
+            const Text('سيتم إرفاق الإيصال عند اختيار شام كاش فقط.', style: TextStyle(color: muted, fontSize: 12)),
+        ],
+        const SizedBox(height: 12),
+        FilledButton(
+          onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('cod'),
+          child: const Text('الدفع عند الاستلام'),
+        ),
+        if (!marketer && total > 0 && cashbackUsed >= total)
+          FilledButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('cashback'),
+            child: const Text('تأكيد الطلب بالكاش باك بالكامل'),
+          ),
+        if (!marketer)
+          OutlinedButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('sham'),
+            child: const Text('شام كاش'),
+          ),
+        if (!marketer)
+          OutlinedButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('debt'),
+            child: const Text('دفتر الدين للورشة'),
+          ),
+      ],
+    );
+  }
+
+  Widget ordersPage() => RefreshIndicator(
+        onRefresh: loadOrders,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            const Text('طلباتي', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            if (orders.isEmpty)
+              const Text('لا توجد طلبات لعرضها', style: TextStyle(color: muted)),
+            ...orders.map((order) => Card(
+                  color: panel,
+                  child: ListTile(
+                    leading: const Icon(Icons.receipt_long, color: blue),
+                    title: Text('طلب #${order['order_number'] ?? order['id'] ?? '—'}'),
+                    subtitle: Text('${order['status'] ?? '—'}'),
+                    trailing: Text('${order['total_amount'] ?? ''} \\$'),
+                  ),
+                )),
+          ],
+        ),
+      );
+
+  Widget accountPage() {
+    final workshop = Map<String, dynamic>.from(account['user'] ?? {});
+    final isMarketer = widget.user['role'] == 'marketer';
+    final cashbackRate = (double.tryParse('${workshop['cashback_rate'] ?? 0}') ?? 0) * 100;
+    return RefreshIndicator(
+      onRefresh: loadAccount,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text('أهلاً \\${widget.user['name'] ?? ''}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          Text('${widget.user['phone'] ?? ''}', style: const TextStyle(color: muted)),
+          const SizedBox(height: 18),
+          if (isMarketer) ...[
+            _metric('كود الإحالة', '${widget.user['my_ref_code'] ?? '—'}'),
+            _metric('العمولات المتاحة', '${account['commissions']?['available'] ?? 0} \\$'),
+            _metric('العمولات المعلّقة', '${account['commissions']?['held'] ?? 0} \\$'),
+          ] else ...[
+            _metric('التصنيف', '${workshop['tier'] ?? widget.user['tier'] ?? 'Standard'}'),
+            _metric('نسبة الكاش باك الحالية', '${cashbackRate.toStringAsFixed(0)}%'),
+            _metric('رصيد الكاش باك', '${workshop['cashback_balance'] ?? 0} \\$'),
+            _metric('حد الدين', '${workshop['debt_limit'] ?? widget.user['debt_limit'] ?? 0} \\$'),
+            _metric('الرصيد المستحق', '${workshop['debt_balance'] ?? widget.user['debt_balance'] ?? 0} \\$'),
+          ],
+          OutlinedButton.icon(onPressed: loadAccount, icon: const Icon(Icons.refresh), label: const Text('تحديث بيانات الحساب')),
+          OutlinedButton.icon(onPressed: widget.onLogout, icon: const Icon(Icons.logout), label: const Text('تسجيل الخروج')),
+        ],
+      ),
+    );
+  }
+
+  Widget _metric(String label, String value) => Card(
+        color: panel,
+        child: ListTile(
+          title: Text(label, style: const TextStyle(color: muted)),
+          trailing: Text(value, style: const TextStyle(color: blue, fontWeight: FontWeight.bold)),
+        ),
+      );
+}
+),
+        )),
+        ListTile(
+          title: const Text('الإجمالي'),
+          trailing: Text(total.toStringAsFixed(2) + ' \\$', style: const TextStyle(color: blue)),
+        ),
+        if (selected.isEmpty)
+          const Text('أضف القطع من الكتالوج أولاً', style: TextStyle(color: muted)),
+        if (!marketer) ...[
+          const SizedBox(height: 10),
+          Text('رصيد الكاش باك المتاح: ' + cashbackBalance.toStringAsFixed(2) + ' \\$', style: const TextStyle(color: blue, fontWeight: FontWeight.bold)),
+          TextField(
+            controller: cashbackCtl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(labelText: 'استخدام كاش باك من الرصيد', suffixText: 'USD'),
+          ),
+          TextButton(
+            onPressed: () => setState(() => cashbackCtl.text = math.min(cashbackBalance, total).toStringAsFixed(2)),
+            child: const Text('استخدام كامل الرصيد المتاح للطلب'),
+          ),
+          ListTile(
+            title: const Text('المتبقي بعد الكاش باك'),
+            trailing: Text(remaining.toStringAsFixed(2) + ' \\$'),
+          ),
+        ],
+        const SizedBox(height: 14),
+        const Text('عنوان الشحن', style: TextStyle(fontWeight: FontWeight.bold)),
+        if (addresses.isNotEmpty && !addingAddress)
+          DropdownButtonFormField<String>(
+            value: selectedAddressId,
+            decoration: const InputDecoration(labelText: 'اختر عنوان التوصيل'),
+            items: addresses.map((address) {
+              final addressParts = [address['governorate'], address['area'], address['street']]
+                  .where((value) => value != null && value.toString().trim().isNotEmpty)
+                  .join('، ');
+              return DropdownMenuItem<String>(
+                value: address['id'].toString(),
+                child: Text(address['label'].toString() + ' · ' + addressParts, overflow: TextOverflow.ellipsis),
+              );
+            }).toList(),
+            onChanged: (value) => setState(() => selectedAddressId = value),
+          ),
+        if (addresses.isEmpty || addingAddress) ...[
+          TextField(controller: addressLabelCtl, decoration: const InputDecoration(labelText: 'اسم العنوان (مثال: الورشة)')),
+          const SizedBox(height: 8),
+          TextField(controller: governorateCtl, decoration: const InputDecoration(labelText: 'المحافظة')),
+          const SizedBox(height: 8),
+          TextField(controller: areaCtl, decoration: const InputDecoration(labelText: 'المنطقة')),
+          const SizedBox(height: 8),
+          TextField(controller: streetCtl, decoration: const InputDecoration(labelText: 'الشارع')),
+          const SizedBox(height: 8),
+          TextField(controller: addressDetailsCtl, decoration: const InputDecoration(labelText: 'تفاصيل إضافية')),
+          const SizedBox(height: 8),
+          FilledButton(onPressed: busy ? null : saveAddress, child: const Text('حفظ عنوان الشحن')),
+        ],
+        if (addresses.isNotEmpty && !addingAddress)
+          TextButton.icon(
+            onPressed: () => setState(() => addingAddress = true),
+            icon: const Icon(Icons.add_location_alt_outlined),
+            label: const Text('إضافة عنوان جديد'),
+          ),
+        if (!marketer) ...[
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: busy ? null : pickReceipt,
+            icon: const Icon(Icons.receipt_long),
+            label: Text(receiptPath == null ? 'اختيار صورة إيصال شام كاش' : 'تم اختيار صورة الإيصال · تغيير الصورة'),
+          ),
+          if (receiptPath != null)
+            const Text('سيتم إرفاق الإيصال عند اختيار شام كاش فقط.', style: TextStyle(color: muted, fontSize: 12)),
+        ],
+        const SizedBox(height: 12),
+        FilledButton(
+          onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('cod'),
+          child: const Text('الدفع عند الاستلام'),
+        ),
+        if (!marketer && total > 0 && cashbackUsed >= total)
+          FilledButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('cashback'),
+            child: const Text('تأكيد الطلب بالكاش باك بالكامل'),
+          ),
+        if (!marketer)
+          OutlinedButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('sham'),
+            child: const Text('شام كاش'),
+          ),
+        if (!marketer)
+          OutlinedButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('debt'),
+            child: const Text('دفتر الدين للورشة'),
+          ),
+      ],
+    );
+  }
+
+  Widget ordersPage() => RefreshIndicator(
+        onRefresh: loadOrders,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            const Text('طلباتي', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            if (orders.isEmpty)
+              const Text('لا توجد طلبات لعرضها', style: TextStyle(color: muted)),
+            ...orders.map((order) => Card(
+                  color: panel,
+                  child: ListTile(
+                    leading: const Icon(Icons.receipt_long, color: blue),
+                    title: Text('طلب #${order['order_number'] ?? order['id'] ?? '—'}'),
+                    subtitle: Text('${order['status'] ?? '—'}'),
+                    trailing: Text('${order['total_amount'] ?? ''} \\$'),
+                  ),
+                )),
+          ],
+        ),
+      );
+
+  Widget accountPage() {
+    final workshop = Map<String, dynamic>.from(account['user'] ?? {});
+    final isMarketer = widget.user['role'] == 'marketer';
+    final cashbackRate = (double.tryParse('${workshop['cashback_rate'] ?? 0}') ?? 0) * 100;
+    return RefreshIndicator(
+      onRefresh: loadAccount,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text('أهلاً \\${widget.user['name'] ?? ''}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          Text('${widget.user['phone'] ?? ''}', style: const TextStyle(color: muted)),
+          const SizedBox(height: 18),
+          if (isMarketer) ...[
+            _metric('كود الإحالة', '${widget.user['my_ref_code'] ?? '—'}'),
+            _metric('العمولات المتاحة', '${account['commissions']?['available'] ?? 0} \\$'),
+            _metric('العمولات المعلّقة', '${account['commissions']?['held'] ?? 0} \\$'),
+          ] else ...[
+            _metric('التصنيف', '${workshop['tier'] ?? widget.user['tier'] ?? 'Standard'}'),
+            _metric('نسبة الكاش باك الحالية', '${cashbackRate.toStringAsFixed(0)}%'),
+            _metric('رصيد الكاش باك', '${workshop['cashback_balance'] ?? 0} \\$'),
+            _metric('حد الدين', '${workshop['debt_limit'] ?? widget.user['debt_limit'] ?? 0} \\$'),
+            _metric('الرصيد المستحق', '${workshop['debt_balance'] ?? widget.user['debt_balance'] ?? 0} \\$'),
+          ],
+          OutlinedButton.icon(onPressed: loadAccount, icon: const Icon(Icons.refresh), label: const Text('تحديث بيانات الحساب')),
+          OutlinedButton.icon(onPressed: widget.onLogout, icon: const Icon(Icons.logout), label: const Text('تسجيل الخروج')),
+        ],
+      ),
+    );
+  }
+
+  Widget _metric(String label, String value) => Card(
+        color: panel,
+        child: ListTile(
+          title: Text(label, style: const TextStyle(color: muted)),
+          trailing: Text(value, style: const TextStyle(color: blue, fontWeight: FontWeight.bold)),
+        ),
+      );
+}
+, style: const TextStyle(color: blue, fontWeight: FontWeight.bold)),
+          TextField(
+            controller: cashbackCtl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(labelText: 'استخدام كاش باك من الرصيد', suffixText: 'USD'),
+          ),
+          TextButton(
+            onPressed: () => setState(() => cashbackCtl.text = math.min(cashbackBalance, total).toStringAsFixed(2)),
+            child: const Text('استخدام كامل الرصيد المتاح للطلب'),
+          ),
+          ListTile(
+            title: const Text('المتبقي بعد الكاش باك'),
+            trailing: Text(remaining.toStringAsFixed(2) + ' \\$'),
+          ),
+        ],
+        const SizedBox(height: 14),
+        const Text('عنوان الشحن', style: TextStyle(fontWeight: FontWeight.bold)),
+        if (addresses.isNotEmpty && !addingAddress)
+          DropdownButtonFormField<String>(
+            value: selectedAddressId,
+            decoration: const InputDecoration(labelText: 'اختر عنوان التوصيل'),
+            items: addresses.map((address) {
+              final addressParts = [address['governorate'], address['area'], address['street']]
+                  .where((value) => value != null && value.toString().trim().isNotEmpty)
+                  .join('، ');
+              return DropdownMenuItem<String>(
+                value: address['id'].toString(),
+                child: Text(address['label'].toString() + ' · ' + addressParts, overflow: TextOverflow.ellipsis),
+              );
+            }).toList(),
+            onChanged: (value) => setState(() => selectedAddressId = value),
+          ),
+        if (addresses.isEmpty || addingAddress) ...[
+          TextField(controller: addressLabelCtl, decoration: const InputDecoration(labelText: 'اسم العنوان (مثال: الورشة)')),
+          const SizedBox(height: 8),
+          TextField(controller: governorateCtl, decoration: const InputDecoration(labelText: 'المحافظة')),
+          const SizedBox(height: 8),
+          TextField(controller: areaCtl, decoration: const InputDecoration(labelText: 'المنطقة')),
+          const SizedBox(height: 8),
+          TextField(controller: streetCtl, decoration: const InputDecoration(labelText: 'الشارع')),
+          const SizedBox(height: 8),
+          TextField(controller: addressDetailsCtl, decoration: const InputDecoration(labelText: 'تفاصيل إضافية')),
+          const SizedBox(height: 8),
+          FilledButton(onPressed: busy ? null : saveAddress, child: const Text('حفظ عنوان الشحن')),
+        ],
+        if (addresses.isNotEmpty && !addingAddress)
+          TextButton.icon(
+            onPressed: () => setState(() => addingAddress = true),
+            icon: const Icon(Icons.add_location_alt_outlined),
+            label: const Text('إضافة عنوان جديد'),
+          ),
+        if (!marketer) ...[
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: busy ? null : pickReceipt,
+            icon: const Icon(Icons.receipt_long),
+            label: Text(receiptPath == null ? 'اختيار صورة إيصال شام كاش' : 'تم اختيار صورة الإيصال · تغيير الصورة'),
+          ),
+          if (receiptPath != null)
+            const Text('سيتم إرفاق الإيصال عند اختيار شام كاش فقط.', style: TextStyle(color: muted, fontSize: 12)),
+        ],
+        const SizedBox(height: 12),
+        FilledButton(
+          onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('cod'),
+          child: const Text('الدفع عند الاستلام'),
+        ),
+        if (!marketer && total > 0 && cashbackUsed >= total)
+          FilledButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('cashback'),
+            child: const Text('تأكيد الطلب بالكاش باك بالكامل'),
+          ),
+        if (!marketer)
+          OutlinedButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('sham'),
+            child: const Text('شام كاش'),
+          ),
+        if (!marketer)
+          OutlinedButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('debt'),
+            child: const Text('دفتر الدين للورشة'),
+          ),
+      ],
+    );
+  }
+
+  Widget ordersPage() => RefreshIndicator(
+        onRefresh: loadOrders,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            const Text('طلباتي', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            if (orders.isEmpty)
+              const Text('لا توجد طلبات لعرضها', style: TextStyle(color: muted)),
+            ...orders.map((order) => Card(
+                  color: panel,
+                  child: ListTile(
+                    leading: const Icon(Icons.receipt_long, color: blue),
+                    title: Text('طلب #${order['order_number'] ?? order['id'] ?? '—'}'),
+                    subtitle: Text('${order['status'] ?? '—'}'),
+                    trailing: Text('${order['total_amount'] ?? ''} \\$'),
+                  ),
+                )),
+          ],
+        ),
+      );
+
+  Widget accountPage() {
+    final workshop = Map<String, dynamic>.from(account['user'] ?? {});
+    final isMarketer = widget.user['role'] == 'marketer';
+    final cashbackRate = (double.tryParse('${workshop['cashback_rate'] ?? 0}') ?? 0) * 100;
+    return RefreshIndicator(
+      onRefresh: loadAccount,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text('أهلاً \\${widget.user['name'] ?? ''}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          Text('${widget.user['phone'] ?? ''}', style: const TextStyle(color: muted)),
+          const SizedBox(height: 18),
+          if (isMarketer) ...[
+            _metric('كود الإحالة', '${widget.user['my_ref_code'] ?? '—'}'),
+            _metric('العمولات المتاحة', '${account['commissions']?['available'] ?? 0} \\$'),
+            _metric('العمولات المعلّقة', '${account['commissions']?['held'] ?? 0} \\$'),
+          ] else ...[
+            _metric('التصنيف', '${workshop['tier'] ?? widget.user['tier'] ?? 'Standard'}'),
+            _metric('نسبة الكاش باك الحالية', '${cashbackRate.toStringAsFixed(0)}%'),
+            _metric('رصيد الكاش باك', '${workshop['cashback_balance'] ?? 0} \\$'),
+            _metric('حد الدين', '${workshop['debt_limit'] ?? widget.user['debt_limit'] ?? 0} \\$'),
+            _metric('الرصيد المستحق', '${workshop['debt_balance'] ?? widget.user['debt_balance'] ?? 0} \\$'),
+          ],
+          OutlinedButton.icon(onPressed: loadAccount, icon: const Icon(Icons.refresh), label: const Text('تحديث بيانات الحساب')),
+          OutlinedButton.icon(onPressed: widget.onLogout, icon: const Icon(Icons.logout), label: const Text('تسجيل الخروج')),
+        ],
+      ),
+    );
+  }
+
+  Widget _metric(String label, String value) => Card(
+        color: panel,
+        child: ListTile(
+          title: Text(label, style: const TextStyle(color: muted)),
+          trailing: Text(value, style: const TextStyle(color: blue, fontWeight: FontWeight.bold)),
+        ),
+      );
+}
+),
+        )),
+        ListTile(
+          title: const Text('الإجمالي'),
+          trailing: Text(total.toStringAsFixed(2) + ' \\$', style: const TextStyle(color: blue)),
+        ),
+        if (selected.isEmpty)
+          const Text('أضف القطع من الكتالوج أولاً', style: TextStyle(color: muted)),
+        if (!marketer) ...[
+          const SizedBox(height: 10),
+          Text('رصيد الكاش باك المتاح: ' + cashbackBalance.toStringAsFixed(2) + ' \\$', style: const TextStyle(color: blue, fontWeight: FontWeight.bold)),
+          TextField(
+            controller: cashbackCtl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(labelText: 'استخدام كاش باك من الرصيد', suffixText: 'USD'),
+          ),
+          TextButton(
+            onPressed: () => setState(() => cashbackCtl.text = math.min(cashbackBalance, total).toStringAsFixed(2)),
+            child: const Text('استخدام كامل الرصيد المتاح للطلب'),
+          ),
+          ListTile(
+            title: const Text('المتبقي بعد الكاش باك'),
+            trailing: Text(remaining.toStringAsFixed(2) + ' \\$'),
+          ),
+        ],
+        const SizedBox(height: 14),
+        const Text('عنوان الشحن', style: TextStyle(fontWeight: FontWeight.bold)),
+        if (addresses.isNotEmpty && !addingAddress)
+          DropdownButtonFormField<String>(
+            value: selectedAddressId,
+            decoration: const InputDecoration(labelText: 'اختر عنوان التوصيل'),
+            items: addresses.map((address) {
+              final addressParts = [address['governorate'], address['area'], address['street']]
+                  .where((value) => value != null && value.toString().trim().isNotEmpty)
+                  .join('، ');
+              return DropdownMenuItem<String>(
+                value: address['id'].toString(),
+                child: Text(address['label'].toString() + ' · ' + addressParts, overflow: TextOverflow.ellipsis),
+              );
+            }).toList(),
+            onChanged: (value) => setState(() => selectedAddressId = value),
+          ),
+        if (addresses.isEmpty || addingAddress) ...[
+          TextField(controller: addressLabelCtl, decoration: const InputDecoration(labelText: 'اسم العنوان (مثال: الورشة)')),
+          const SizedBox(height: 8),
+          TextField(controller: governorateCtl, decoration: const InputDecoration(labelText: 'المحافظة')),
+          const SizedBox(height: 8),
+          TextField(controller: areaCtl, decoration: const InputDecoration(labelText: 'المنطقة')),
+          const SizedBox(height: 8),
+          TextField(controller: streetCtl, decoration: const InputDecoration(labelText: 'الشارع')),
+          const SizedBox(height: 8),
+          TextField(controller: addressDetailsCtl, decoration: const InputDecoration(labelText: 'تفاصيل إضافية')),
+          const SizedBox(height: 8),
+          FilledButton(onPressed: busy ? null : saveAddress, child: const Text('حفظ عنوان الشحن')),
+        ],
+        if (addresses.isNotEmpty && !addingAddress)
+          TextButton.icon(
+            onPressed: () => setState(() => addingAddress = true),
+            icon: const Icon(Icons.add_location_alt_outlined),
+            label: const Text('إضافة عنوان جديد'),
+          ),
+        if (!marketer) ...[
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: busy ? null : pickReceipt,
+            icon: const Icon(Icons.receipt_long),
+            label: Text(receiptPath == null ? 'اختيار صورة إيصال شام كاش' : 'تم اختيار صورة الإيصال · تغيير الصورة'),
+          ),
+          if (receiptPath != null)
+            const Text('سيتم إرفاق الإيصال عند اختيار شام كاش فقط.', style: TextStyle(color: muted, fontSize: 12)),
+        ],
+        const SizedBox(height: 12),
+        FilledButton(
+          onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('cod'),
+          child: const Text('الدفع عند الاستلام'),
+        ),
+        if (!marketer && total > 0 && cashbackUsed >= total)
+          FilledButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('cashback'),
+            child: const Text('تأكيد الطلب بالكاش باك بالكامل'),
+          ),
+        if (!marketer)
+          OutlinedButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('sham'),
+            child: const Text('شام كاش'),
+          ),
+        if (!marketer)
+          OutlinedButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('debt'),
+            child: const Text('دفتر الدين للورشة'),
+          ),
+      ],
+    );
+  }
+
+  Widget ordersPage() => RefreshIndicator(
+        onRefresh: loadOrders,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            const Text('طلباتي', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            if (orders.isEmpty)
+              const Text('لا توجد طلبات لعرضها', style: TextStyle(color: muted)),
+            ...orders.map((order) => Card(
+                  color: panel,
+                  child: ListTile(
+                    leading: const Icon(Icons.receipt_long, color: blue),
+                    title: Text('طلب #${order['order_number'] ?? order['id'] ?? '—'}'),
+                    subtitle: Text('${order['status'] ?? '—'}'),
+                    trailing: Text('${order['total_amount'] ?? ''} \\$'),
+                  ),
+                )),
+          ],
+        ),
+      );
+
+  Widget accountPage() {
+    final workshop = Map<String, dynamic>.from(account['user'] ?? {});
+    final isMarketer = widget.user['role'] == 'marketer';
+    final cashbackRate = (double.tryParse('${workshop['cashback_rate'] ?? 0}') ?? 0) * 100;
+    return RefreshIndicator(
+      onRefresh: loadAccount,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text('أهلاً \\${widget.user['name'] ?? ''}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          Text('${widget.user['phone'] ?? ''}', style: const TextStyle(color: muted)),
+          const SizedBox(height: 18),
+          if (isMarketer) ...[
+            _metric('كود الإحالة', '${widget.user['my_ref_code'] ?? '—'}'),
+            _metric('العمولات المتاحة', '${account['commissions']?['available'] ?? 0} \\$'),
+            _metric('العمولات المعلّقة', '${account['commissions']?['held'] ?? 0} \\$'),
+          ] else ...[
+            _metric('التصنيف', '${workshop['tier'] ?? widget.user['tier'] ?? 'Standard'}'),
+            _metric('نسبة الكاش باك الحالية', '${cashbackRate.toStringAsFixed(0)}%'),
+            _metric('رصيد الكاش باك', '${workshop['cashback_balance'] ?? 0} \\$'),
+            _metric('حد الدين', '${workshop['debt_limit'] ?? widget.user['debt_limit'] ?? 0} \\$'),
+            _metric('الرصيد المستحق', '${workshop['debt_balance'] ?? widget.user['debt_balance'] ?? 0} \\$'),
+          ],
+          OutlinedButton.icon(onPressed: loadAccount, icon: const Icon(Icons.refresh), label: const Text('تحديث بيانات الحساب')),
+          OutlinedButton.icon(onPressed: widget.onLogout, icon: const Icon(Icons.logout), label: const Text('تسجيل الخروج')),
+        ],
+      ),
+    );
+  }
+
+  Widget _metric(String label, String value) => Card(
+        color: panel,
+        child: ListTile(
+          title: Text(label, style: const TextStyle(color: muted)),
+          trailing: Text(value, style: const TextStyle(color: blue, fontWeight: FontWeight.bold)),
+        ),
+      );
+}
+, style: const TextStyle(color: blue)),
+        ),
+        if (selected.isEmpty)
+          const Text('أضف القطع من الكتالوج أولاً', style: TextStyle(color: muted)),
+        if (!marketer) ...[
+          const SizedBox(height: 10),
+          Text('رصيد الكاش باك المتاح: ' + cashbackBalance.toStringAsFixed(2) + ' \\$', style: const TextStyle(color: blue, fontWeight: FontWeight.bold)),
+          TextField(
+            controller: cashbackCtl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(labelText: 'استخدام كاش باك من الرصيد', suffixText: 'USD'),
+          ),
+          TextButton(
+            onPressed: () => setState(() => cashbackCtl.text = math.min(cashbackBalance, total).toStringAsFixed(2)),
+            child: const Text('استخدام كامل الرصيد المتاح للطلب'),
+          ),
+          ListTile(
+            title: const Text('المتبقي بعد الكاش باك'),
+            trailing: Text(remaining.toStringAsFixed(2) + ' \\$'),
+          ),
+        ],
+        const SizedBox(height: 14),
+        const Text('عنوان الشحن', style: TextStyle(fontWeight: FontWeight.bold)),
+        if (addresses.isNotEmpty && !addingAddress)
+          DropdownButtonFormField<String>(
+            value: selectedAddressId,
+            decoration: const InputDecoration(labelText: 'اختر عنوان التوصيل'),
+            items: addresses.map((address) {
+              final addressParts = [address['governorate'], address['area'], address['street']]
+                  .where((value) => value != null && value.toString().trim().isNotEmpty)
+                  .join('، ');
+              return DropdownMenuItem<String>(
+                value: address['id'].toString(),
+                child: Text(address['label'].toString() + ' · ' + addressParts, overflow: TextOverflow.ellipsis),
+              );
+            }).toList(),
+            onChanged: (value) => setState(() => selectedAddressId = value),
+          ),
+        if (addresses.isEmpty || addingAddress) ...[
+          TextField(controller: addressLabelCtl, decoration: const InputDecoration(labelText: 'اسم العنوان (مثال: الورشة)')),
+          const SizedBox(height: 8),
+          TextField(controller: governorateCtl, decoration: const InputDecoration(labelText: 'المحافظة')),
+          const SizedBox(height: 8),
+          TextField(controller: areaCtl, decoration: const InputDecoration(labelText: 'المنطقة')),
+          const SizedBox(height: 8),
+          TextField(controller: streetCtl, decoration: const InputDecoration(labelText: 'الشارع')),
+          const SizedBox(height: 8),
+          TextField(controller: addressDetailsCtl, decoration: const InputDecoration(labelText: 'تفاصيل إضافية')),
+          const SizedBox(height: 8),
+          FilledButton(onPressed: busy ? null : saveAddress, child: const Text('حفظ عنوان الشحن')),
+        ],
+        if (addresses.isNotEmpty && !addingAddress)
+          TextButton.icon(
+            onPressed: () => setState(() => addingAddress = true),
+            icon: const Icon(Icons.add_location_alt_outlined),
+            label: const Text('إضافة عنوان جديد'),
+          ),
+        if (!marketer) ...[
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: busy ? null : pickReceipt,
+            icon: const Icon(Icons.receipt_long),
+            label: Text(receiptPath == null ? 'اختيار صورة إيصال شام كاش' : 'تم اختيار صورة الإيصال · تغيير الصورة'),
+          ),
+          if (receiptPath != null)
+            const Text('سيتم إرفاق الإيصال عند اختيار شام كاش فقط.', style: TextStyle(color: muted, fontSize: 12)),
+        ],
+        const SizedBox(height: 12),
+        FilledButton(
+          onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('cod'),
+          child: const Text('الدفع عند الاستلام'),
+        ),
+        if (!marketer && total > 0 && cashbackUsed >= total)
+          FilledButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('cashback'),
+            child: const Text('تأكيد الطلب بالكاش باك بالكامل'),
+          ),
+        if (!marketer)
+          OutlinedButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('sham'),
+            child: const Text('شام كاش'),
+          ),
+        if (!marketer)
+          OutlinedButton(
+            onPressed: busy || selected.isEmpty || selectedAddressId == null ? null : () => sendOrder('debt'),
+            child: const Text('دفتر الدين للورشة'),
+          ),
+      ],
+    );
+  }
+
+  Widget ordersPage() => RefreshIndicator(
+        onRefresh: loadOrders,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            const Text('طلباتي', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            if (orders.isEmpty)
+              const Text('لا توجد طلبات لعرضها', style: TextStyle(color: muted)),
+            ...orders.map((order) => Card(
+                  color: panel,
+                  child: ListTile(
+                    leading: const Icon(Icons.receipt_long, color: blue),
+                    title: Text('طلب #${order['order_number'] ?? order['id'] ?? '—'}'),
+                    subtitle: Text('${order['status'] ?? '—'}'),
+                    trailing: Text('${order['total_amount'] ?? ''} \\$'),
+                  ),
+                )),
+          ],
+        ),
+      );
+
+  Widget accountPage() {
+    final workshop = Map<String, dynamic>.from(account['user'] ?? {});
+    final isMarketer = widget.user['role'] == 'marketer';
+    final cashbackRate = (double.tryParse('${workshop['cashback_rate'] ?? 0}') ?? 0) * 100;
+    return RefreshIndicator(
+      onRefresh: loadAccount,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text('أهلاً \\${widget.user['name'] ?? ''}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          Text('${widget.user['phone'] ?? ''}', style: const TextStyle(color: muted)),
+          const SizedBox(height: 18),
+          if (isMarketer) ...[
+            _metric('كود الإحالة', '${widget.user['my_ref_code'] ?? '—'}'),
+            _metric('العمولات المتاحة', '${account['commissions']?['available'] ?? 0} \\$'),
+            _metric('العمولات المعلّقة', '${account['commissions']?['held'] ?? 0} \\$'),
+          ] else ...[
+            _metric('التصنيف', '${workshop['tier'] ?? widget.user['tier'] ?? 'Standard'}'),
+            _metric('نسبة الكاش باك الحالية', '${cashbackRate.toStringAsFixed(0)}%'),
+            _metric('رصيد الكاش باك', '${workshop['cashback_balance'] ?? 0} \\$'),
+            _metric('حد الدين', '${workshop['debt_limit'] ?? widget.user['debt_limit'] ?? 0} \\$'),
+            _metric('الرصيد المستحق', '${workshop['debt_balance'] ?? widget.user['debt_balance'] ?? 0} \\$'),
+          ],
+          OutlinedButton.icon(onPressed: loadAccount, icon: const Icon(Icons.refresh), label: const Text('تحديث بيانات الحساب')),
+          OutlinedButton.icon(onPressed: widget.onLogout, icon: const Icon(Icons.logout), label: const Text('تسجيل الخروج')),
+        ],
+      ),
+    );
+  }
+
+  Widget _metric(String label, String value) => Card(
+        color: panel,
+        child: ListTile(
+          title: Text(label, style: const TextStyle(color: muted)),
+          trailing: Text(value, style: const TextStyle(color: blue, fontWeight: FontWeight.bold)),
+        ),
+      );
+}
+),
         )),
         ListTile(
           title: const Text('الإجمالي'),

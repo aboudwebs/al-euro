@@ -50,7 +50,7 @@ export type AccountUser = {
 };
 
 /** Re-reads the customer and enforces any pending phone-verification requirement server-side. */
-export async function requireUser(): Promise<{ ok: true; user: AccountUser } | { ok: false; response: NextResponse }> {
+export async function requireUser(options: { requireVerifiedPhone?: boolean } = {}): Promise<{ ok: true; user: AccountUser } | { ok: false; response: NextResponse }> {
   let session: Awaited<ReturnType<typeof getSession>>;
   try {
     session = await getSession();
@@ -81,7 +81,7 @@ export async function requireUser(): Promise<{ ok: true; user: AccountUser } | {
     return { ok: false, response: reply({ error: "تعذر التحقق من الحساب" }, 500) };
   }
   if (!data || !data.is_active) return { ok: false, response: reply({ error: "الحساب غير مفعّل" }, 403) };
-  if (data.phone_verification_required === true) {
+  if (options.requireVerifiedPhone === true && data.phone_verification_required === true) {
     return {
       ok: false,
       response: reply({

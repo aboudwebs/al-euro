@@ -137,6 +137,21 @@ export async function POST(req: Request) {
         return reply({ error: identityError.code === "23505" ? "طريقة الدخول مرتبطة بحساب آخر." : "تعذر حفظ هوية تسجيل الدخول" }, identityError.code === "23505" ? 409 : 500);
       }
 
+      if (validatedReferralCode) {
+        const { data: referrer } = await db.from("users").select("id")
+          .eq("role", "marketer").eq("my_ref_code", validatedReferralCode).maybeSingle();
+        if (referrer) {
+          await notifyUser({
+            userId: String(referrer.id),
+            type: "referral_new",
+            title: "إحالة جديدة",
+            body: "انضم مستخدم جديد عبر رابطك",
+            eventKey: `referral:user:${created.id}`,
+            data: { screen: "dashboard", referralUserId: String(created.id) },
+          });
+        }
+      }
+
       if (role === "workshop") {
         return reply({ ok: true, pendingApproval: true, message: "تم إنشاء الحساب وإرسال طلب الورشة للمراجعة. أكمل توثيق الهاتف عند أول شراء." });
       }

@@ -56,6 +56,9 @@ export async function POST(req: Request) {
       .eq("id", linked.user_id).maybeSingle();
     if (userError || !user) return reply({ error: "حساب EURO المرتبط غير موجود" }, 404);
     if (!user.is_active) return reply({ pendingApproval: true, error: "حسابك قيد المراجعة من قِبل الإدارة." }, 403);
+    if (user.phone_verification_required !== true) {
+      return reply({ error: "رقم هاتف هذا الحساب موثّق بالفعل. استخدم إعدادات الحساب لتغييره." }, 409);
+    }
 
     const { data: duplicates, error: duplicateError } = await db.from("users")
       .select("id, role, name, phone, my_ref_code, is_active")

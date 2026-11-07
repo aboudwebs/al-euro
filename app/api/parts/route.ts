@@ -1,17 +1,13 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { requireUser } from "@/lib/account-api";
 
 export const dynamic = "force-dynamic";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
-/** Live catalog for signed-in customers: active rows of the `parts` table. */
+/** Public read-only catalog for guests and signed-in customers: active rows of the parts table. */
 export async function GET() {
   try {
-    const auth = await requireUser();
-    if (!auth.ok) return auth.response;
-
     const db = getSupabaseAdmin();
     const FIELDS = "id, name, brand, model, years, oem_number, alt_grade, price, stock, branch, image_url";
     const list = (fields: string) => db.from("parts").select(fields).eq("is_active", true).order("name", { ascending: true });

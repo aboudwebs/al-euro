@@ -134,6 +134,9 @@ export async function POST(req: Request) {
     if (createError || !created) {
       console.error("[api/auth/firebase/register] user insert:", createError);
       if (createError?.code === "23505") return reply({ error: "هذا الرقم مسجل مسبقاً أو تعذر إنشاء الحساب" }, 409);
+      if (createError?.code === "42703" || createError?.code === "PGRST204" || createError?.code === "42P01" || createError?.code === "PGRST205") {
+        return reply({ error: "يجب تطبيق تحديث قاعدة بيانات تسجيل الدخول قبل إنشاء الحسابات الجديدة" }, 503);
+      }
       return reply({ error: "تعذر إنشاء الحساب" }, 500);
     }
 
@@ -148,6 +151,9 @@ export async function POST(req: Request) {
       console.error("[api/auth/firebase/register] identity insert:", identityError);
       await db.from("users").delete().eq("id", created.id);
       if (identityError.code === "23505") return reply({ error: "طريقة الدخول مرتبطة بحساب آخر. سجّل الدخول بالحساب المرتبط." }, 409);
+      if (identityError.code === "42P01" || identityError.code === "PGRST205") {
+        return reply({ error: "يجب تطبيق تحديث قاعدة بيانات تسجيل الدخول قبل إنشاء الحسابات الجديدة" }, 503);
+      }
       return reply({ error: "تعذر حفظ هوية تسجيل الدخول" }, 500);
     }
 

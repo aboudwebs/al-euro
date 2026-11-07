@@ -90,7 +90,21 @@ export async function GET() {
     if (user.role === "worker") {
       return json({ user: { id: user.id, role: user.role, name: user.name, phone: user.phone, is_active: user.is_active, created_at: user.created_at } });
     }
-    return json({ user });
+    const { data: identities, error: identityError } = await getSupabaseAdmin()
+      .from("user_auth_identities")
+      .select("provider, email, email_verified")
+      .eq("user_id", user.id);
+    if (identityError) {
+      console.error("[api/auth] identity metadata:", identityError);
+    }
+    const primaryIdentity = identities?.find((item) => item.email) ?? identities?.[0] ?? null;
+    return json({
+      user: {
+        ...user,
+        auth_email: primaryIdentity?.email ?? null,
+        auth_provider: primaryIdentity?.provider ?? null,
+      },
+    });
   } catch (err) {
     console.error("[api/auth] GET:", err);
     return json({ user: null });

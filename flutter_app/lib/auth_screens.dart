@@ -63,7 +63,7 @@ class _EuroAuthScreenState extends State<EuroAuthScreen> {
   }
 
   Future<void> legacyLogin() async {
-    if (phone.text.trim().isEmpty || password.text.isEmpty) {
+    if (phone.text.trim().isEmpty || phonePassword.text.isEmpty) {
       showError('أدخل رقم الموبايل وكلمة المرور');
       return;
     }

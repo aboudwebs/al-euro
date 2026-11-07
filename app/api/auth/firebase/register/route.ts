@@ -40,9 +40,10 @@ export async function POST(req: Request) {
     if (!idToken || idToken.length > 12_000) return reply({ error: "رمز تسجيل الدخول غير صالح" }, 400);
 
     const verifiedPhone = typeof body?.phone === "string" ? body.phone.trim() : "";
+    const contactPhone = typeof body?.contactPhone === "string" ? body.contactPhone.trim() : "";
 
-    // Google / Apple / email registration creates a usable account first. Phone verification
-    // is deliberately deferred until checkout; no email-based account linking is performed.
+    // OAuth registration stores a workshop contact number without treating it as WhatsApp-verified.
+    // WhatsApp verification remains a separate checkout requirement.
     if (!verifiedPhone) {
       let identity;
       try {
@@ -55,6 +56,10 @@ export async function POST(req: Request) {
       const role = body?.role;
       if (role !== "workshop" && role !== "marketer") {
         return reply({ error: "اختر نوع الحساب: ورشة أو مسوّق" }, 400);
+      }
+      const workshopPhone = phoneDigits(contactPhone);
+      if (role === "workshop" && canonicalPhone(workshopPhone).length < 8) {
+        return reply({ error: "رقم هاتف الورشة إلزامي ويجب أن يكون صحيحاً" }, 400);
       }
 
       const db = getSupabaseAdmin();
@@ -98,6 +103,15 @@ export async function POST(req: Request) {
       const optionalSpec = typeof body?.spec === "string" ? body.spec.trim() : "";
       const optionalLicense = typeof body?.license === "string" ? body.license.trim() : "";
       const specs = optionalSpec ? optionalSpec.split(/[,،]/).map((item: string) => item.trim()).filter(Boolean) : [];
+      if (role === "workshop") {
+        const { data: duplicatePhone, error: duplicatePhoneError } = await db.from("users")
+          .select("id").in("phone", phoneCandidates(workshopPhone)).in("role", ["workshop", "marketer"]).limit(1);
+        if (duplicatePhoneError) {
+          console.error("[api/auth/firebase/register] contact phone lookup:", duplicatePhoneError);
+          return reply({ error: "تعذر التحقق من رقم الهاتف" }, 500);
+        }
+        if (duplicatePhone?.length) return reply({ error: "رقم الهاتف مرتبط بحساب EURO موجود" }, 409);
+      }
       let created: any = null;
       let createError: any = null;
       for (let attempt = 0; attempt < 5; attempt++) {
@@ -105,7 +119,7 @@ export async function POST(req: Request) {
         const result = await db.from("users").insert({
           role,
           name: optionalName.length >= 2 ? optionalName : null,
-          phone: null,
+          phone: role === "workshop" ? workshopPhone : null,
           password_hash: null,
           license: role === "workshop" ? (optionalLicense || null) : null,
           license_verification_status: role === "workshop" && !optionalLicense ? "pending" : null,

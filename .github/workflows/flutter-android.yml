@@ -66,9 +66,9 @@ jobs:
               p.write_text(text)
           # Firebase Auth requires Android API 23 or newer.
           if p.suffix == ".kts":
-              text = re.sub(r"minSdk\\s*=\\s*flutter\\.minSdkVersion", "minSdk = 23", text)
+              text = re.sub(r"minSdk\s*=\s*flutter\.minSdkVersion", "minSdk = 23", text)
           else:
-              text = re.sub(r"minSdkVersion\\s+flutter\\.minSdkVersion", "minSdkVersion 23", text)
+              text = re.sub(r"minSdkVersion\s+flutter\.minSdkVersion", "minSdkVersion 23", text)
           p.write_text(text)
 
           manifest = Path("flutter_app/android/app/src/main/AndroidManifest.xml")

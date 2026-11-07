@@ -22,6 +22,7 @@ function firebaseAuthAdmin() {
 export type VerifiedFirebaseIdentity = {
   uid: string;
   provider: string;
+  /** Empty until a WhatsApp-verified phone is supplied or Firebase phone auth was used. */
   phone: string;
   email: string | null;
   emailVerified: boolean;
@@ -31,19 +32,20 @@ export async function verifyFirebaseIdentityToken(idToken: string, whatsappVerif
   const decoded = await firebaseAuthAdmin().verifyIdToken(idToken, true);
   const firebasePhone = typeof decoded.phone_number === "string" ? decoded.phone_number : "";
   const phone = firebasePhone || whatsappVerifiedPhone;
-  if (firebasePhone && whatsappVerifiedPhone && firebasePhone.replace(/[^0-9]/g, "") !== whatsappVerifiedPhone.replace(/[^0-9]/g, "")) {
+  if (firebasePhone && whatsappVerifiedPhone &&
+      firebasePhone.replace(/[^0-9]/g, "") !== whatsappVerifiedPhone.replace(/[^0-9]/g, "")) {
     throw new Error("رقم الهاتف في هوية Firebase لا يطابق الرقم الموثّق عبر واتساب");
   }
+
   const provider = typeof decoded.firebase?.sign_in_provider === "string"
     ? decoded.firebase.sign_in_provider
     : "";
-  if (!decoded.uid || !phone || !provider || provider === "anonymous") {
-    throw new Error("يجب توثيق رقم الهاتف قبل متابعة تسجيل الدخول");
+  if (!decoded.uid || !provider || provider === "anonymous") {
+    throw new Error("هوية تسجيل الدخول غير صالحة");
   }
 
-  const normalizedProvider = provider === "google.com" || provider === "apple.com" || provider === "phone" || provider === "password"
-    ? provider
-    : "";
+  const normalizedProvider = provider === "google.com" || provider === "apple.com" ||
+    provider === "phone" || provider === "password" ? provider : "";
   if (!normalizedProvider) throw new Error("طريقة تسجيل الدخول غير مدعومة");
 
   return {

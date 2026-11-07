@@ -509,7 +509,7 @@ class _ShopState extends State<Shop> {
                       const SizedBox(height: 5),
                       Text('${part['brand'] ?? ''} · OEM ${part['pn'] ?? '—'}', style: const TextStyle(color: muted)),
                       const SizedBox(height: 8),
-                      Text('${part['price'] ?? 0} \\$ · المتوفر ${part['stock'] ?? 0}', style: const TextStyle(color: blue, fontWeight: FontWeight.bold)),
+                      Text('${part['price'] ?? 0} \$ · المتوفر ${part['stock'] ?? 0}', style: const TextStyle(color: blue, fontWeight: FontWeight.bold)),
                       Row(
                         children: [
                           IconButton(
@@ -659,7 +659,7 @@ class _ShopState extends State<Shop> {
                     leading: const Icon(Icons.receipt_long, color: blue),
                     title: Text('طلب #${order['order_number'] ?? order['id'] ?? '—'}'),
                     subtitle: Text('${order['status'] ?? '—'}'),
-                    trailing: Text('${order['total_amount'] ?? ''} \\$'),
+                    trailing: Text('${order['total_amount'] ?? ''} \$'),
                   ),
                 )),
           ],
@@ -680,14 +680,14 @@ class _ShopState extends State<Shop> {
           const SizedBox(height: 18),
           if (isMarketer) ...[
             _metric('كود الإحالة', '${widget.user['my_ref_code'] ?? '—'}'),
-            _metric('العمولات المتاحة', '${account['commissions']?['available'] ?? 0} \\$'),
-            _metric('العمولات المعلّقة', '${account['commissions']?['held'] ?? 0} \\$'),
+            _metric('العمولات المتاحة', '${account['commissions']?['available'] ?? 0} \$'),
+            _metric('العمولات المعلّقة', '${account['commissions']?['held'] ?? 0} \$'),
           ] else ...[
             _metric('التصنيف', '${workshop['tier'] ?? widget.user['tier'] ?? 'Standard'}'),
             _metric('نسبة الكاش باك الحالية', '${cashbackRate.toStringAsFixed(0)}%'),
-            _metric('رصيد الكاش باك', '${workshop['cashback_balance'] ?? 0} \\$'),
-            _metric('حد الدين', '${workshop['debt_limit'] ?? widget.user['debt_limit'] ?? 0} \\$'),
-            _metric('الرصيد المستحق', '${workshop['debt_balance'] ?? widget.user['debt_balance'] ?? 0} \\$'),
+            _metric('رصيد الكاش باك', '${workshop['cashback_balance'] ?? 0} \$'),
+            _metric('حد الدين', '${workshop['debt_limit'] ?? widget.user['debt_limit'] ?? 0} \$'),
+            _metric('الرصيد المستحق', '${workshop['debt_balance'] ?? widget.user['debt_balance'] ?? 0} \$'),
           ],
           OutlinedButton.icon(onPressed: loadAccount, icon: const Icon(Icons.refresh), label: const Text('تحديث بيانات الحساب')),
           OutlinedButton.icon(onPressed: widget.onLogout, icon: const Icon(Icons.logout), label: const Text('تسجيل الخروج')),

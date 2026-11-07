@@ -35,6 +35,7 @@ class _EuroAuthScreenState extends State<EuroAuthScreen> {
   String? initialEmail;
   final phone = TextEditingController();
   final password = TextEditingController();
+  final phonePassword = TextEditingController();
   final email = TextEditingController();
   final name = TextEditingController();
   final license = TextEditingController();
@@ -70,7 +71,7 @@ class _EuroAuthScreenState extends State<EuroAuthScreen> {
         'mode': 'login',
         'client': 'mobile',
         'phone': phone.text.trim(),
-        'password': password.text,
+        'password': phonePassword.text,
       });
       if (data['accessToken'] == null || data['user'] == null) {
         throw Exception('الخادم لم يرجع جلسة تطبيق صالحة');
@@ -311,6 +312,7 @@ class _EuroAuthScreenState extends State<EuroAuthScreen> {
   void dispose() {
     phone.dispose();
     password.dispose();
+    phonePassword.dispose();
     email.dispose();
     name.dispose();
     license.dispose();
@@ -372,7 +374,7 @@ class _EuroAuthScreenState extends State<EuroAuthScreen> {
                       const SizedBox(height: 16),
                       field(phone, 'رقم الموبايل', keyboard: TextInputType.phone),
                       const SizedBox(height: 10),
-                      field(password, 'كلمة المرور', secret: true),
+                      field(phonePassword, 'كلمة المرور', secret: true),
                       const SizedBox(height: 14),
                       actionButton('دخول برقم الهاتف', legacyLogin),
                       const Divider(height: 30),

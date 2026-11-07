@@ -58,28 +58,71 @@ export async function POST(req: Request) {
     if (!user.is_active) return reply({ pendingApproval: true, error: "حسابك قيد المراجعة من قِبل الإدارة." }, 403);
 
     const { data: duplicates, error: duplicateError } = await db.from("users")
-      .select("id").in("phone", phoneCandidates(phone)).in("role", ["workshop", "marketer"])
-      .neq("id", user.id).limit(1);
+      .select("id, role, name, phone, my_ref_code, is_active")
+      .in("phone", phoneCandidates(phone)).in("role", ["workshop", "marketer"])
+      .neq("id", user.id).limit(2);
     if (duplicateError) {
       console.error("[api/auth/firebase/complete-profile] phone lookup:", duplicateError);
       return reply({ error: "تعذر التحقق من رقم الهاتف" }, 500);
     }
-    if (duplicates?.length) return reply({ error: "رقم الهاتف مرتبط بحساب EURO آخر. سجّل الدخول بذلك الحساب لربط الهوية." }, 409);
+    if ((duplicates?.length ?? 0) > 1) {
+      return reply({ error: "يوجد أكثر من حساب مرتبط بهذا الرقم. تواصل مع الإدارة لربط الحساب بأمان." }, 409);
+    }
 
-    const { data: updated, error: updateError } = await db.from("users")
-      .update({
-        name,
-        phone: digits(phone),
-        phone_verified_at: new Date().toISOString(),
-        phone_verification_required: false,
-      })
-      .eq("id", user.id)
-      .select("id, role, name, phone, my_ref_code, is_active")
-      .single();
-    if (updateError || !updated) {
-      console.error("[api/auth/firebase/complete-profile] profile update:", updateError);
-      if (updateError?.code === "23505") return reply({ error: "رقم الهاتف مرتبط بحساب آخر" }, 409);
-      return reply({ error: "تعذر حفظ بيانات الحساب" }, 500);
+    let updated: any;
+    const existingPhoneAccount = duplicates?.[0];
+    if (existingPhoneAccount) {
+      // The WhatsApp OTP proves ownership of the legacy phone account. Link this exact
+      // provider UID to that account; never use email as a matching key.
+      if (existingPhoneAccount.role !== user.role) {
+        return reply({ error: "نوع الحساب لا يطابق الحساب المرتبط بهذا الرقم. تواصل مع الدعم." }, 409);
+      }
+      if (!existingPhoneAccount.is_active) {
+        return reply({ pendingApproval: true, error: "الحساب المرتبط بهذا الرقم قيد مراجعة الإدارة." }, 403);
+      }
+
+      const { error: identityMoveError } = await db.from("user_auth_identities")
+        .update({ user_id: existingPhoneAccount.id })
+        .eq("provider", identity.provider)
+        .eq("provider_uid", identity.uid)
+        .eq("user_id", user.id);
+      if (identityMoveError) {
+        console.error("[api/auth/firebase/complete-profile] safe identity link:", identityMoveError);
+        return reply({ error: "تعذر ربط طريقة الدخول بالحساب القديم" }, 503);
+      }
+
+      const { data: legacyUpdated, error: legacyUpdateError } = await db.from("users")
+        .update({
+          name: existingPhoneAccount.name || name,
+          phone_verified_at: new Date().toISOString(),
+          phone_verification_required: false,
+        })
+        .eq("id", existingPhoneAccount.id)
+        .select("id, role, name, phone, my_ref_code, is_active")
+        .single();
+      if (legacyUpdateError || !legacyUpdated) {
+        console.error("[api/auth/firebase/complete-profile] legacy account update:", legacyUpdateError);
+        return reply({ error: "تم ربط الهوية لكن تعذر تحديث حالة التوثيق. أعد تسجيل الدخول." }, 503);
+      }
+      updated = legacyUpdated;
+      await db.from("users").update({ is_active: false }).eq("id", user.id);
+    } else {
+      const { data: profileUpdated, error: updateError } = await db.from("users")
+        .update({
+          name,
+          phone: digits(phone),
+          phone_verified_at: new Date().toISOString(),
+          phone_verification_required: false,
+        })
+        .eq("id", user.id)
+        .select("id, role, name, phone, my_ref_code, is_active")
+        .single();
+      if (updateError || !profileUpdated) {
+        console.error("[api/auth/firebase/complete-profile] profile update:", updateError);
+        if (updateError?.code === "23505") return reply({ error: "رقم الهاتف مرتبط بحساب آخر" }, 409);
+        return reply({ error: "تعذر حفظ بيانات الحساب" }, 500);
+      }
+      updated = profileUpdated;
     }
 
     const accessToken = signSession({

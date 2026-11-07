@@ -3,8 +3,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:euro_cars/main.dart';
 
 void main() {
-  testWidgets('EURO CARS shows startup loading state', (tester) async {
+  testWidgets('EURO CARS shows the welcome screen', (tester) async {
     await tester.pumpWidget(const EuroApp());
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(find.text('EURO CARS'), findsOneWidget);
+    expect(find.text('أهلاً بك في EURO'), findsOneWidget);
   });
 }

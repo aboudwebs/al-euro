@@ -77,6 +77,21 @@ jobs:
               manifest.write_text(manifest_text)
           PY
           echo "EURO_FIREBASE_ENABLED=true" >> "$GITHUB_ENV"
+      - name: Set Android minimum SDK for Firebase Auth compatibility
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p = Path("flutter_app/android/app/build.gradle.kts")
+          if not p.exists():
+              p = Path("flutter_app/android/app/build.gradle")
+          text = p.read_text()
+          if p.suffix == ".kts":
+              text = re.sub(r"minSdk\\s*=\\s*flutter\\.minSdkVersion", "minSdk = 23", text)
+          else:
+              text = re.sub(r"minSdkVersion\\s+flutter\\.minSdkVersion", "minSdkVersion 23", text)
+          p.write_text(text)
+          PY
       - name: Resolve packages
         working-directory: flutter_app
         run: flutter pub get

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { getSession } from "@/lib/session";
 import { requireUser } from "@/lib/account-api";
 import { PAY_METHOD } from "@/lib/status";
 import { removeImage, storeImage } from "@/lib/uploads";
@@ -35,13 +34,8 @@ function reply(body: unknown, status = 200) {
 export async function POST(req: Request) {
   let uploadedPath: string | null = null;
   try {
-    let session: Awaited<ReturnType<typeof getSession>>;
-    try {
-      session = await getSession();
-    } catch {
-      return reply({ error: "إعداد AUTH_SECRET مفقود على الخادم" }, 500);
-    }
-    if (!session) return reply({ error: "يرجى تسجيل الدخول لإتمام الطلب" }, 401);
+    const auth = await requireUser();
+    if (!auth.ok) return auth.response;
 
     let form: FormData;
     try {
@@ -90,20 +84,8 @@ export async function POST(req: Request) {
 
     const db = getSupabaseAdmin();
 
-    // The account must still exist and be active (the cookie alone is not enough).
-    const { data: user, error: userError } = await db
-      .from("users")
-      .select("id, role, name, phone, is_active, debt_limit, debt_balance, cashback_balance")
-      .eq("id", session.id)
-      .maybeSingle();
-    if (userError) {
-      console.error("[api/orders] user lookup:", userError);
-      return reply({ error: "تعذر التحقق من الحساب" }, 500);
-    }
-    if (!user || !user.is_active) return reply({ error: "الحساب غير مفعّل" }, 403);
-    if (user.role !== "workshop" && user.role !== "marketer") {
-      return reply({ error: "حسابات الإدارة لا تنشئ طلبات شراء" }, 403);
-    }
+    // requireUser re-reads the account, checks its active state and enforces phone verification.
+    const user = auth.user;
 
     // Resolve a retry before checking today's stock or prices: the original order
     // may already have been approved while the client's response was lost.

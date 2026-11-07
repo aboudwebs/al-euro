@@ -82,7 +82,14 @@ export async function requireUser(): Promise<{ ok: true; user: AccountUser } | {
   }
   if (!data || !data.is_active) return { ok: false, response: reply({ error: "الحساب غير مفعّل" }, 403) };
   if (data.phone_verification_required === true) {
-    return { ok: false, response: reply({ error: "يجب توثيق رقم الهاتف قبل استخدام خدمات الحساب" }, 403) };
+    return {
+      ok: false,
+      response: reply({
+        code: "PHONE_VERIFICATION_REQUIRED",
+        phoneVerificationRequired: true,
+        error: "أكمل توثيق رقم الهاتف عبر واتساب قبل إتمام الشراء أو إرسال الطلبات.",
+      }, 403),
+    };
   }
   if (data.role !== "workshop" && data.role !== "marketer") {
     return { ok: false, response: reply({ error: "هذه الخدمة لحسابات الورشات والمسوّقين فقط" }, 403) };

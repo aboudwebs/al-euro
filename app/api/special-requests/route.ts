@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { BRANDS } from "@/lib/data";
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { getSession } from "@/lib/session";
+import { requireUser } from "@/lib/account-api";
 import { SPECIAL_STATUS, splitRequestNotes } from "@/lib/status";
 import { removeImage, storeImage } from "@/lib/uploads";
 
@@ -24,13 +24,8 @@ function text(form: FormData, key: string, max: number): string {
 export async function POST(req: Request) {
   let uploadedPath: string | null = null;
   try {
-    let session: Awaited<ReturnType<typeof getSession>>;
-    try {
-      session = await getSession();
-    } catch {
-      return reply({ error: "إعداد AUTH_SECRET مفقود على الخادم" }, 500);
-    }
-    if (!session) return reply({ error: "يرجى تسجيل الدخول أولاً" }, 401);
+    const auth = await requireUser();
+    if (!auth.ok) return auth.response;
 
     let form: FormData;
     try {
@@ -54,19 +49,7 @@ export async function POST(req: Request) {
     if (!partName) return reply({ error: "يرجى إدخال اسم القطعة" }, 400);
 
     const db = getSupabaseAdmin();
-    const { data: user, error: userError } = await db
-      .from("users")
-      .select("id, name, phone, role, is_active")
-      .eq("id", session.id)
-      .maybeSingle();
-    if (userError) {
-      console.error("[api/special-requests] user lookup:", userError);
-      return reply({ error: "تعذر التحقق من الحساب" }, 500);
-    }
-    if (!user || !user.is_active) return reply({ error: "الحساب غير مفعّل" }, 403);
-    if (user.role !== "workshop" && user.role !== "marketer") {
-      return reply({ error: "هذه الخدمة متاحة لحسابات الورشات والمسوّقين فقط" }, 403);
-    }
+    const user = auth.user;
 
     const file = form.get("image");
     const requestHash = createHash("sha256").update(JSON.stringify({
@@ -145,21 +128,13 @@ export async function POST(req: Request) {
 /** The signed-in customer's own special requests, with the admin's quote and reply. */
 export async function GET() {
   try {
-    let session: Awaited<ReturnType<typeof getSession>>;
-    try {
-      session = await getSession();
-    } catch {
-      return reply({ error: "إعداد AUTH_SECRET مفقود على الخادم" }, 500);
-    }
-    if (!session) return reply({ error: "يرجى تسجيل الدخول" }, 401);
-    if (session.role !== "workshop" && session.role !== "marketer") {
-      return reply({ error: "هذه الخدمة متاحة لحسابات الورشات والمسوّقين فقط" }, 403);
-    }
+    const auth = await requireUser();
+    if (!auth.ok) return auth.response;
 
     const { data, error } = await getSupabaseAdmin()
       .from("special_requests")
       .select("id, brand, other_brand, part_name, notes, quoted_price, status, created_at")
-      .eq("user_id", session.id)
+      .eq("user_id", auth.user.id)
       .order("created_at", { ascending: false })
       .limit(30);
     if (error) {

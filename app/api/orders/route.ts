@@ -34,7 +34,7 @@ function reply(body: unknown, status = 200) {
 export async function POST(req: Request) {
   let uploadedPath: string | null = null;
   try {
-    const auth = await requireUser();
+    const auth = await requireUser({ requireVerifiedPhone: true });
     if (!auth.ok) return auth.response;
 
     let form: FormData;

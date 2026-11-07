@@ -149,7 +149,7 @@ class _ShopState extends State<Shop> {
   Future<Map<String, dynamic>> api(String path) async {
     final response = await http.get(
       Uri.parse('$apiBase$path'),
-      headers: {'Authorization': 'Bearer ${widget.token}'},
+      headers: {'Authorization': 'Bearer \\${widget.token}'},
     ).timeout(const Duration(seconds: 30));
     final data = Map<String, dynamic>.from(jsonDecode(response.body));
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -164,7 +164,7 @@ class _ShopState extends State<Shop> {
     String? idempotencyKey,
   }) async {
     final headers = <String, String>{
-      'Authorization': 'Bearer ${widget.token}',
+      'Authorization': 'Bearer \\${widget.token}',
       'Content-Type': 'application/json',
     };
     if (idempotencyKey != null) headers['idempotency-key'] = idempotencyKey;
@@ -276,7 +276,7 @@ class _ShopState extends State<Shop> {
       }
       if (mounted) setState(() => receiptPath = file.path);
     } catch (e) {
-      if (mounted) setState(() => error = 'تعذر اختيار صورة الإيصال: ${e.toString()}');
+      if (mounted) setState(() => error = 'تعذر اختيار صورة الإيصال: \\${e.toString()}');
     }
   }
 
@@ -354,7 +354,7 @@ class _ShopState extends State<Shop> {
     });
     try {
       final request = http.MultipartRequest('POST', Uri.parse('$apiBase/api/orders'));
-      request.headers['Authorization'] = 'Bearer ${widget.token}';
+      request.headers['Authorization'] = 'Bearer \\${widget.token}';
       request.headers['idempotency-key'] = pendingOrderKey!;
       request.fields['items'] = jsonEncode(cart);
       request.fields['pay'] = pay;
@@ -374,7 +374,7 @@ class _ShopState extends State<Shop> {
       pendingOrderFingerprint = null;
       pendingOrderKey = null;
       receiptPath = null;
-      error = 'تم إرسال الطلب بنجاح: ${data['orderNumber'] ?? data['orderId'] ?? ''}';
+      error = 'تم إرسال الطلب بنجاح: \\${data['orderNumber'] ?? data['orderId'] ?? ''}';
       await loadOrders();
       if (mounted) setState(() => tab = 2);
     } catch (e) {
@@ -407,7 +407,7 @@ class _ShopState extends State<Shop> {
   @override
   Widget build(BuildContext context) {
     final visible = parts.where((part) {
-      final haystack = '${part['name']} ${part['brand']} ${part['pn']} ${part['model']}'.toLowerCase();
+      final haystack = '${part['name']} \\${part['brand']} \\${part['pn']} \\${part['model']}'.toLowerCase();
       return haystack.contains(search.toLowerCase());
     }).toList();
     return Directionality(
@@ -496,9 +496,9 @@ class _ShopState extends State<Shop> {
                     children: [
                       Text('${part['name'] ?? 'قطعة'}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                       const SizedBox(height: 5),
-                      Text('${part['brand'] ?? ''} · OEM ${part['pn'] ?? '—'}', style: const TextStyle(color: muted)),
+                      Text('${part['brand'] ?? ''} · OEM \\${part['pn'] ?? '—'}', style: const TextStyle(color: muted)),
                       const SizedBox(height: 8),
-                      Text('${part['price'] ?? 0} $ · المتوفر ${part['stock'] ?? 0}', style: const TextStyle(color: blue, fontWeight: FontWeight.bold)),
+                      Text('${part['price'] ?? 0} \\$ · المتوفر \\${part['stock'] ?? 0}', style: const TextStyle(color: blue, fontWeight: FontWeight.bold)),
                       Row(
                         children: [
                           IconButton(
@@ -538,17 +538,17 @@ class _ShopState extends State<Shop> {
         const Text('سلة الطلب', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
         ...selected.map((part) => ListTile(
           title: Text(part['name'].toString() + ' × ' + (cart[part['id'].toString()] ?? 0).toString()),
-          subtitle: Text(part['price'].toString() + ' $'),
+          subtitle: Text(part['price'].toString() + ' \\$'),
         )),
         ListTile(
           title: const Text('الإجمالي'),
-          trailing: Text(total.toStringAsFixed(2) + ' $', style: const TextStyle(color: blue)),
+          trailing: Text(total.toStringAsFixed(2) + ' \\$', style: const TextStyle(color: blue)),
         ),
         if (selected.isEmpty)
           const Text('أضف القطع من الكتالوج أولاً', style: TextStyle(color: muted)),
         if (!marketer) ...[
           const SizedBox(height: 10),
-          Text('رصيد الكاش باك المتاح: ' + cashbackBalance.toStringAsFixed(2) + ' $', style: const TextStyle(color: blue, fontWeight: FontWeight.bold)),
+          Text('رصيد الكاش باك المتاح: ' + cashbackBalance.toStringAsFixed(2) + ' \\$', style: const TextStyle(color: blue, fontWeight: FontWeight.bold)),
           TextField(
             controller: cashbackCtl,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -561,7 +561,7 @@ class _ShopState extends State<Shop> {
           ),
           ListTile(
             title: const Text('المتبقي بعد الكاش باك'),
-            trailing: Text(remaining.toStringAsFixed(2) + ' $'),
+            trailing: Text(remaining.toStringAsFixed(2) + ' \\$'),
           ),
         ],
         const SizedBox(height: 14),
@@ -648,7 +648,7 @@ class _ShopState extends State<Shop> {
                     leading: const Icon(Icons.receipt_long, color: blue),
                     title: Text('طلب #${order['order_number'] ?? order['id'] ?? '—'}'),
                     subtitle: Text('${order['status'] ?? '—'}'),
-                    trailing: Text('${order['total_amount'] ?? ''} $'),
+                    trailing: Text('${order['total_amount'] ?? ''} \\$'),
                   ),
                 )),
           ],
@@ -664,19 +664,19 @@ class _ShopState extends State<Shop> {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text('أهلاً ${widget.user['name'] ?? ''}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          Text('أهلاً \\${widget.user['name'] ?? ''}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
           Text('${widget.user['phone'] ?? ''}', style: const TextStyle(color: muted)),
           const SizedBox(height: 18),
           if (isMarketer) ...[
             _metric('كود الإحالة', '${widget.user['my_ref_code'] ?? '—'}'),
-            _metric('العمولات المتاحة', '${account['commissions']?['available'] ?? 0} $'),
-            _metric('العمولات المعلّقة', '${account['commissions']?['held'] ?? 0} $'),
+            _metric('العمولات المتاحة', '${account['commissions']?['available'] ?? 0} \\$'),
+            _metric('العمولات المعلّقة', '${account['commissions']?['held'] ?? 0} \\$'),
           ] else ...[
             _metric('التصنيف', '${workshop['tier'] ?? widget.user['tier'] ?? 'Standard'}'),
             _metric('نسبة الكاش باك الحالية', '${cashbackRate.toStringAsFixed(0)}%'),
-            _metric('رصيد الكاش باك', '${workshop['cashback_balance'] ?? 0} $'),
-            _metric('حد الدين', '${workshop['debt_limit'] ?? widget.user['debt_limit'] ?? 0} $'),
-            _metric('الرصيد المستحق', '${workshop['debt_balance'] ?? widget.user['debt_balance'] ?? 0} $'),
+            _metric('رصيد الكاش باك', '${workshop['cashback_balance'] ?? 0} \\$'),
+            _metric('حد الدين', '${workshop['debt_limit'] ?? widget.user['debt_limit'] ?? 0} \\$'),
+            _metric('الرصيد المستحق', '${workshop['debt_balance'] ?? widget.user['debt_balance'] ?? 0} \\$'),
           ],
           OutlinedButton.icon(onPressed: loadAccount, icon: const Icon(Icons.refresh), label: const Text('تحديث بيانات الحساب')),
           OutlinedButton.icon(onPressed: widget.onLogout, icon: const Icon(Icons.logout), label: const Text('تسجيل الخروج')),

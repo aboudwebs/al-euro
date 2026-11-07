@@ -161,8 +161,8 @@ export async function POST(req: Request) {
     const accessToken = signSession({
       id: String(user.id),
       role: user.role,
-      name: user.name,
-      phone: user.phone,
+      name: user.name ?? "",
+      phone: user.phone ?? "",
       my_ref_code: user.my_ref_code,
       iat: Date.now(),
     });
@@ -172,8 +172,8 @@ export async function POST(req: Request) {
       user: {
         id: user.id,
         role: user.role,
-        name: user.name,
-        phone: user.phone,
+        name: user.name ?? "",
+        phone: user.phone ?? "",
         my_ref_code: user.my_ref_code,
         is_active: user.is_active,
       },

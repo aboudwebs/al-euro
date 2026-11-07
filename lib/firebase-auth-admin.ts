@@ -37,7 +37,7 @@ export async function verifyFirebaseIdentityToken(idToken: string): Promise<Veri
     throw new Error("يجب توثيق رقم الهاتف قبل متابعة تسجيل الدخول");
   }
 
-  const normalizedProvider = provider === "google.com" || provider === "apple.com" || provider === "phone"
+  const normalizedProvider = provider === "google.com" || provider === "apple.com" || provider === "phone" || provider === "password"
     ? provider
     : "";
   if (!normalizedProvider) throw new Error("طريقة تسجيل الدخول غير مدعومة");

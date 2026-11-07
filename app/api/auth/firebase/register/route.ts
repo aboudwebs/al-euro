@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { signSession, safeEqual } from "@/lib/session";
+import { signSession, safeEqual, hashPassword } from "@/lib/session";
 import { verifyFirebaseIdentityToken } from "@/lib/firebase-auth-admin";
 import { notifyUser } from "@/lib/push";
 
@@ -109,7 +109,7 @@ export async function POST(req: Request) {
         role,
         name,
         phone,
-        password_hash: null,
+        password_hash: hashPassword(crypto.randomBytes(32).toString("base64url")),
         license: role === "workshop" ? (license || null) : null,
         license_verification_status: role === "workshop" && !license ? "pending" : null,
         city: city || null,

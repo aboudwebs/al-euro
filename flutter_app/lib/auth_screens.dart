@@ -405,6 +405,12 @@ class _EuroAuthScreenState extends State<EuroAuthScreen> {
                       const SizedBox(height: 8),
                       const Text('اختر نوع الحساب، ثم أكمل بيانات التسجيل.', style: TextStyle(color: _muted)),
                       const SizedBox(height: 16),
+                      if (FirebaseAuth.instance.currentUser == null) ...[
+                        field(email, 'البريد الإلكتروني', keyboard: TextInputType.emailAddress),
+                        const SizedBox(height: 10),
+                        field(password, 'كلمة المرور (6 أحرف على الأقل)', secret: true),
+                        const SizedBox(height: 14),
+                      ],
                       SegmentedButton<String>(
                         segments: const [
                           ButtonSegment(value: 'workshop', label: Text('ورشة')),
@@ -430,11 +436,13 @@ class _EuroAuthScreenState extends State<EuroAuthScreen> {
                         field(spec, 'اختصاص الورشة'),
                       ],
                       const SizedBox(height: 16),
-                      actionButton('متابعة عبر البريد والتحقق بالهاتف', emailRegister, outlined: true),
-                      const SizedBox(height: 8),
-                      actionButton('إنشاء عبر Google', () => socialLogin('google.com'), outlined: true),
-                      const SizedBox(height: 8),
-                      actionButton('إنشاء عبر Apple', () => socialLogin('apple.com'), outlined: true),
+                      if (FirebaseAuth.instance.currentUser == null) ...[
+                        actionButton('متابعة عبر البريد والتحقق بالهاتف', emailRegister, outlined: true),
+                        const SizedBox(height: 8),
+                        actionButton('إنشاء عبر Google', () => socialLogin('google.com'), outlined: true),
+                        const SizedBox(height: 8),
+                        actionButton('إنشاء عبر Apple', () => socialLogin('apple.com'), outlined: true),
+                      ],
                       if (FirebaseAuth.instance.currentUser?.phoneNumber != null) ...[
                         const SizedBox(height: 14),
                         actionButton('تأكيد وإنشاء الحساب', completeRegistration),

@@ -537,7 +537,7 @@ class _GuestCatalogState extends State<GuestCatalog> {
                         child: ListTile(
                           title: Text('${part['name'] ?? 'قطعة'}'),
                           subtitle: Text('${part['brand'] ?? ''} · OEM ${part['pn'] ?? '—'}'),
-                          trailing: Text('\${part['price'] ?? 0} \$'),
+                          trailing: Text('${part['price'] ?? 0} \$'),
                         ),
                       )),
                     ],

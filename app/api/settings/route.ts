@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/session";
+import { requireUser } from "@/lib/account-api";
 import { reply } from "@/lib/account-api";
 import { getStableInvoiceRate } from "@/lib/syr-rates";
 
@@ -6,7 +6,8 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    if (!await getSession()) return reply({ error: "يرجى تسجيل الدخول" }, 401);
+    const auth = await requireUser();
+    if (!auth.ok) return auth.response;
     const live = await getStableInvoiceRate();
     if (!live) {
       return reply({

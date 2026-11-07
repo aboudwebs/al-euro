@@ -100,7 +100,8 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { mode = "login", role, name, phone, password, license, manualVerification, city, spec, refCode, refSignature, client, otpCode, otpToken } = body ?? {};
+    const { mode = "login", role: requestedRole, name, phone, password, license, manualVerification, city, spec, refCode, refSignature, client, otpCode, otpToken } = body ?? {};
+    let role = requestedRole;
     const isMobileClient = client === "mobile";
 
     const allowedRoles = mode === "login" ? (isMobileClient ? ["workshop", "marketer"] : ["workshop", "marketer", "admin", "worker"]) : ["workshop", "marketer"];
@@ -124,7 +125,10 @@ export async function POST(req: Request) {
       return json({ ok: true, otpToken: tokenPayload, message: "تم إرسال رمز التحقق إلى واتساب بنجاح" });
     }
 
-    if (!["login", "register"].includes(mode) || !allowedRoles.includes(role)) {
+    const roleIsValid = mode === "login" && isMobileClient && !role
+      ? true
+      : allowedRoles.includes(role);
+    if (!["login", "register"].includes(mode) || !roleIsValid) {
       return json({ error: "نوع العملية أو الحساب غير صالح" }, 400);
     }
     if (!(role === "worker" ? body.identifier : phone) || !password || String(password).length < 4) {
@@ -136,14 +140,19 @@ export async function POST(req: Request) {
     if (role === "worker" && !/^[0-9]{8,10}$/.test(cleanPhone)) {
       return json({ error: "معرّف الموظف يجب أن يتكون من 8 إلى 10 أرقام" }, 400);
     }
-    const { data: existingUser, error: findError } = await db
-      .from("users")
+    let userLookup = db.from("users")
       .select(`${USER_FIELDS}, password_hash`)
-      .eq("phone", cleanPhone)
-      .eq("role", role)
-      .maybeSingle();
+      .eq("phone", cleanPhone);
+    if (role) userLookup = userLookup.eq("role", role);
+    else userLookup = userLookup.in("role", ["workshop", "marketer"]);
+    const { data: matchedUsers, error: findError } = await userLookup.limit(2);
 
     if (findError) return serverError("lookup", findError, "خطأ في الاتصال بقاعدة البيانات");
+    if (!role && (matchedUsers?.length ?? 0) > 1) {
+      return json({ error: "يوجد أكثر من حساب مرتبط بهذا الرقم. تواصل مع الإدارة لتحديد الحساب." }, 409);
+    }
+    const existingUser = matchedUsers?.[0] ?? null;
+    if (!role && existingUser) role = existingUser.role;
 
     if (mode === "login") {
       if (!existingUser) return json({ error: role === "worker" ? "معرّف الموظف أو كلمة المرور غير صحيح" : "لا يوجد حساب مسجل بهذا الرقم ونوع الحساب." }, 404);

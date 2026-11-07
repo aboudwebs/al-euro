@@ -67,17 +67,24 @@ class _GateState extends State<Gate> {
   }
 
   Future<void> restore() async {
-    final t = await secure.read(key: 'token');
-    final u = await secure.read(key: 'user');
-    if (t != null && u != null) {
-      try {
+    try {
+      final t = await secure.read(key: 'token');
+      final u = await secure.read(key: 'user');
+      if (t != null && u != null) {
         token = t;
         user = Map<String, dynamic>.from(jsonDecode(u));
-      } catch (_) {
-        await secure.deleteAll();
       }
+    } catch (_) {
+      token = null;
+      user = null;
+      try {
+        await secure.deleteAll();
+      } catch (_) {
+        // Storage may be unavailable in a test environment or during OS recovery.
+      }
+    } finally {
+      if (mounted) setState(() => loading = false);
     }
-    if (mounted) setState(() => loading = false);
   }
 
   Future<void> login(String value, Map<String, dynamic> account) async {

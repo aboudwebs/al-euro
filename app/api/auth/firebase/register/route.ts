@@ -40,7 +40,114 @@ export async function POST(req: Request) {
     if (!idToken || idToken.length > 12_000) return reply({ error: "رمز تسجيل الدخول غير صالح" }, 400);
 
     const verifiedPhone = typeof body?.phone === "string" ? body.phone.trim() : "";
-    if (!verifiedPhone || !verifyRegistrationOtp(verifiedPhone, body?.otpCode, body?.otpToken)) {
+
+    // Google / Apple / email registration creates a usable account first. Phone verification
+    // is deliberately deferred until checkout; no email-based account linking is performed.
+    if (!verifiedPhone) {
+      let identity;
+      try {
+        identity = await verifyFirebaseIdentityToken(idToken);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "";
+        return reply({ error: message || "تعذر التحقق من هوية Firebase" }, 401);
+      }
+
+      const role = body?.role;
+      if (role !== "workshop" && role !== "marketer") {
+        return reply({ error: "اختر نوع الحساب: ورشة أو مسوّق" }, 400);
+      }
+
+      const db = getSupabaseAdmin();
+      const { data: linked, error: linkedError } = await db.from("user_auth_identities")
+        .select("user_id").eq("provider", identity.provider).eq("provider_uid", identity.uid).maybeSingle();
+      if (linkedError) {
+        console.error("[api/auth/firebase/register] identity lookup:", linkedError);
+        return reply({ error: "تعذر التحقق من هوية الحساب" }, 503);
+      }
+      if (linked) {
+        const { data: existingUser, error } = await db.from("users")
+          .select("id, role, name, phone, my_ref_code, is_active").eq("id", linked.user_id).maybeSingle();
+        if (error || !existingUser) return reply({ error: "حساب EURO المرتبط غير موجود" }, 404);
+        if (!existingUser.is_active) return reply({ pendingApproval: true, message: "حسابك قيد المراجعة من قِبل الإدارة." }, 403);
+        const accessToken = signSession({
+          id: String(existingUser.id), role: existingUser.role, name: existingUser.name ?? "",
+          phone: existingUser.phone ?? "", my_ref_code: existingUser.my_ref_code, iat: Date.now(),
+        });
+        return reply({ ok: true, accessToken, user: existingUser, phoneVerificationRequired: true });
+      }
+
+      const refCode = typeof body?.refCode === "string" ? body.refCode.trim().slice(0, 80) : "";
+      const refSignature = typeof body?.refSignature === "string" ? body.refSignature.trim() : "";
+      let validatedReferralCode: string | null = null;
+      if (role === "workshop" && refCode) {
+        if (refSignature) {
+          const expected = crypto.createHmac("sha256", process.env.AUTH_SECRET || "")
+            .update(`workshop-referral:${refCode}`).digest("hex");
+          if (!safeEqual(expected, refSignature)) return reply({ error: "كود الإحالة غير صالح" }, 400);
+        }
+        const { data: referrer, error } = await db.from("users").select("id")
+          .eq("role", "marketer").eq("my_ref_code", refCode).eq("is_active", true).maybeSingle();
+        if (error || !referrer) return reply({ error: "كود الإحالة غير صحيح أو حساب المسوّق غير مفعّل" }, 400);
+        validatedReferralCode = refCode;
+      } else if (role === "workshop" && refSignature) {
+        return reply({ error: "رابط الإحالة غير مكتمل؛ افتح رابط المسوّق من جديد" }, 400);
+      }
+
+      const optionalName = typeof body?.name === "string" ? body.name.trim() : "";
+      const optionalCity = typeof body?.city === "string" ? body.city.trim() : "";
+      const optionalSpec = typeof body?.spec === "string" ? body.spec.trim() : "";
+      const optionalLicense = typeof body?.license === "string" ? body.license.trim() : "";
+      const specs = optionalSpec ? optionalSpec.split(/[,،]/).map((item: string) => item.trim()).filter(Boolean) : [];
+      let created: any = null;
+      let createError: any = null;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const myRefCode = role === "marketer" ? `MK-${crypto.randomBytes(3).toString("hex").toUpperCase()}` : null;
+        const result = await db.from("users").insert({
+          role,
+          name: optionalName.length >= 2 ? optionalName : null,
+          phone: null,
+          password_hash: null,
+          license: role === "workshop" ? (optionalLicense || null) : null,
+          license_verification_status: role === "workshop" && !optionalLicense ? "pending" : null,
+          city: optionalCity || null,
+          specs,
+          my_ref_code: myRefCode,
+          referred_by_code: validatedReferralCode,
+          tier: role === "workshop" ? "Standard" : undefined,
+          is_active: role !== "workshop",
+          phone_verified_at: null,
+          phone_verification_required: true,
+        }).select("id, role, name, phone, my_ref_code, is_active, tier, city, license, license_verification_status, specs, created_at").single();
+        if (!result.error) { created = result.data; createError = null; break; }
+        createError = result.error;
+        if (!(result.error.code === "23505" && result.error.message?.includes("my_ref_code"))) break;
+      }
+      if (createError || !created) {
+        console.error("[api/auth/firebase/register] incomplete user insert:", createError);
+        return reply({ error: "تعذر إنشاء الحساب" }, 500);
+      }
+
+      const { error: identityError } = await db.from("user_auth_identities").insert({
+        user_id: created.id, provider: identity.provider, provider_uid: identity.uid,
+        email: identity.email, email_verified: identity.emailVerified,
+      });
+      if (identityError) {
+        console.error("[api/auth/firebase/register] identity insert:", identityError);
+        await db.from("users").delete().eq("id", created.id);
+        return reply({ error: identityError.code === "23505" ? "طريقة الدخول مرتبطة بحساب آخر." : "تعذر حفظ هوية تسجيل الدخول" }, identityError.code === "23505" ? 409 : 500);
+      }
+
+      if (role === "workshop") {
+        return reply({ ok: true, pendingApproval: true, message: "تم إنشاء الحساب وإرسال طلب الورشة للمراجعة. أكمل توثيق الهاتف عند أول شراء." });
+      }
+      const accessToken = signSession({
+        id: String(created.id), role: created.role, name: created.name ?? "",
+        phone: created.phone ?? "", my_ref_code: created.my_ref_code, iat: Date.now(),
+      });
+      return reply({ ok: true, accessToken, user: created, phoneVerificationRequired: true });
+    }
+
+    if (!verifyRegistrationOtp(verifiedPhone, body?.otpCode, body?.otpToken)) {
       return reply({ error: "رمز واتساب غير صحيح أو انتهت صلاحيته. اطلب رمزاً جديداً." }, 400);
     }
 

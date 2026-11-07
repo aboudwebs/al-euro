@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { getSession } from "@/lib/session";
 
-/** Shared helpers of the signed-in customer endpoints under /api/account/* and /api/settings. */
+/** Shared helpers of the signed-in customer endpoints under /api/account/* and /api/settings/. */
 
 export const NO_STORE = { "Cache-Control": "no-store" };
 
@@ -15,22 +15,19 @@ export const isUuid = (v: unknown): v is string => typeof v === "string" && UUID
 
 type PgError = { code?: string; message?: string } | null | undefined;
 
-/** 42703 = the column does not exist (the 2026-10 SQL file has not been run yet). */
 export function isUndefinedColumn(err: PgError): boolean {
-  return err?.code === "42703" || (err?.code === "PGRST204");
+  return err?.code === "42703" || err?.code === "PGRST204";
 }
 
-/** 42P01 / PGRST205 = the table does not exist (the 2026-10 SQL file has not been run yet). */
 export function isMissingTable(err: PgError): boolean {
   return err?.code === "42P01" || err?.code === "PGRST205" || err?.code === "42883" || err?.code === "PGRST202";
 }
 
 const NOT_READY = "هذه الميزة غير مفعّلة بعد على الخادم (تحتاج تحديث قاعدة البيانات). تواصل مع الإدارة.";
 
-/** The standard reply for a failed query: a clear message when the SQL update is missing, a logged generic 500 otherwise. */
 export function dbError(context: string, err: PgError, fallback = "حدث خطأ غير متوقع في الخادم") {
   if (isMissingTable(err) || isUndefinedColumn(err)) {
-    console.error(`[api/account] ${context}: run supabase/updates_2026_10.sql`, err);
+    console.error(`[api/account] ${context}: run the required Supabase migration`, err);
     return reply({ error: NOT_READY, code: "not_ready" }, 503);
   }
   console.error(`[api/account] ${context}:`, err);
@@ -47,12 +44,12 @@ export type AccountUser = {
   is_active: boolean;
   password_hash: string | null;
   debt_balance: number | null;
+  debt_limit: number | null;
+  cashback_balance: number | null;
+  phone_verification_required?: boolean;
 };
 
-/**
- * The signed-in customer, re-read from the database (the signed token alone is not enough: the account must still
- * exist and be active). Admin accounts are not served by these endpoints.
- */
+/** Re-reads the customer and enforces any pending phone-verification requirement server-side. */
 export async function requireUser(): Promise<{ ok: true; user: AccountUser } | { ok: false; response: NextResponse }> {
   let session: Awaited<ReturnType<typeof getSession>>;
   try {
@@ -63,16 +60,27 @@ export async function requireUser(): Promise<{ ok: true; user: AccountUser } | {
   if (!session) return { ok: false, response: reply({ error: "يرجى تسجيل الدخول أولاً" }, 401) };
   if (!isUuid(session.id)) return { ok: false, response: reply({ error: "الجلسة غير صالحة، سجّل الدخول مجدداً" }, 401) };
 
-  const { data, error } = await getSupabaseAdmin()
-    .from("users")
-    .select("id, role, name, phone, city, license, is_active, password_hash, debt_balance")
+  const db = getSupabaseAdmin();
+  const fields = "id, role, name, phone, city, license, is_active, password_hash, debt_balance, debt_limit, cashback_balance";
+  let { data, error } = await db.from("users")
+    .select(`${fields}, phone_verification_required`)
     .eq("id", session.id)
     .maybeSingle();
+
+  // Backward compatibility during deployment: old database schemas have no verification column yet.
+  if (isUndefinedColumn(error)) {
+    const fallback = await db.from("users").select(fields).eq("id", session.id).maybeSingle();
+    data = fallback.data;
+    error = fallback.error;
+  }
   if (error) {
     console.error("[api/account] user lookup:", error);
     return { ok: false, response: reply({ error: "تعذر التحقق من الحساب" }, 500) };
   }
   if (!data || !data.is_active) return { ok: false, response: reply({ error: "الحساب غير مفعّل" }, 403) };
+  if (data.phone_verification_required === true) {
+    return { ok: false, response: reply({ error: "يجب توثيق رقم الهاتف قبل استخدام خدمات الحساب" }, 403) };
+  }
   if (data.role !== "workshop" && data.role !== "marketer") {
     return { ok: false, response: reply({ error: "هذه الخدمة لحسابات الورشات والمسوّقين فقط" }, 403) };
   }
@@ -82,7 +90,7 @@ export async function requireUser(): Promise<{ ok: true; user: AccountUser } | {
 export async function readBody(req: Request): Promise<Record<string, unknown> | null> {
   try {
     const body = await req.json();
-    return body && typeof body === "object" && !Array.isArray(body) ? (body as Record<string, unknown>) : null;
+    return body && typeof body === "object" && !Array.isArray(body) ? body as Record<string, unknown> : null;
   } catch {
     return null;
   }

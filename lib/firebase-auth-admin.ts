@@ -29,7 +29,11 @@ export type VerifiedFirebaseIdentity = {
 
 export async function verifyFirebaseIdentityToken(idToken: string, whatsappVerifiedPhone = ""): Promise<VerifiedFirebaseIdentity> {
   const decoded = await firebaseAuthAdmin().verifyIdToken(idToken, true);
-  const firebasePhone = typeof decoded.phone_number === "string" ? decoded.phone_number : "";\n  const phone = firebasePhone || whatsappVerifiedPhone;\n  if (firebasePhone && whatsappVerifiedPhone && firebasePhone.replace(/[^0-9]/g, "") !== whatsappVerifiedPhone.replace(/[^0-9]/g, "")) {\n    throw new Error("رقم الهاتف في هوية Firebase لا يطابق الرقم الموثّق عبر واتساب");\n  }
+  const firebasePhone = typeof decoded.phone_number === "string" ? decoded.phone_number : "";
+  const phone = firebasePhone || whatsappVerifiedPhone;
+  if (firebasePhone && whatsappVerifiedPhone && firebasePhone.replace(/[^0-9]/g, "") !== whatsappVerifiedPhone.replace(/[^0-9]/g, "")) {
+    throw new Error("رقم الهاتف في هوية Firebase لا يطابق الرقم الموثّق عبر واتساب");
+  }
   const provider = typeof decoded.firebase?.sign_in_provider === "string"
     ? decoded.firebase.sign_in_provider
     : "";

@@ -20,6 +20,52 @@ jobs:
       - name: Generate Android platform project
         working-directory: flutter_app
         run: flutter create --platforms=android --org com.eurocars .
+      - name: Configure Firebase Auth
+        env:
+          FIREBASE_ANDROID_CONFIG_B64: ${{ secrets.FIREBASE_ANDROID_CONFIG_B64 }}
+        run: |
+          if [ -z "$FIREBASE_ANDROID_CONFIG_B64" ]; then
+            echo "EURO_FIREBASE_ENABLED=false" >> "$GITHUB_ENV"
+            echo "Firebase configuration secret is not set; legacy phone login remains buildable."
+            exit 0
+          fi
+          mkdir -p flutter_app/android/app
+          printf '%s' "$FIREBASE_ANDROID_CONFIG_B64" | base64 --decode > flutter_app/android/app/google-services.json
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          settings_kts = Path("flutter_app/android/settings.gradle.kts")
+          settings_groovy = Path("flutter_app/android/settings.gradle")
+          app_kts = Path("flutter_app/android/app/build.gradle.kts")
+          app_groovy = Path("flutter_app/android/app/build.gradle")
+
+          if settings_kts.exists():
+              p = settings_kts
+              text = p.read_text()
+              if "com.google.gms.google-services" not in text:
+                  text, count = re.subn(r"plugins\\s*\\{", 'plugins {\\n    id("com.google.gms.google-services") version "4.4.4" apply false', text, count=1)
+                  if not count: raise SystemExit("Could not locate Android Gradle plugins block")
+                  p.write_text(text)
+          elif settings_groovy.exists():
+              p = settings_groovy
+              text = p.read_text()
+              if "com.google.gms.google-services" not in text:
+                  text, count = re.subn(r"plugins\\s*\\{", "plugins {\\n    id 'com.google.gms.google-services' version '4.4.4' apply false", text, count=1)
+                  if not count: raise SystemExit("Could not locate Android Gradle plugins block")
+                  p.write_text(text)
+          else:
+              raise SystemExit("Generated Android Gradle settings file not found")
+
+          p = app_kts if app_kts.exists() else app_groovy
+          text = p.read_text()
+          if "com.google.gms.google-services" not in text:
+              plugin = '    id("com.google.gms.google-services")' if p.suffix == ".kts" else "    id 'com.google.gms.google-services'"
+              text, count = re.subn(r"plugins\\s*\\{", lambda m: m.group(0) + "\\n" + plugin, text, count=1)
+              if not count: raise SystemExit("Could not locate app Gradle plugins block")
+              p.write_text(text)
+          PY
+          echo "EURO_FIREBASE_ENABLED=true" >> "$GITHUB_ENV"
       - name: Resolve packages
         working-directory: flutter_app
         run: flutter pub get
@@ -31,7 +77,7 @@ jobs:
         run: flutter test --no-pub
       - name: Build APK for ARM32 and ARM64
         working-directory: flutter_app
-        run: flutter build apk --release --target-platform android-arm,android-arm64
+        run: flutter build apk --release --target-platform android-arm,android-arm64 --dart-define=EURO_FIREBASE_ENABLED=$EURO_FIREBASE_ENABLED
       - name: Verify APK archive and Android signature
         run: |
           APK=flutter_app/build/app/outputs/flutter-apk/app-release.apk

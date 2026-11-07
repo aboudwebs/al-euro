@@ -6,7 +6,7 @@ export function verifyRegistrationOtp(phone: unknown, code: unknown, token: unkn
   const cleanPhone = typeof phone === "string" ? phone.trim() : "";
   const submittedCode = typeof code === "string" ? code.trim() : "";
   const encodedToken = typeof token === "string" ? token : "";
-  if (!cleanPhone || !/^\\d{6}$/.test(submittedCode) || !encodedToken || encodedToken.length > 2048) return false;
+  if (!cleanPhone || !/^\d{6}$/.test(submittedCode) || !encodedToken || encodedToken.length > 2048) return false;
 
   try {
     const decoded = JSON.parse(Buffer.from(encodedToken, "base64").toString("utf-8"));

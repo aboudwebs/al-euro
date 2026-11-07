@@ -377,8 +377,8 @@ export async function PUT(req: Request) {
     await setSession({
       id: String(user.id),
       role: user.role,
-      name: user.name,
-      phone: user.phone,
+      name: user.name ?? "",
+      phone: user.phone ?? "",
       my_ref_code: user.my_ref_code,
     });
     return json({ ok: true, user });

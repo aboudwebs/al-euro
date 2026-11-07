@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { signSession } from "@/lib/session";
-import { verifyFirebaseIdentityToken } from "@/lib/firebase-auth-admin";\nimport { verifyRegistrationOtp } from "@/lib/registration-otp";
+import { verifyFirebaseIdentityToken } from "@/lib/firebase-auth-admin";
+import { verifyRegistrationOtp } from "@/lib/registration-otp";
 
 export const dynamic = "force-dynamic";
 
@@ -38,9 +39,14 @@ export async function POST(req: Request) {
     const idToken = typeof body?.idToken === "string" ? body.idToken : "";
     if (!idToken || idToken.length > 12_000) return reply({ error: "رمز تسجيل الدخول غير صالح" }, 400);
 
+    const phone = typeof body?.phone === "string" ? body.phone.trim() : "";
+    if (!phone || !verifyRegistrationOtp(phone, body?.otpCode, body?.otpToken)) {
+      return reply({ error: "رمز واتساب غير صحيح أو انتهت صلاحيته. اطلب رمزاً جديداً." }, 400);
+    }
+
     let identity;
     try {
-      identity = await verifyFirebaseIdentityToken(idToken);
+      identity = await verifyFirebaseIdentityToken(idToken, phone);
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
       if (message.includes("غير مدعومة") || message.includes("توثيق رقم الهاتف")) {

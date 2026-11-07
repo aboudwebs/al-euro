@@ -8,10 +8,8 @@ const _apiBase = String.fromEnvironment(
   defaultValue: 'https://control-panel-euro-cars.onrender.com',
 );
 const _firebaseEnabled = bool.fromEnvironment('EURO_FIREBASE_ENABLED', defaultValue: false);
-const _bg = Color(0xFF07090E);
 const _panel = Color(0xFF11151E);
 const _border = Color(0xFF293141);
-const _blue = Color(0xFF0A84FF);
 const _red = Color(0xFF8D2637);
 const _muted = Color(0xFF9AA6B7);
 
@@ -39,6 +37,7 @@ class _EuroAuthScreenState extends State<EuroAuthScreen> {
   final license = TextEditingController();
   final city = TextEditingController();
   final spec = TextEditingController();
+  final refCode = TextEditingController();
   final otp = TextEditingController();
 
   User? get currentFirebaseUser => _firebaseEnabled ? FirebaseAuth.instance.currentUser : null;
@@ -284,6 +283,7 @@ class _EuroAuthScreenState extends State<EuroAuthScreen> {
         'manualVerification': manualVerification,
         'city': city.text.trim(),
         'spec': spec.text.trim(),
+        'refCode': refCode.text.trim(),
       });
       if (data['pendingApproval'] == true) {
         await FirebaseAuth.instance.signOut();
@@ -314,6 +314,7 @@ class _EuroAuthScreenState extends State<EuroAuthScreen> {
     license.dispose();
     city.dispose();
     spec.dispose();
+    refCode.dispose();
     otp.dispose();
     super.dispose();
   }
@@ -430,6 +431,8 @@ class _EuroAuthScreenState extends State<EuroAuthScreen> {
                         field(city, 'المدينة'),
                         const SizedBox(height: 8),
                         field(spec, 'اختصاص الورشة'),
+                        const SizedBox(height: 8),
+                        field(refCode, 'كود إحالة المسوّق (اختياري)'),
                       ],
                       const SizedBox(height: 16),
                       if (currentFirebaseUser == null) ...[

@@ -62,15 +62,18 @@ export async function requireUser(): Promise<{ ok: true; user: AccountUser } | {
 
   const db = getSupabaseAdmin();
   const fields = "id, role, name, phone, city, license, is_active, password_hash, debt_balance, debt_limit, cashback_balance";
-  let { data, error } = await db.from("users")
+  const initialLookup = await db.from("users")
     .select(`${fields}, phone_verification_required`)
     .eq("id", session.id)
     .maybeSingle();
+  type AccountLookup = AccountUser & { phone_verification_required?: boolean };
+  let data: AccountLookup | null = initialLookup.data as AccountLookup | null;
+  let error = initialLookup.error;
 
   // Backward compatibility during deployment: old database schemas have no verification column yet.
   if (isUndefinedColumn(error)) {
     const fallback = await db.from("users").select(fields).eq("id", session.id).maybeSingle();
-    data = fallback.data;
+    data = fallback.data as AccountLookup | null;
     error = fallback.error;
   }
   if (error) {

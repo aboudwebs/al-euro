@@ -512,7 +512,7 @@ class _GuestCatalogState extends State<GuestCatalog> {
   @override
   Widget build(BuildContext context) {
     final visible = parts.where((part) =>
-      '${part['name']} ${part['brand']} ${part['pn']} ${part['model']}'.toLowerCase().contains(search.toLowerCase())
+      '${part['name']} \\${part['brand']} \\${part['pn']} \\${part['model']}'.toLowerCase().contains(search.toLowerCase())
     ).toList();
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -536,8 +536,8 @@ class _GuestCatalogState extends State<GuestCatalog> {
                         color: _panel,
                         child: ListTile(
                           title: Text('${part['name'] ?? 'قطعة'}'),
-                          subtitle: Text('${part['brand'] ?? ''} · OEM ${part['pn'] ?? '—'}'),
-                          trailing: Text('${part['price'] ?? 0} $'),
+                          subtitle: Text('${part['brand'] ?? ''} · OEM \\${part['pn'] ?? '—'}'),
+                          trailing: Text('${part['price'] ?? 0} \\$'),
                         ),
                       )),
                     ],

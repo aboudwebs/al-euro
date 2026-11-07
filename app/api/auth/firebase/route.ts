@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { signSession } from "@/lib/session";
-import { verifyFirebaseIdentityToken } from "@/lib/firebase-auth-admin";
+import { verifyFirebaseIdentityToken } from "@/lib/firebase-auth-admin";\nimport { verifyRegistrationOtp } from "@/lib/registration-otp";
 
 export const dynamic = "force-dynamic";
 

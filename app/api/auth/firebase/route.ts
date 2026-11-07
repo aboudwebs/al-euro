@@ -12,7 +12,19 @@ function reply(body: unknown, status = 200) {
 }
 
 function normalizedPhone(value: unknown): string {
-  return typeof value === "string" ? value.replace(/[^0-9]/g, "") : "";
+  const digits = typeof value === "string" ? value.replace(/[^0-9]/g, "") : "";
+  // EURO's existing Syrian records may use local 09... or international 9639... notation.
+  if (digits.startsWith("963")) return digits.slice(3);
+  if (digits.startsWith("0")) return digits.slice(1);
+  return digits;
+}
+
+function phoneLookupCandidates(value: string): string[] {
+  const digits = value.replace(/[^0-9]/g, "");
+  const candidates = new Set([digits, `+${digits}`]);
+  if (digits.startsWith("963")) candidates.add(`0${digits.slice(3)}`);
+  if (digits.startsWith("0")) candidates.add(`963${digits.slice(1)}`);
+  return [...candidates];
 }
 
 /**
@@ -62,7 +74,7 @@ export async function POST(req: Request) {
       const { data: matches, error: userLookupError } = await db
         .from("users")
         .select("id, role, name, phone, my_ref_code, is_active")
-        .eq("phone", phone)
+        .in("phone", phoneLookupCandidates(identity.phone))
         .in("role", ["workshop", "marketer"])
         .limit(2);
 

@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'auth_screens.dart';
 
 const apiBase = String.fromEnvironment('EURO_API_URL', defaultValue: 'https://control-panel-euro-cars.onrender.com');
 const bg = Color(0xFF07090E);
@@ -14,7 +16,13 @@ const red = Color(0xFF8D2637);
 const muted = Color(0xFF9AA6B7);
 const secure = FlutterSecureStorage();
 
-void main() => runApp(const EuroApp());
+const firebaseEnabled = bool.fromEnvironment('EURO_FIREBASE_ENABLED', defaultValue: false);
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  if (firebaseEnabled) await Firebase.initializeApp();
+  runApp(const EuroApp());
+}
 
 class EuroApp extends StatelessWidget {
   const EuroApp({super.key});
@@ -92,140 +100,9 @@ class _GateState extends State<Gate> {
   @override
   Widget build(BuildContext context) {
     if (loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    if (token == null || user == null) return Login(onLogin: login);
+    if (token == null || user == null) return EuroAuthScreen(onLogin: login);
     return Shop(token: token!, user: user!, onLogout: logout);
   }
-}
-
-class Login extends StatefulWidget {
-  final Future<void> Function(String, Map<String, dynamic>) onLogin;
-  const Login({super.key, required this.onLogin});
-  @override
-  State<Login> createState() => _LoginState();
-}
-
-class _LoginState extends State<Login> {
-  final phone = TextEditingController();
-  final pass = TextEditingController();
-  String role = 'workshop';
-  bool busy = false;
-  String? error;
-
-  Future<void> submit() async {
-    if (phone.text.trim().isEmpty || pass.text.isEmpty) {
-      setState(() => error = 'أدخل رقم الموبايل وكلمة المرور');
-      return;
-    }
-    setState(() {
-      busy = true;
-      error = null;
-    });
-    try {
-      final response = await http
-          .post(
-            Uri.parse('$apiBase/api/auth'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'mode': 'login',
-              'client': 'mobile',
-              'role': role,
-              'phone': phone.text.trim(),
-              'password': pass.text,
-            }),
-          )
-          .timeout(const Duration(seconds: 30));
-      final data = Map<String, dynamic>.from(jsonDecode(response.body));
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw Exception(data['error'] ?? 'تعذر تسجيل الدخول');
-      }
-      if (data['accessToken'] == null || data['user'] == null) {
-        throw Exception('الخادم لم يرجع جلسة تطبيق صالحة');
-      }
-      await widget.onLogin(
-        data['accessToken'].toString(),
-        Map<String, dynamic>.from(data['user']),
-      );
-    } catch (e) {
-      if (mounted) setState(() => error = e.toString().replaceFirst('Exception: ', ''));
-    } finally {
-      if (mounted) setState(() => busy = false);
-    }
-  }
-
-  @override
-  void dispose() {
-    phone.dispose();
-    pass.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: Scaffold(
-          body: SafeArea(
-            child: Center(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 440),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const Icon(Icons.directions_car_filled_rounded, color: red, size: 60),
-                      const SizedBox(height: 12),
-                      const Center(child: Text('EURO CARS', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: 2))),
-                      const SizedBox(height: 6),
-                      const Center(child: Text('منصة قطع الصيانة للورشات', style: TextStyle(color: muted))),
-                      const SizedBox(height: 32),
-                      SegmentedButton<String>(
-                        segments: const [
-                          ButtonSegment(value: 'workshop', label: Text('حساب ورشة')),
-                          ButtonSegment(value: 'marketer', label: Text('حساب مسوّق')),
-                        ],
-                        selected: {role},
-                        onSelectionChanged: (value) => setState(() => role = value.first),
-                      ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: phone,
-                        keyboardType: TextInputType.phone,
-                        decoration: const InputDecoration(labelText: 'رقم الموبايل', prefixIcon: Icon(Icons.phone)),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: pass,
-                        obscureText: true,
-                        onSubmitted: (_) => submit(),
-                        decoration: const InputDecoration(labelText: 'كلمة المرور', prefixIcon: Icon(Icons.lock_outline)),
-                      ),
-                      if (error != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 12),
-                          child: Text(error!, style: const TextStyle(color: Colors.redAccent)),
-                        ),
-                      const SizedBox(height: 18),
-                      FilledButton(
-                        onPressed: busy ? null : submit,
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Text(busy ? 'جاري الدخول...' : 'تسجيل الدخول'),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'يلزم حساب مسجّل ومفعّل من إدارة EURO CARS.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: muted, fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
 }
 
 class Shop extends StatefulWidget {

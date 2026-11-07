@@ -22,7 +22,7 @@ import { notifyUser } from "@/lib/push";
 export const dynamic = "force-dynamic";
 
 // Temporary public-demo switch. Set to true to restore WhatsApp registration OTP.
-const REGISTRATION_OTP_ENABLED = true;
+const REGISTRATION_OTP_ENABLED = false;
 
 const USER_FIELDS = "id, role, name, phone, city, license, license_verification_status, specs, tier, debt_limit, debt_balance, cashback_balance, my_ref_code, is_active, created_at";
 

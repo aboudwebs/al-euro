@@ -73,7 +73,7 @@ jobs:
             echo "Unexpected x86 ABI found in APK" >&2
             exit 1
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: euro-cars-android-apk
           path: mobile/android/app/build/outputs/apk/release/app-release.apk

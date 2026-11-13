@@ -70,6 +70,13 @@ export async function POST(req: Request) {
     p_idempotency_key: idempotencyKey,
   });
   if (error) return dbFail("record payment", error, "تعذر تسجيل التسديد");
+  // Record which administrator entered the payment (the SQL function does not). Best effort: the column comes from the
+  // data-integrity migration, and a missing column must not fail a payment that was already recorded.
+  const { error: actorError } = await db.from("debt_ledger").update({ created_by: guard.admin.id })
+    .eq("workshop_id", body.workshop_id).eq("idempotency_key", idempotencyKey).is("created_by", null);
+  if (actorError && actorError.code !== "42703" && actorError.code !== "PGRST204") {
+    console.error("[api/admin/ledger] actor audit:", actorError);
+  }
   await notifyUser({
     userId: String(body.workshop_id),
     type: "debt_payment",

@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/account-api";
 import { PAY_METHOD } from "@/lib/status";
 import { removeImage, storeImage } from "@/lib/uploads";
 import { getStableInvoiceRate } from "@/lib/syr-rates";
+import { attachReceipt, claimReceipt, releaseReceipt } from "@/lib/receipt-fingerprint";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,12 @@ function reply(body: unknown, status = 200) {
  */
 export async function POST(req: Request) {
   let uploadedPath: string | null = null;
+  // Fingerprint of the receipt image while this request owns it (released again if no order is created).
+  let claimedReceipt: { fingerprint: string; userId: string } | null = null;
+  const giveBackReceipt = async () => {
+    if (claimedReceipt) await releaseReceipt(claimedReceipt.fingerprint, claimedReceipt.userId);
+    claimedReceipt = null;
+  };
   try {
     const auth = await requireUser({ requireVerifiedPhone: true });
     if (!auth.ok) return auth.response;
@@ -232,8 +239,17 @@ export async function POST(req: Request) {
       if (!file || typeof file === "string" || (file as Blob).size === 0) {
         return reply({ error: "يرجى إرفاق إشعار تحويل شام كاش" }, 400);
       }
+      // One receipt, one order: the image's SHA-256 is claimed before anything is stored (see lib/receipt-fingerprint.ts).
+      if (receiptHash) {
+        const claim = await claimReceipt(receiptHash, String(user.id));
+        if (!claim.ok) return reply({ error: claim.message }, claim.status);
+        if (claim.tracked) claimedReceipt = { fingerprint: receiptHash, userId: String(user.id) };
+      }
       const stored = await storeImage(RECEIPT_BUCKET, String(user.id), file);
-      if (!stored.ok) return reply({ error: stored.error }, stored.status);
+      if (!stored.ok) {
+        await giveBackReceipt();
+        return reply({ error: stored.error }, stored.status);
+      }
       receiptPath = stored.path;
       uploadedPath = stored.path;
     }
@@ -261,6 +277,7 @@ export async function POST(req: Request) {
     if (createError || !result) {
       console.error("[api/orders] create RPC:", createError);
       await removeImage(RECEIPT_BUCKET, uploadedPath);
+      await giveBackReceipt();
       const message = createError?.message ?? "تعذر حفظ الطلب، حاول مجدداً";
       const safeMessage = message.includes("مفتاح التأكيد") || message.includes("رصيد الكاش باك")
         || message.includes("الكاش باك") || message.includes("سقف الدين")
@@ -268,6 +285,15 @@ export async function POST(req: Request) {
         : "تعذر حفظ الطلب، حاول مجدداً";
       return reply({ error: safeMessage }, 400);
     }
+
+    // The order exists now: tie the receipt fingerprint to it at once (or give it back for a duplicate answer).
+    if (result.created === false) {
+      await giveBackReceipt();
+    } else if (claimedReceipt) {
+      await attachReceipt(claimedReceipt.fingerprint, claimedReceipt.userId, String(result.orderId));
+      claimedReceipt = null;
+    }
+    uploadedPath = result.created === false ? uploadedPath : null;
 
     const { data: customerSequenceRow, error: customerSequenceError } = await db
       .from("orders")
@@ -277,7 +303,6 @@ export async function POST(req: Request) {
       .maybeSingle();
     if (customerSequenceError) {
       console.error("[api/orders] customer order number lookup:", customerSequenceError);
-      await removeImage(RECEIPT_BUCKET, uploadedPath);
       return reply({ error: "تم حفظ الطلب لكن تعذر تحميل رقمه، حدّث صفحة الطلبات" }, 500);
     }
 
@@ -304,6 +329,7 @@ export async function POST(req: Request) {
   } catch (err) {
     console.error("[api/orders] POST:", err);
     await removeImage(RECEIPT_BUCKET, uploadedPath);
+    await giveBackReceipt();
     return reply({ error: "حدث خطأ غير متوقع في الخادم" }, 500);
   }
 }

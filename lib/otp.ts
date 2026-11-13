@@ -1,6 +1,10 @@
 import crypto from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { getSecret, safeEqual } from "@/lib/session";
+import { hmacHex, timingSafeEqualHex } from "@/lib/keys";
+
+// Sending moved to lib/messaging.ts; re-exported so existing imports keep working.
+export { sendWhatsAppText, whatsappChatId, whatsappConfigured } from "@/lib/messaging";
 
 /**
  * One-time codes for password recovery and phone change.
@@ -20,47 +24,19 @@ export function generateCode(): string {
   return String(crypto.randomInt(100000, 1000000));
 }
 
+/** Keyed hash with a purpose-bound sub-key of AUTH_SECRET (see lib/keys.ts). */
 export function hashCode(purpose: OtpPurpose, userId: string, target: string, code: string): string {
+  return hmacHex("otp-v1", `otp:${purpose}:${userId}:${target}:${code}`);
+}
+
+/** Hash format used before sub-keys existed; codes issued just before a deployment (10 minute TTL) still verify. */
+function legacyHashCode(purpose: OtpPurpose, userId: string, target: string, code: string): string {
   return crypto.createHmac("sha256", getSecret()).update(`otp:${purpose}:${userId}:${target}:${code}`).digest("hex");
 }
 
 export function codeMatches(storedHash: string, purpose: OtpPurpose, userId: string, target: string, code: string): boolean {
-  return safeEqual(storedHash, hashCode(purpose, userId, target, code));
-}
-
-/** Convert Syrian local mobile numbers to Green API's international WhatsApp chat ID format. */
-export function whatsappChatId(phone: string): string {
-  let digits = String(phone).replace(/\D/g, "");
-  if (digits.startsWith("00")) digits = digits.slice(2);
-  if (/^0?9\d{8}$/.test(digits)) digits = `963${digits.replace(/^0/, "")}`;
-  return `${digits}@c.us`;
-}
-
-export function whatsappConfigured(): boolean {
-  return Boolean(process.env.GREEN_API_URL && process.env.GREEN_API_INSTANCE_ID && process.env.GREEN_API_TOKEN);
-}
-
-/** Sends a WhatsApp text through Green API (same environment variables as the registration code). */
-export async function sendWhatsAppText(phone: string, message: string): Promise<boolean> {
-  const apiUrl = process.env.GREEN_API_URL;
-  const instanceId = process.env.GREEN_API_INSTANCE_ID;
-  const token = process.env.GREEN_API_TOKEN;
-  if (!apiUrl || !instanceId || !token) {
-    console.error("[Green-API] Missing environment variables");
-    return false;
-  }
-  try {
-    const res = await fetch(`${apiUrl.replace(/\/+$/, "")}/waInstance${instanceId}/sendMessage/${token}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chatId: whatsappChatId(phone), message }),
-    });
-    const data = await res.json().catch(() => null);
-    return res.ok && Boolean(data?.idMessage);
-  } catch (err) {
-    console.error("[Green-API] Error sending message:", err);
-    return false;
-  }
+  return timingSafeEqualHex(storedHash, hashCode(purpose, userId, target, code)) ||
+    safeEqual(storedHash, legacyHashCode(purpose, userId, target, code));
 }
 
 export function otpMessage(purpose: OtpPurpose, code: string): string {

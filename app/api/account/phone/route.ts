@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { hashPassword, safeEqual, setSession, signSession } from "@/lib/session";
+import { bumpTokenVersion, setSession, verifyPassword } from "@/lib/session";
+import { RULES, rateHit, rateKey, rateReset, tooManyRequests } from "@/lib/rate-limit";
 import { cleanPhone, dbError, readBody, reply, requireUser } from "@/lib/account-api";
 import { consumeOtp, dropOtp, issueOtp, otpMessage, sendWhatsAppText, whatsappConfigured } from "@/lib/otp";
 
@@ -26,9 +27,15 @@ export async function POST(req: Request) {
 
   if (body.mode === "request") {
     const current = typeof body.currentPassword === "string" ? body.currentPassword : "";
-    if (!safeEqual(String(auth.user.password_hash ?? ""), hashPassword(current))) {
-      return reply({ error: "كلمة المرور الحالية غير صحيحة" }, 403);
+    // (The old check compared the stored hash with a freshly salted hash, so it could never match.)
+    const key = rateKey("password-check", auth.user.id);
+    const blocked = await rateHit(key, RULES.loginFailPerAccount, { increment: false });
+    if (!blocked.allowed) return tooManyRequests(blocked.retryAfter);
+    if (!auth.user.password_hash || !verifyPassword(String(auth.user.password_hash), current)) {
+      const after = await rateHit(key, RULES.loginFailPerAccount);
+      return after.allowed ? reply({ error: "كلمة المرور الحالية غير صحيحة" }, 403) : tooManyRequests(after.retryAfter);
     }
+    await rateReset(key);
     if (!whatsappConfigured()) return reply({ error: "خدمة إرسال الرموز غير متاحة حالياً، حاول لاحقاً" }, 503);
 
     const { data: taken, error: takenError } = await db
@@ -62,9 +69,14 @@ export async function POST(req: Request) {
     if (error?.code === "23505") return reply({ error: "هذا الرقم مسجل مسبقاً بنفس نوع الحساب" }, 409);
     if (error || !user) return dbError("phone update", error, "تعذر تغيير الرقم");
 
-    const session = { id: String(user.id), role: user.role, name: user.name, phone: user.phone, my_ref_code: user.my_ref_code };
-    await setSession(session);
-    return reply({ ok: true, user, accessToken: signSession({ ...session, iat: Date.now() }) });
+    // Tokens carry the phone number: every token issued with the old number is revoked, this device gets a new one.
+    try {
+      await bumpTokenVersion(String(user.id));
+    } catch (err) {
+      console.error("[api/account/phone] revoke sessions:", err);
+    }
+    const accessToken = await setSession({ id: String(user.id), role: user.role, name: user.name, phone: user.phone, my_ref_code: user.my_ref_code });
+    return reply({ ok: true, user, accessToken });
   }
 
   return reply({ error: "نوع العملية غير صالح" }, 400);

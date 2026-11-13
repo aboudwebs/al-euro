@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { DELETION_GRACE_DAYS } from "@/lib/account-deletion";
 import { dbError, readBody, reply, requireUser } from "@/lib/account-api";
+import { hmacHex, timingSafeEqualHex } from "@/lib/keys";
 
 export const dynamic = "force-dynamic";
 const FIELDS = "id, requested_at, due_at";
@@ -18,6 +19,10 @@ function maskEmail(email: string) {
   return `${local.slice(0, 1)}•••@${domain}`;
 }
 function codeHash(userId: string, code: string) {
+  return hmacHex("account-deletion-v1", `account-deletion:${userId}:${code}`);
+}
+/** Hash format used before sub-keys existed: a code e-mailed just before deployment (10 minute TTL) still works. */
+function legacyCodeHash(userId: string, code: string) {
   const secret = process.env.AUTH_SECRET;
   if (!secret) throw new Error("AUTH_SECRET is missing");
   return crypto.createHmac("sha256", secret).update(`account-deletion:${userId}:${code}`).digest("hex");
@@ -108,15 +113,20 @@ export async function POST(req: Request) {
   if (!stored || new Date(stored.expires_at).getTime() <= Date.now()) {
     return reply({ error: "انتهت صلاحية الرمز. اطلب رمزاً جديداً." }, 400);
   }
-  if (Number(stored.attempts) >= MAX_ATTEMPTS) {
+  const attempts = Number(stored.attempts);
+  if (attempts >= MAX_ATTEMPTS) {
     await db.from("account_deletion_email_codes").delete().eq("user_id", auth.user.id);
     return reply({ error: "تجاوزت عدد المحاولات المسموح. اطلب رمزاً جديداً." }, 429);
   }
-  const valid = crypto.timingSafeEqual(Buffer.from(String(stored.code_hash)), Buffer.from(codeHash(auth.user.id, code)));
+  // Burn one try BEFORE comparing (compare-and-set on `attempts`): parallel guesses cannot exceed the limit of five.
+  const { data: burned, error: burnError } = await db.from("account_deletion_email_codes")
+    .update({ attempts: attempts + 1 }).eq("user_id", auth.user.id).eq("attempts", attempts).select("user_id").maybeSingle();
+  if (burnError) return dbError("deletion attempt update", burnError, "تعذر التحقق من الرمز");
+  if (!burned) return reply({ error: "الرمز غير صحيح. أعد المحاولة." }, 400);
+  const valid = timingSafeEqualHex(String(stored.code_hash), codeHash(auth.user.id, code)) ||
+    timingSafeEqualHex(String(stored.code_hash), legacyCodeHash(auth.user.id, code));
   if (!valid) {
-    const nextAttempts = Number(stored.attempts) + 1;
-    await db.from("account_deletion_email_codes").update({ attempts: nextAttempts }).eq("user_id", auth.user.id);
-    return reply({ error: `الرمز غير صحيح. المحاولات المتبقية: ${Math.max(0, MAX_ATTEMPTS - nextAttempts)}` }, 400);
+    return reply({ error: `الرمز غير صحيح. المحاولات المتبقية: ${Math.max(0, MAX_ATTEMPTS - attempts - 1)}` }, 400);
   }
 
   if (Number(auth.user.debt_balance ?? 0) > 0) {

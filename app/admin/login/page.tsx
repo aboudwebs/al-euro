@@ -8,6 +8,9 @@ export default function AdminLogin() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  // Shown after the password was accepted for an administrator who enabled two-step verification.
+  const [needCode, setNeedCode] = useState(false);
+  const [code, setCode] = useState("");
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -18,10 +21,14 @@ export default function AdminLogin() {
       const res = await fetch("/api/auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: "login", role, ...(role === "worker" ? { identifier: phone.trim() } : { phone: phone.trim() }), password }),
+        body: JSON.stringify({
+          mode: "login", role, ...(role === "worker" ? { identifier: phone.trim() } : { phone: phone.trim() }), password,
+          ...(needCode ? (/^\d{6}$/.test(code.replace(/\s+/g, "")) ? { totpCode: code.replace(/\s+/g, "") } : { recoveryCode: code.trim() }) : {}),
+        }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.ok) {
+        if (data?.twoFactorRequired) setNeedCode(true);
         setError(data?.error || "تعذر تسجيل الدخول");
         return;
       }
@@ -47,6 +54,9 @@ export default function AdminLogin() {
         </div>
         <input className="inp" dir="ltr" autoComplete="username" inputMode={role === "worker" ? "numeric" : "tel"} maxLength={role === "worker" ? 10 : 20} placeholder={role === "worker" ? "معرّف الموظف (8–10 أرقام)" : "رقم الموبايل"} value={phone} onChange={(e) => setPhone(e.target.value)} required />
         <input className="inp" type="password" autoComplete="current-password" placeholder="كلمة المرور" value={password} onChange={(e) => setPassword(e.target.value)} required />
+        {needCode && (
+          <input className="inp" dir="ltr" autoComplete="one-time-code" inputMode="text" maxLength={16} placeholder="رمز التطبيق (6 أرقام) أو رمز استرداد" value={code} onChange={(e) => setCode(e.target.value)} required autoFocus />
+        )}
         {error && <p role="alert" className="rounded-2xl border border-[#FF453A]/40 bg-[#FF453A]/15 p-3 text-sm text-[#FF6961]">{error}</p>}
         <button type="submit" disabled={loading} className="btn w-full">{loading ? "جارٍ التحقق..." : "دخول"}</button>
       </form>

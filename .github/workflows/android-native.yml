@@ -11,6 +11,8 @@ on:
       - '.github/workflows/android-native.yml'
       - 'lib/session.ts'
       - 'app/api/auth/route.ts'
+permissions:
+  contents: read
 jobs:
   build-apk:
     runs-on: ubuntu-latest

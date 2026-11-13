@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { signSession, safeEqual, hashPassword } from "@/lib/session";
+import { mintAccessToken, hashPassword } from "@/lib/session";
 import { verifyFirebaseIdentityToken } from "@/lib/firebase-auth-admin";
-import { verifyRegistrationOtp } from "@/lib/registration-otp";
+import { claimRegistrationOtp, type OtpClaim } from "@/lib/registration-otp";
 import { notifyUser } from "@/lib/push";
+import { verifyReferralSignature } from "@/lib/referral-signature";
+import { RULES, rateHit, rateKey, tooManyRequests } from "@/lib/rate-limit";
+import { BodyTooLargeError, clientIp, readJsonLimited } from "@/lib/http";
+import { recordReferralSignup } from "@/lib/referral-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -34,8 +38,21 @@ function phoneCandidates(value: string): string[] {
 }
 
 export async function POST(req: Request) {
+  // A WhatsApp code that was accepted but not used up (the sign-up then failed) is given back in `finally`.
+  let otpClaim: OtpClaim | null = null;
+  let otpSpent = false;
   try {
-    const body = await req.json().catch(() => null);
+    const ip = clientIp(req);
+    const limited = await rateHit(rateKey("register-ip", ip), RULES.registerPerIp);
+    if (!limited.allowed) return tooManyRequests(limited.retryAfter);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let body: any;
+    try {
+      body = await readJsonLimited(req);
+    } catch (error) {
+      return reply({ error: error instanceof BodyTooLargeError ? "حجم الطلب كبير جداً" : "بيانات الطلب غير صالحة" }, error instanceof BodyTooLargeError ? 413 : 400);
+    }
     const idToken = typeof body?.idToken === "string" ? body.idToken : "";
     if (!idToken || idToken.length > 12_000) return reply({ error: "رمز تسجيل الدخول غير صالح" }, 400);
 
@@ -74,9 +91,9 @@ export async function POST(req: Request) {
           .select("id, role, name, phone, my_ref_code, is_active").eq("id", linked.user_id).maybeSingle();
         if (error || !existingUser) return reply({ error: "حساب EURO المرتبط غير موجود" }, 404);
         if (!existingUser.is_active) return reply({ pendingApproval: true, message: "حسابك قيد المراجعة من قِبل الإدارة." }, 403);
-        const accessToken = signSession({
+        const accessToken = await mintAccessToken({
           id: String(existingUser.id), role: existingUser.role, name: existingUser.name ?? "",
-          phone: existingUser.phone ?? "", my_ref_code: existingUser.my_ref_code, iat: Date.now(),
+          phone: existingUser.phone ?? "", my_ref_code: existingUser.my_ref_code,
         });
         return reply({ ok: true, accessToken, user: existingUser, phoneVerificationRequired: true });
       }
@@ -85,11 +102,7 @@ export async function POST(req: Request) {
       const refSignature = typeof body?.refSignature === "string" ? body.refSignature.trim() : "";
       let validatedReferralCode: string | null = null;
       if (role === "workshop" && refCode) {
-        if (refSignature) {
-          const expected = crypto.createHmac("sha256", process.env.AUTH_SECRET || "")
-            .update(`workshop-referral:${refCode}`).digest("hex");
-          if (!safeEqual(expected, refSignature)) return reply({ error: "كود الإحالة غير صالح" }, 400);
-        }
+        if (refSignature && !verifyReferralSignature(refCode, refSignature)) return reply({ error: "كود الإحالة غير صالح" }, 400);
         const { data: referrer, error } = await db.from("users").select("id")
           .eq("role", "marketer").eq("my_ref_code", refCode).eq("is_active", true).maybeSingle();
         if (error || !referrer) return reply({ error: "كود الإحالة غير صحيح أو حساب المسوّق غير مفعّل" }, 400);
@@ -152,6 +165,7 @@ export async function POST(req: Request) {
       }
 
       if (validatedReferralCode) {
+        await recordReferralSignup({ newUserId: String(created.id), newUserPhone: workshopPhone, referralCode: validatedReferralCode, ip });
         const { data: referrer } = await db.from("users").select("id")
           .eq("role", "marketer").eq("my_ref_code", validatedReferralCode).maybeSingle();
         if (referrer) {
@@ -169,15 +183,20 @@ export async function POST(req: Request) {
       if (role === "workshop") {
         return reply({ ok: true, pendingApproval: true, message: "تم إنشاء الحساب وإرسال طلب الورشة للمراجعة. أكمل توثيق الهاتف عند أول شراء." });
       }
-      const accessToken = signSession({
+      const accessToken = await mintAccessToken({
         id: String(created.id), role: created.role, name: created.name ?? "",
-        phone: created.phone ?? "", my_ref_code: created.my_ref_code, iat: Date.now(),
+        phone: created.phone ?? "", my_ref_code: created.my_ref_code,
       });
       return reply({ ok: true, accessToken, user: created, phoneVerificationRequired: true });
     }
 
-    if (!verifyRegistrationOtp(verifiedPhone, body?.otpCode, body?.otpToken)) {
-      return reply({ error: "رمز واتساب غير صحيح أو انتهت صلاحيته. اطلب رمزاً جديداً." }, 400);
+    const otpLimited = await rateHit(rateKey("otp-verify-ip", ip), RULES.otpVerifyPerIp);
+    if (!otpLimited.allowed) return tooManyRequests(otpLimited.retryAfter);
+    otpClaim = await claimRegistrationOtp(verifiedPhone, body?.otpCode, body?.otpToken);
+    if (!otpClaim.ok) {
+      return otpClaim.reason === "failed"
+        ? reply({ error: "تعذر التحقق من الرمز حالياً، حاول لاحقاً" }, 503)
+        : reply({ error: "رمز واتساب غير صحيح أو انتهت صلاحيته. اطلب رمزاً جديداً." }, 400);
     }
 
     let identity;
@@ -222,12 +241,8 @@ export async function POST(req: Request) {
 
     let validatedReferralCode: string | null = null;
     if (role === "workshop" && refCode) {
-      if (refSignature) {
-        const expected = crypto.createHmac("sha256", process.env.AUTH_SECRET || "")
-          .update(`workshop-referral:${refCode}`).digest("hex");
-        if (!safeEqual(expected, refSignature)) {
-          return reply({ error: "كود الإحالة مثبت من رابط المسوّق ولا يمكن تغييره" }, 400);
-        }
+      if (refSignature && !verifyReferralSignature(refCode, refSignature)) {
+        return reply({ error: "كود الإحالة مثبت من رابط المسوّق ولا يمكن تغييره" }, 400);
       }
       const { data: referrer, error } = await db.from("users")
         .select("id").eq("role", "marketer").eq("my_ref_code", refCode).eq("is_active", true).maybeSingle();
@@ -298,8 +313,10 @@ export async function POST(req: Request) {
       }
       return reply({ error: "تعذر حفظ هوية تسجيل الدخول" }, 500);
     }
+    otpSpent = true;
 
     if (validatedReferralCode) {
+      await recordReferralSignup({ newUserId: String(created.id), newUserPhone: phone, referralCode: validatedReferralCode, ip });
       const { data: referrer } = await db.from("users").select("id")
         .eq("role", "marketer").eq("my_ref_code", validatedReferralCode).maybeSingle();
       if (referrer) {
@@ -322,17 +339,18 @@ export async function POST(req: Request) {
       });
     }
 
-    const accessToken = signSession({
+    const accessToken = await mintAccessToken({
       id: String(created.id),
       role: created.role,
       name: created.name,
       phone: created.phone,
       my_ref_code: created.my_ref_code,
-      iat: Date.now(),
     });
     return reply({ ok: true, accessToken, user: created });
   } catch (error) {
     console.error("[api/auth/firebase/register] POST:", error);
     return reply({ error: "حدث خطأ غير متوقع في الخادم" }, 500);
+  } finally {
+    if (otpClaim?.ok && !otpSpent) await otpClaim.release();
   }
 }

@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { signSession } from "@/lib/session";
+import { mintAccessToken } from "@/lib/session";
 import { verifyFirebaseIdentityToken } from "@/lib/firebase-auth-admin";
-import { verifyRegistrationOtp } from "@/lib/registration-otp";
+import { claimRegistrationOtp, type OtpClaim } from "@/lib/registration-otp";
+import { RULES, rateHit, rateKey, tooManyRequests } from "@/lib/rate-limit";
+import { BodyTooLargeError, clientIp, readJsonLimited } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 const NO_STORE = { "Cache-Control": "no-store" };
@@ -31,18 +33,43 @@ function phoneCandidates(value: string): string[] {
 }
 
 export async function POST(req: Request) {
+  // A WhatsApp code that was accepted but not used up (the linking then failed) is given back in `finally`.
+  let otpClaim: OtpClaim | null = null;
+  let otpSpent = false;
   try {
-    const body = await req.json().catch(() => null);
+    const limited = await rateHit(rateKey("otp-verify-ip", clientIp(req)), RULES.otpVerifyPerIp);
+    if (!limited.allowed) return tooManyRequests(limited.retryAfter);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let body: any;
+    try {
+      body = await readJsonLimited(req);
+    } catch (error) {
+      return reply({ error: error instanceof BodyTooLargeError ? "حجم الطلب كبير جداً" : "بيانات الطلب غير صالحة" }, error instanceof BodyTooLargeError ? 413 : 400);
+    }
     const idToken = typeof body?.idToken === "string" ? body.idToken : "";
     const name = typeof body?.name === "string" ? body.name.trim() : "";
     const phone = typeof body?.phone === "string" ? body.phone.trim() : "";
     if (!idToken || idToken.length > 12_000) return reply({ error: "جلسة تسجيل الدخول غير صالحة" }, 400);
     if (name.length < 2 || name.length > 100) return reply({ error: "الاسم يجب أن يكون بين حرفين و100 حرف" }, 400);
-    if (canonicalPhone(phone).length < 8 || !verifyRegistrationOtp(phone, body?.otpCode, body?.otpToken)) {
-      return reply({ error: "رمز واتساب غير صحيح أو انتهت صلاحيته. اطلب رمزاً جديداً." }, 400);
+    if (canonicalPhone(phone).length < 8) {
+      return reply({ error: "رقم الهاتف غير صالح" }, 400);
+    }
+    otpClaim = await claimRegistrationOtp(phone, body?.otpCode, body?.otpToken);
+    if (!otpClaim.ok) {
+      return otpClaim.reason === "failed"
+        ? reply({ error: "تعذر التحقق من الرمز حالياً، حاول لاحقاً" }, 503)
+        : reply({ error: "رمز واتساب غير صحيح أو انتهت صلاحيته. اطلب رمزاً جديداً." }, 400);
     }
 
-    const identity = await verifyFirebaseIdentityToken(idToken, phone);
+    let identity;
+    try {
+      identity = await verifyFirebaseIdentityToken(idToken, phone);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (message.includes("غير مدعومة") || message.includes("توثيق رقم الهاتف")) return reply({ error: message }, 401);
+      console.error("[api/auth/firebase/complete-profile] token verification:", error);
+      return reply({ error: "تعذر التحقق من هوية Firebase" }, 401);
+    }
     const db = getSupabaseAdmin();
     const { data: linked, error: linkedError } = await db.from("user_auth_identities")
       .select("user_id").eq("provider", identity.provider).eq("provider_uid", identity.uid).maybeSingle();
@@ -108,6 +135,7 @@ export async function POST(req: Request) {
         return reply({ error: "تم ربط الهوية لكن تعذر تحديث حالة التوثيق. أعد تسجيل الدخول." }, 503);
       }
       updated = legacyUpdated;
+      otpSpent = true;
       await db.from("users").update({ is_active: false }).eq("id", user.id);
     } else {
       const { data: profileUpdated, error: updateError } = await db.from("users")
@@ -126,20 +154,22 @@ export async function POST(req: Request) {
         return reply({ error: "تعذر حفظ بيانات الحساب" }, 500);
       }
       updated = profileUpdated;
+      otpSpent = true;
     }
 
-    const accessToken = signSession({
+    const accessToken = await mintAccessToken({
       id: String(updated.id),
       role: updated.role,
       name: updated.name ?? "",
       phone: updated.phone ?? "",
       my_ref_code: updated.my_ref_code,
-      iat: Date.now(),
     });
     return reply({ ok: true, accessToken, user: updated });
   } catch (error) {
+    // Internal error text (database, provider) is logged, never returned to the caller.
     console.error("[api/auth/firebase/complete-profile] POST:", error);
-    const message = error instanceof Error ? error.message : "";
-    return reply({ error: message || "حدث خطأ غير متوقع في الخادم" }, 500);
+    return reply({ error: "حدث خطأ غير متوقع في الخادم" }, 500);
+  } finally {
+    if (otpClaim?.ok && !otpSpent) await otpClaim.release();
   }
 }

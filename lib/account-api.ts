@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { getSession } from "@/lib/session";
+import { getSession, SessionStoreError } from "@/lib/session";
+import { readJsonLimited } from "@/lib/http";
 
 /** Shared helpers of the signed-in customer endpoints under /api/account/* and /api/settings/. */
 
@@ -54,7 +55,8 @@ export async function requireUser(options: { requireVerifiedPhone?: boolean } = 
   let session: Awaited<ReturnType<typeof getSession>>;
   try {
     session = await getSession();
-  } catch {
+  } catch (err) {
+    if (err instanceof SessionStoreError) return { ok: false, response: reply({ error: "الخدمة غير متاحة مؤقتاً، حاول لاحقاً" }, 503) };
     return { ok: false, response: reply({ error: "إعداد AUTH_SECRET مفقود على الخادم" }, 500) };
   }
   if (!session) return { ok: false, response: reply({ error: "يرجى تسجيل الدخول أولاً" }, 401) };
@@ -97,9 +99,10 @@ export async function requireUser(options: { requireVerifiedPhone?: boolean } = 
   return { ok: true, user: data as AccountUser };
 }
 
+/** Reads a JSON object body (at most 64 KB; larger or malformed bodies give null). */
 export async function readBody(req: Request): Promise<Record<string, unknown> | null> {
   try {
-    const body = await req.json();
+    const body = await readJsonLimited(req);
     return body && typeof body === "object" && !Array.isArray(body) ? body as Record<string, unknown> : null;
   } catch {
     return null;

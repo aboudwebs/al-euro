@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { signSession } from "@/lib/session";
+import { mintAccessToken } from "@/lib/session";
 import { verifyFirebaseIdentityToken } from "@/lib/firebase-auth-admin";
-import { verifyRegistrationOtp } from "@/lib/registration-otp";
+import { claimRegistrationOtp, type OtpClaim } from "@/lib/registration-otp";
+import { RULES, rateHit, rateKey, tooManyRequests } from "@/lib/rate-limit";
+import { BodyTooLargeError, clientIp, readJsonLimited } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
@@ -34,15 +36,34 @@ function phoneLookupCandidates(value: string): string[] {
  * and is never used to auto-link accounts (including Apple private-relay addresses).
  */
 export async function POST(req: Request) {
+  // A WhatsApp code that was accepted but not used up (the exchange then did not complete) is given back in `finally`.
+  let otpClaim: OtpClaim | null = null;
+  let otpSpent = false;
   try {
-    const body = await req.json().catch(() => null);
+    const limited = await rateHit(rateKey("firebase-exchange-ip", clientIp(req)), RULES.loginPerIp);
+    if (!limited.allowed) return tooManyRequests(limited.retryAfter);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let body: any;
+    try {
+      body = await readJsonLimited(req);
+    } catch (error) {
+      return reply({ error: error instanceof BodyTooLargeError ? "حجم الطلب كبير جداً" : "بيانات الطلب غير صالحة" }, error instanceof BodyTooLargeError ? 413 : 400);
+    }
     const idToken = typeof body?.idToken === "string" ? body.idToken : "";
     if (!idToken || idToken.length > 12_000) return reply({ error: "رمز تسجيل الدخول غير صالح" }, 400);
 
     const phone = typeof body?.phone === "string" ? body.phone.trim() : "";
-    const whatsappVerified = Boolean(phone) && verifyRegistrationOtp(phone, body?.otpCode, body?.otpToken);
-    if (phone && !whatsappVerified) {
-      return reply({ error: "رمز واتساب غير صحيح أو انتهت صلاحيته. اطلب رمزاً جديداً." }, 400);
+    let whatsappVerified = false;
+    if (phone) {
+      const otpLimited = await rateHit(rateKey("otp-verify-ip", clientIp(req)), RULES.otpVerifyPerIp);
+      if (!otpLimited.allowed) return tooManyRequests(otpLimited.retryAfter);
+      otpClaim = await claimRegistrationOtp(phone, body?.otpCode, body?.otpToken);
+      if (!otpClaim.ok) {
+        return otpClaim.reason === "failed"
+          ? reply({ error: "تعذر التحقق من الرمز حالياً، حاول لاحقاً" }, 503)
+          : reply({ error: "رمز واتساب غير صحيح أو انتهت صلاحيته. اطلب رمزاً جديداً." }, 400);
+      }
+      whatsappVerified = true;
     }
 
     let identity;
@@ -158,13 +179,13 @@ export async function POST(req: Request) {
       }
     }
 
-    const accessToken = signSession({
+    otpSpent = true;
+    const accessToken = await mintAccessToken({
       id: String(user.id),
       role: user.role,
       name: user.name ?? "",
       phone: user.phone ?? "",
       my_ref_code: user.my_ref_code,
-      iat: Date.now(),
     });
     return reply({
       ok: true,
@@ -181,5 +202,7 @@ export async function POST(req: Request) {
   } catch (error) {
     console.error("[api/auth/firebase] POST:", error);
     return reply({ error: "حدث خطأ غير متوقع في الخادم" }, 500);
+  } finally {
+    if (otpClaim?.ok && !otpSpent) await otpClaim.release();
   }
 }

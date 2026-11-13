@@ -2,31 +2,32 @@ import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import {
-  COOKIE_NAME,
+  SessionStoreError,
+  bumpTokenVersion,
   clearSession,
   getSession,
   hashPassword,
-  verifyPassword,
   isLegacyPasswordHash,
-  getSecret,
-  safeEqual,
   setSession,
-  verifySession,
-  signSession,
+  verifyPassword,
 } from "@/lib/session";
-import { cookies } from "next/headers";
 import { finalizeDueDeletion } from "@/lib/account-deletion";
-import { whatsappChatId } from "@/lib/otp";
 import { notifyUser } from "@/lib/push";
+import { RULES, rateHit, rateKey, rateReset, tooManyRequests } from "@/lib/rate-limit";
+import { BodyTooLargeError, clientIp, readJsonLimited } from "@/lib/http";
+import { claimRegistrationOtp, issueRegistrationOtp, registrationOtpEnabled, type OtpClaim } from "@/lib/registration-otp";
+import { checkSecondFactor } from "@/lib/admin-2fa";
+import { verifyReferralSignature } from "@/lib/referral-signature";
+import { MAX_PASSWORD, MIN_NEW_PASSWORD } from "@/lib/password-policy";
+import { recordReferralSignup, referralLookupAllowed, referralLookupFailed } from "@/lib/referral-guard";
 
 export const dynamic = "force-dynamic";
-
-// Temporary public-demo switch. Set to true to restore WhatsApp registration OTP.
-const REGISTRATION_OTP_ENABLED = false;
 
 const USER_FIELDS = "id, role, name, phone, city, license, license_verification_status, specs, tier, debt_limit, debt_balance, cashback_balance, my_ref_code, is_active, created_at";
 
 const NO_STORE = { "Cache-Control": "no-store" };
+/** Same answer for an unknown account and a wrong password, so the form cannot be used to find registered numbers. */
+const BAD_CREDENTIALS = "بيانات الدخول غير صحيحة. تحقق من الرقم وكلمة المرور.";
 
 function json(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: NO_STORE });
@@ -37,40 +38,16 @@ function serverError(context: string, err: unknown, message = "حدث خطأ غ�
   return json({ error: message }, 500);
 }
 
-async function sendWhatsAppOtp(phone: string, code: string) {
-  const apiUrl = process.env.GREEN_API_URL;
-  const instanceId = process.env.GREEN_API_INSTANCE_ID;
-  const token = process.env.GREEN_API_TOKEN;
-
-  if (!apiUrl || !instanceId || !token) {
-    console.error("[Green-API] Missing environment variables");
-    return false;
-  }
-
-  const url = `${apiUrl.replace(/\/+$/, "")}/waInstance${instanceId}/sendMessage/${token}`;
-  const chatId = whatsappChatId(phone);
-  const message = `رمز التحقق الخاص بك في تطبيق EURO CARS هو: *${code}*.\nصالح لمدة 5 دقائق.`;
-
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chatId, message }),
-    });
-    const data = await res.json();
-    return res.ok && Boolean(data.idMessage);
-  } catch (err) {
-    console.error("[Green-API] Error sending message:", err);
-    return false;
-  }
+/** A password check against a throw-away hash, so an unknown phone number costs the same time as a wrong password. */
+let decoyHash: string | null = null;
+function burnPasswordCheck(password: string) {
+  decoyHash ??= hashPassword("euro-decoy-password");
+  verifyPassword(decoyHash, password);
 }
 
 export async function GET() {
   try {
-    const token = (await cookies()).get(COOKIE_NAME)?.value;
-    if (!token) return json({ user: null });
-
-    const session = verifySession(token);
+    const session = await getSession();
     if (!session) {
       await clearSession();
       return json({ user: null });
@@ -107,72 +84,101 @@ export async function GET() {
     });
   } catch (err) {
     console.error("[api/auth] GET:", err);
+    // A database outage must not look like "signed out" (the app would drop the session).
+    if (err instanceof SessionStoreError) return json({ error: "الخدمة غير متاحة مؤقتاً" }, 503);
     return json({ user: null });
   }
 }
 
 export async function POST(req: Request) {
+  // A WhatsApp code that was accepted but not used up (the sign-up then failed) is given back in `finally`.
+  let otpClaim: OtpClaim | null = null;
+  let otpSpent = false;
   try {
-    const body = await req.json();
-    const { mode = "login", role: requestedRole, name, phone, password, license, manualVerification, city, spec, refCode, refSignature, client, otpCode, otpToken } = body ?? {};
-    let role = requestedRole;
+    const ip = clientIp(req);
+    let body: Record<string, unknown>;
+    try {
+      const parsed = await readJsonLimited(req);
+      body = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+    } catch (error) {
+      if (error instanceof BodyTooLargeError) return json({ error: "حجم الطلب كبير جداً" }, 413);
+      return json({ error: "بيانات الطلب غير صالحة" }, 400);
+    }
+    const { mode = "login", role: requestedRole, name, phone, password, license, manualVerification, city, spec, refCode, refSignature, client, otpCode, otpToken } = body;
+    let role = requestedRole as string | undefined;
     const isMobileClient = client === "mobile";
 
     const allowedRoles = mode === "login" ? (isMobileClient ? ["workshop", "marketer"] : ["workshop", "marketer", "admin", "worker"]) : ["workshop", "marketer"];
 
     if (mode === "send-otp") {
-      if (!REGISTRATION_OTP_ENABLED) return json({ ok: true, otpRequired: false });
+      // Registration without phone proof stays on until REGISTRATION_OTP_ENABLED=true is set on the server.
+      if (!registrationOtpEnabled()) return json({ ok: true, otpRequired: false });
       if (!phone || String(phone).trim().length < 8) {
         return json({ error: "يرجى إدخال رقم موبايل صالح" }, 400);
       }
-      const cleanPhone = String(phone).trim();
-      const code = crypto.randomInt(100000, 1000000).toString();
-      const expires = Date.now() + 5 * 60 * 1000;
-      const signature = crypto.createHmac("sha256", getSecret()).update(`${cleanPhone}:${expires}:${code}`).digest("hex");
-      // The token binds the phone, expiry and OTP hash, but never contains the six-digit code.
-      const tokenPayload = Buffer.from(JSON.stringify({ p: cleanPhone, e: expires, s: signature })).toString("base64");
-
-      const sent = await sendWhatsAppOtp(cleanPhone, code);
-      if (!sent) {
+      const issued = await issueRegistrationOtp(String(phone).trim(), ip);
+      if (!issued.ok) {
+        if (issued.reason === "throttled") return tooManyRequests(issued.retryAfter ?? 60);
+        if (issued.reason === "unavailable") return json({ error: "خدمة التحقق غير متاحة حالياً، حاول لاحقاً" }, 503);
         return json({ error: "تعذر إرسال رسالة الواتساب، تأكد من صحة الرقم أو ربط حساب الواتساب" }, 500);
       }
-      return json({ ok: true, otpToken: tokenPayload, message: "تم إرسال رمز التحقق إلى واتساب بنجاح" });
+      return json({ ok: true, otpToken: issued.token, message: "تم إرسال رمز التحقق إلى واتساب بنجاح" });
     }
 
     const roleIsValid = mode === "login" && isMobileClient && !role
       ? true
-      : allowedRoles.includes(role);
-    if (!["login", "register"].includes(mode) || !roleIsValid) {
+      : typeof role === "string" && allowedRoles.includes(role);
+    if (!["login", "register"].includes(String(mode)) || !roleIsValid) {
       return json({ error: "نوع العملية أو الحساب غير صالح" }, 400);
     }
-    if (!(role === "worker" ? body.identifier : phone) || !password || String(password).length < 4) {
-      return json({ error: role === "worker" ? "يرجى إدخال معرّف الموظف وكلمة المرور" : "يرجى إدخال رقم الموبايل وكلمة مرور من 4 أحرف على الأقل" }, 400);
+    const identifier = role === "worker" ? body.identifier : phone;
+    if (typeof identifier !== "string" || !identifier.trim() || typeof password !== "string" || !password || password.length > MAX_PASSWORD) {
+      return json({ error: role === "worker" ? "يرجى إدخال معرّف الموظف وكلمة المرور" : "يرجى إدخال رقم الموبايل وكلمة المرور" }, 400);
     }
 
     const db = getSupabaseAdmin();
-    const cleanPhone = String(role === "worker" ? body.identifier : phone).trim();
+    const cleanPhone = identifier.trim();
+    if (cleanPhone.length > 32) return json({ error: "رقم الموبايل غير صالح" }, 400);
     if (role === "worker" && !/^[0-9]{8,10}$/.test(cleanPhone)) {
       return json({ error: "معرّف الموظف يجب أن يتكون من 8 إلى 10 أرقام" }, 400);
     }
-    let userLookup = db.from("users")
-      .select(`${USER_FIELDS}, password_hash`)
-      .eq("phone", cleanPhone);
-    if (role) userLookup = userLookup.eq("role", role);
-    else userLookup = userLookup.in("role", ["workshop", "marketer"]);
-    const { data: matchedUsers, error: findError } = await userLookup.limit(2);
 
-    if (findError) return serverError("lookup", findError, "خطأ في الاتصال بقاعدة البيانات");
-    if (!role && (matchedUsers?.length ?? 0) > 1) {
-      return json({ error: "يوجد أكثر من حساب مرتبط بهذا الرقم. تواصل مع الإدارة لتحديد الحساب." }, 409);
-    }
-    const existingUser = matchedUsers?.[0] ?? null;
-    if (!role && existingUser) role = existingUser.role;
-
+    // ------------------------------------------------------------------------------------------ sign in
     if (mode === "login") {
-      if (!existingUser) return json({ error: role === "worker" ? "معرّف الموظف أو كلمة المرور غير صحيح" : "لا يوجد حساب مسجل بهذا الرقم ونوع الحساب." }, 404);
-      if (!verifyPassword(String(existingUser.password_hash ?? ""), String(password))) {
-        return json({ error: "كلمة المرور غير صحيحة" }, 401);
+      // Brute-force protection: failed attempts per account and per address; success clears the account counter.
+      // If the counter store fails the limiter keeps counting in memory (lib/rate-limit.ts): it never switches off.
+      const accountKey = rateKey("login-account", role ?? "any", cleanPhone);
+      const addressKey = rateKey("login-ip", ip);
+      const blocked = await rateHit(accountKey, RULES.loginFailPerAccount, { increment: false });
+      if (!blocked.allowed) return tooManyRequests(blocked.retryAfter);
+      const addressBlocked = await rateHit(addressKey, RULES.loginPerIp, { increment: false });
+      if (!addressBlocked.allowed) return tooManyRequests(addressBlocked.retryAfter);
+
+      const failed = async () => {
+        const [account, address] = await Promise.all([
+          rateHit(accountKey, RULES.loginFailPerAccount),
+          rateHit(addressKey, RULES.loginPerIp),
+        ]);
+        const worst = !account.allowed ? account : address;
+        if (!account.allowed || !address.allowed) return tooManyRequests(worst.retryAfter);
+        return json({ error: BAD_CREDENTIALS }, 401);
+      };
+
+      let userLookup = db.from("users").select(`${USER_FIELDS}, password_hash`).eq("phone", cleanPhone);
+      if (role) userLookup = userLookup.eq("role", role);
+      else userLookup = userLookup.in("role", ["workshop", "marketer"]);
+      const { data: matchedUsers, error: findError } = await userLookup.limit(2);
+      if (findError) return serverError("lookup", findError, "خطأ في الاتصال بقاعدة البيانات");
+
+      const candidates = (matchedUsers ?? []).filter((user) => user.password_hash);
+      const verified = candidates.filter((user) => verifyPassword(String(user.password_hash), password));
+      if (!candidates.length) burnPasswordCheck(password);
+      if (!verified.length) return failed();
+      if (verified.length > 1) {
+        return json({ error: "يوجد أكثر من حساب مرتبط بهذا الرقم. تواصل مع الإدارة لتحديد الحساب." }, 409);
       }
+      const existingUser = verified[0];
+
       if (!existingUser.is_active) {
         return json({
           pendingApproval: true,
@@ -180,8 +186,18 @@ export async function POST(req: Request) {
         }, 403);
       }
 
+      // Administrators who enrolled in two-step verification must also send an app code or a recovery code.
+      const second = await checkSecondFactor(String(existingUser.id), existingUser.role, {
+        totpCode: body.totpCode, recoveryCode: body.recoveryCode,
+      });
+      if (second.status === "limited") return tooManyRequests(second.retryAfter);
+      if (second.status === "required") {
+        return json({ twoFactorRequired: true, error: "أدخل رمز التحقق بخطوتين من تطبيق المصادقة." }, 401);
+      }
+      if (second.status === "invalid") return json({ twoFactorRequired: true, error: "رمز التحقق غير صحيح." }, 401);
+
       if (isLegacyPasswordHash(String(existingUser.password_hash ?? ""))) {
-        const upgradedHash = hashPassword(String(password));
+        const upgradedHash = hashPassword(password);
         const { error: rehashError } = await db.from("users").update({ password_hash: upgradedHash })
           .eq("id", existingUser.id).eq("password_hash", existingUser.password_hash);
         if (rehashError) console.error("[api/auth] legacy password rehash:", rehashError);
@@ -189,10 +205,11 @@ export async function POST(req: Request) {
 
       // The 30 days of an account-deletion request are over: finish it and refuse the sign-in (never throws).
       if (await finalizeDueDeletion(String(existingUser.id))) {
-        return json({ error: "لا يوجد حساب مسجل بهذا الرقم ونوع الحساب." }, 404);
+        return json({ error: BAD_CREDENTIALS }, 401);
       }
 
-      await setSession({
+      await rateReset(accountKey);
+      const accessToken = await setSession({
         id: String(existingUser.id),
         role: existingUser.role,
         name: existingUser.name,
@@ -204,32 +221,35 @@ export async function POST(req: Request) {
       const safeUser = existingUser.role === "worker"
         ? { id: existingUser.id, role: existingUser.role, name: existingUser.name, phone: existingUser.phone, is_active: existingUser.is_active, created_at: existingUser.created_at }
         : publicUser;
-      const accessToken = isMobileClient ? signSession({ id: String(existingUser.id), role: existingUser.role, name: existingUser.name, phone: existingUser.phone, my_ref_code: existingUser.my_ref_code, iat: Date.now() }) : undefined;
-      return json({ ok: true, user: safeUser, ...(accessToken ? { accessToken } : {}) });
+      return json({ ok: true, user: safeUser, ...(isMobileClient ? { accessToken } : {}) });
     }
 
-    const passHash = hashPassword(String(password));
+    // ------------------------------------------------------------------------------------------ sign up
+    const limited = await rateHit(rateKey("register-ip", ip), RULES.registerPerIp);
+    if (!limited.allowed) return tooManyRequests(limited.retryAfter);
 
-    if (REGISTRATION_OTP_ENABLED) {
+    if (password.length < MIN_NEW_PASSWORD) {
+      return json({ error: `كلمة المرور يجب أن تكون ${MIN_NEW_PASSWORD} أحرف على الأقل` }, 400);
+    }
+
+    if (registrationOtpEnabled()) {
       if (!otpCode || !otpToken) {
         return json({ error: "يرجى إدخال رمز التحقق المرسل إلى واتساب" }, 400);
       }
-      try {
-      const decoded = JSON.parse(Buffer.from(String(otpToken), "base64").toString("utf-8"));
-      const submittedCode = String(otpCode).trim();
-      if (!/^\d{6}$/.test(submittedCode) || decoded.p !== cleanPhone || typeof decoded.e !== "number" || !Number.isFinite(decoded.e) || decoded.e <= Date.now() || decoded.e > Date.now() + 5 * 60 * 1000) {
-        return json({ error: "رمز التحقق غير صحيح أو انتهت صلاحيته، أعد طلب رمز جديد" }, 400);
-      }
-      const expectedSig = crypto.createHmac("sha256", getSecret()).update(`${cleanPhone}:${decoded.e}:${submittedCode}`).digest("hex");
-      if (!safeEqual(expectedSig, decoded.s)) {
-        return json({ error: "رمز التحقق المدخل غير صحيح" }, 400);
-      }
-      } catch {
-        return json({ error: "بيانات التحقق غير صالحة" }, 400);
+      const otpLimited = await rateHit(rateKey("otp-verify-ip", ip), RULES.otpVerifyPerIp);
+      if (!otpLimited.allowed) return tooManyRequests(otpLimited.retryAfter);
+      otpClaim = await claimRegistrationOtp(cleanPhone, otpCode, otpToken);
+      if (!otpClaim.ok) {
+        return otpClaim.reason === "failed"
+          ? json({ error: "تعذر التحقق من الرمز حالياً، حاول لاحقاً" }, 503)
+          : json({ error: "رمز التحقق غير صحيح أو انتهت صلاحيته، أعد طلب رمز جديد" }, 400);
       }
     }
 
-    if (existingUser) return json({ error: "هذا الرقم مسجل مسبقاً بنفس نوع الحساب." }, 400);
+    const { data: alreadyThere, error: existsError } = await db.from("users").select("id")
+      .eq("phone", cleanPhone).eq("role", role as string).limit(1);
+    if (existsError) return serverError("register lookup", existsError, "خطأ في الاتصال بقاعدة البيانات");
+    if (alreadyThere?.length) return json({ error: "هذا الرقم مسجل مسبقاً بنفس نوع الحساب." }, 400);
     if (!name || !String(name).trim()) return json({ error: "الاسم مطلوب لإنشاء الحساب" }, 400);
     if (role === "workshop" && ((!String(license ?? "").trim() && manualVerification !== true) || !city || !spec)) {
       return json({ error: "يرجى إدخال رقم الترخيص، أو اختيار التحقق اليدوي والتأكد من إدخال المدينة والاختصاص" }, 400);
@@ -242,21 +262,26 @@ export async function POST(req: Request) {
     let validatedReferralCode: string | null = null;
     if (role === "workshop" && typeof refCode === "string" && refCode.trim()) {
       const candidateCode = refCode.trim().slice(0, 80);
-      if (typeof refSignature === "string" && refSignature.trim()) {
-        const expectedSignature = crypto.createHmac("sha256", process.env.AUTH_SECRET || "")
-          .update(`workshop-referral:${candidateCode}`).digest("hex");
-        if (!safeEqual(expectedSignature, refSignature.trim())) {
-          return json({ error: "كود الإحالة مثبت من رابط المسوّق ولا يمكن تغييره" }, 400);
-        }
+      const lookup = await referralLookupAllowed(ip);
+      if (!lookup.allowed) return tooManyRequests(lookup.retryAfter);
+      if (typeof refSignature === "string" && refSignature.trim() && !verifyReferralSignature(candidateCode, refSignature.trim())) {
+        await referralLookupFailed(ip);
+        return json({ error: "كود الإحالة مثبت من رابط المسوّق ولا يمكن تغييره" }, 400);
       }
       const { data: referrer, error: referralError } = await db.from("users")
         .select("id").eq("role", "marketer").eq("my_ref_code", candidateCode).eq("is_active", true).maybeSingle();
       if (referralError) return serverError("referral lookup", referralError, "تعذر التحقق من كود الإحالة");
-      if (!referrer) return json({ error: "كود الإحالة غير صحيح أو حساب المسوّق غير مفعّل" }, 400);
+      if (!referrer) {
+        await referralLookupFailed(ip);
+        return json({ error: "كود الإحالة غير صحيح أو حساب المسوّق غير مفعّل" }, 400);
+      }
       validatedReferralCode = candidateCode;
     } else if (role === "workshop" && typeof refSignature === "string" && refSignature.trim()) {
       return json({ error: "رابط الإحالة غير مكتمل؛ افتح رابط المسوّق من جديد" }, 400);
     }
+
+    // The slow PBKDF2 hash is only computed for a request that passed every cheaper check above.
+    const passHash = hashPassword(password);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let newUser: any = null;
@@ -296,8 +321,10 @@ export async function POST(req: Request) {
       if (insertError?.code === "23505") return json({ error: "هذا الرقم مسجل مسبقاً أو تعذر إنشاء كود فريد." }, 400);
       return serverError("register", insertError, "تعذر إنشاء الحساب");
     }
+    otpSpent = true;
 
     if (validatedReferralCode) {
+      await recordReferralSignup({ newUserId: String(newUser.id), newUserPhone: cleanPhone, referralCode: validatedReferralCode, ip });
       const { data: referrer } = await db.from("users").select("id")
         .eq("role", "marketer").eq("my_ref_code", validatedReferralCode).maybeSingle();
       if (referrer) {
@@ -320,24 +347,23 @@ export async function POST(req: Request) {
       });
     }
 
-    await setSession({
+    const accessToken = await setSession({
       id: String(newUser.id),
       role: newUser.role,
       name: newUser.name,
       phone: newUser.phone,
       my_ref_code: newUser.my_ref_code,
     });
-    const accessToken = isMobileClient ? signSession({ id: String(newUser.id), role: newUser.role, name: newUser.name, phone: newUser.phone, my_ref_code: newUser.my_ref_code, iat: Date.now() }) : undefined;
-    return json({ ok: true, user: newUser, ...(accessToken ? { accessToken } : {}) });
+    return json({ ok: true, user: newUser, ...(isMobileClient ? { accessToken } : {}) });
   } catch (err) {
     return serverError("POST", err);
+  } finally {
+    if (otpClaim?.ok && !otpSpent) await otpClaim.release();
   }
 }
 
 export async function PUT(req: Request) {
   try {
-    const token = (await cookies()).get(COOKIE_NAME)?.value;
-    if (!token) return json({ error: "يرجى تسجيل الدخول أولاً" }, 401);
     const session = await getSession();
     if (!session) {
       await clearSession();
@@ -346,11 +372,13 @@ export async function PUT(req: Request) {
 
     let body: Record<string, unknown>;
     try {
-      body = await req.json();
+      const parsed = await readJsonLimited(req);
+      body = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
     } catch {
       return json({ error: "بيانات الطلب غير صالحة" }, 400);
     }
 
+    const db = getSupabaseAdmin();
     const updates: Record<string, string> = {};
     if (typeof body.name === "string") {
       const name = body.name.trim();
@@ -362,22 +390,42 @@ export async function PUT(req: Request) {
       if (city.length > 80) return json({ error: "اسم المحافظة طويل جداً" }, 400);
       if (city) updates.city = city;
     }
-    if (typeof body.newPassword === "string" && body.newPassword.length) {
-      if (body.newPassword.length < 4 || body.newPassword.length > 128) {
-        return json({ error: "كلمة المرور الجديدة يجب أن تكون بين 4 و128 حرفاً" }, 400);
+    const changingPassword = typeof body.newPassword === "string" && body.newPassword.length > 0;
+    if (changingPassword) {
+      const newPassword = body.newPassword as string;
+      if (newPassword.length < MIN_NEW_PASSWORD || newPassword.length > MAX_PASSWORD) {
+        return json({ error: `كلمة المرور الجديدة يجب أن تكون بين ${MIN_NEW_PASSWORD} و${MAX_PASSWORD} حرفاً` }, 400);
       }
-      updates.password_hash = hashPassword(body.newPassword);
+      // Changing a password needs the current one (an account created through Firebase has none to ask for).
+      const { data: current, error: currentError } = await db.from("users").select("password_hash").eq("id", session.id).maybeSingle();
+      if (currentError || !current) return serverError("password lookup", currentError, "تعذر التحقق من الحساب");
+      if (current.password_hash) {
+        const key = rateKey("password-change", session.id);
+        const blocked = await rateHit(key, RULES.loginFailPerAccount, { increment: false });
+        if (!blocked.allowed) return tooManyRequests(blocked.retryAfter);
+        const currentPassword = typeof body.currentPassword === "string" ? body.currentPassword : "";
+        if (!currentPassword) return json({ error: "أدخل كلمة المرور الحالية" }, 400);
+        if (!verifyPassword(String(current.password_hash), currentPassword)) {
+          const after = await rateHit(key, RULES.loginFailPerAccount);
+          return after.allowed ? json({ error: "كلمة المرور الحالية غير صحيحة" }, 403) : tooManyRequests(after.retryAfter);
+        }
+        await rateReset(key);
+      }
+      updates.password_hash = hashPassword(newPassword);
     }
     if (!Object.keys(updates).length) return json({ error: "لا توجد تغييرات صالحة للحفظ" }, 400);
 
-    const { data: user, error } = await getSupabaseAdmin().from("users")
+    const { data: user, error } = await db.from("users")
       .update(updates)
       .eq("id", session.id)
       .eq("is_active", true)
       .select(USER_FIELDS)
       .single();
     if (error || !user) return serverError("update", error, "تعذر تحديث البيانات");
-    if (typeof updates.password_hash === "string") {
+
+    if (changingPassword) {
+      // Every token issued before this moment (other devices, a thief's copy) stops working; this device gets a new one.
+      await bumpTokenVersion(String(user.id));
       await notifyUser({
         userId: String(user.id),
         type: "security_password_changed",
@@ -388,14 +436,14 @@ export async function PUT(req: Request) {
       });
     }
 
-    await setSession({
+    const accessToken = await setSession({
       id: String(user.id),
       role: user.role,
       name: user.name ?? "",
       phone: user.phone ?? "",
       my_ref_code: user.my_ref_code,
     });
-    return json({ ok: true, user });
+    return json({ ok: true, user, ...(changingPassword ? { accessToken } : {}) });
   } catch (err) {
     return serverError("PUT", err, "حدث خطأ أثناء تحديث البيانات");
   }

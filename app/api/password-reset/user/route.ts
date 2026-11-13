@@ -1,5 +1,8 @@
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { hashPassword } from "@/lib/session";
+import { bumpTokenVersion, hashPassword } from "@/lib/session";
+import { newPasswordError } from "@/lib/password-policy";
+import { RULES, rateHit, rateKey, tooManyRequests } from "@/lib/rate-limit";
+import { clientIp } from "@/lib/http";
 import { isMissingTable, readBody, reply } from "@/lib/account-api";
 import { consumeOtp, dropOtp, issueOtp, otpMessage, sendWhatsAppText, whatsappConfigured } from "@/lib/otp";
 
@@ -19,6 +22,8 @@ const BAD_CODE = "الرمز غير صحيح أو انتهت صلاحيته. ا�
 
 export async function POST(req: Request) {
   try {
+    const limited = await rateHit(rateKey("recovery-ip", clientIp(req)), RULES.recoveryPerIp);
+    if (!limited.allowed) return tooManyRequests(limited.retryAfter);
     const body = await readBody(req);
     if (!body) return reply({ error: "بيانات الطلب غير صالحة" }, 400);
 
@@ -61,7 +66,8 @@ export async function POST(req: Request) {
       const code = typeof body.code === "string" ? body.code.trim() : "";
       const next = typeof body.newPassword === "string" ? body.newPassword : "";
       if (!/^\d{6}$/.test(code)) return reply({ error: "أدخل رمز التحقق المكوّن من 6 أرقام" }, 400);
-      if (next.length < 4 || next.length > 128) return reply({ error: "كلمة المرور الجديدة يجب أن تكون بين 4 و128 حرفاً" }, 400);
+      const policyError = newPasswordError(next);
+      if (policyError) return reply({ error: policyError }, 400);
       if (!user || !user.is_active) return reply({ error: BAD_CODE }, 400);
 
       const result = await consumeOtp(String(user.id), "password_reset", String(user.phone), code);
@@ -72,6 +78,12 @@ export async function POST(req: Request) {
       if (error) {
         console.error("[password-reset/user] update:", error);
         return reply({ error: "تعذر تغيير كلمة المرور" }, 500);
+      }
+      // A recovered password also ends every session that was open before it (a thief's copy included).
+      try {
+        await bumpTokenVersion(String(user.id));
+      } catch (err) {
+        console.error("[password-reset/user] revoke sessions:", err);
       }
       return reply({ ok: true, message: "تم تغيير كلمة المرور. سجّل الدخول بكلمة المرور الجديدة." });
     }

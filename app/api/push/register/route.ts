@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/account-api";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { createHash } from "node:crypto";
 import { notifyUser } from "@/lib/push";
+import { readJsonLimited } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
@@ -10,10 +11,15 @@ export async function POST(req: Request) {
   const auth = await requireUser();
   if (!auth.ok) return auth.response;
   try {
-    const body = await req.json();
+    const body = (await readJsonLimited(req, 16 * 1024)) as Record<string, unknown> | null;
     const token = typeof body?.token === "string" ? body.token.trim() : "";
     if (!token || token.length > 4096) {
       return NextResponse.json({ error: "رمز الجهاز غير صالح" }, { status: 400 });
+    }
+    // The apps may send their platform; the table only allows these two values (older app builds send nothing).
+    const platform = body?.platform === undefined ? "android" : body.platform;
+    if (platform !== "android" && platform !== "ios") {
+      return NextResponse.json({ error: "منصة الجهاز غير صالحة" }, { status: 400 });
     }
     const db = getSupabaseAdmin();
     const { data: existingTokens, error: lookupError } = await db.from("push_tokens")
@@ -26,7 +32,7 @@ export async function POST(req: Request) {
     const { error } = await db.from("push_tokens").upsert({
       user_id: auth.user.id,
       token,
-      platform: "android",
+      platform,
       updated_at: new Date().toISOString(),
     }, { onConflict: "token" });
     if (error) {

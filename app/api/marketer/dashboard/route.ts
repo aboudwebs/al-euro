@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import crypto from "crypto";
 import { requireUser } from "@/lib/account-api";
 import { getSupabaseAdmin } from "@/lib/supabase";
+import { signReferralCode } from "@/lib/referral-signature";
 
 export const dynamic = "force-dynamic";
 const reply = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
@@ -79,7 +79,7 @@ export async function GET() {
       console.error("[api/marketer/dashboard] AUTH_SECRET is not configured");
       return reply({ error: "إعدادات الأمان غير مكتملة على الخادم" }, 503);
     }
-    const referralSignature = crypto.createHmac("sha256", authSecret).update(`workshop-referral:${marketer.my_ref_code}`).digest("hex");
+    const referralSignature = signReferralCode(String(marketer.my_ref_code));
     const referralUrl = `${referralOrigin}/r?ref=${encodeURIComponent(marketer.my_ref_code)}&sig=${referralSignature}`;
     return reply({
       marketer: { name: marketer.name, code: marketer.my_ref_code, referralUrl },

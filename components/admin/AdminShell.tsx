@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
-import { BookOpen, Banknote, Boxes, LayoutDashboard, LogOut, Moon, PackageSearch, Percent, ShoppingBag, Sun, Users, UserCog, DollarSign, WalletCards, type LucideIcon } from "lucide-react";
+import { BookOpen, Banknote, Boxes, LayoutDashboard, LogOut, Moon, PackageSearch, Percent, ShoppingBag, Sun, Users, UserCog, DollarSign, WalletCards, ShieldCheck, type LucideIcon } from "lucide-react";
 import { api, Toaster } from "./kit";
 import type { Overview } from "@/lib/admin-types";
 
@@ -21,6 +21,7 @@ const NAV: Item[] = [
   { href: "/admin/payouts", label: "طلبات سحب العمولات", Icon: WalletCards },
   { href: "/admin/currency", label: "سعر صرف الليرة", Icon: DollarSign },
   { href: "/admin/workers", label: "حسابات الموظفين", Icon: UserCog },
+  { href: "/admin/security", label: "الأمان", Icon: ShieldCheck },
 ];
 
 export default function AdminShell({ children }: { children: React.ReactNode }) {

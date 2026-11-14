@@ -33,7 +33,7 @@ function phoneCandidates(value: string): string[] {
 }
 
 export async function POST(req: Request) {
-  // A WhatsApp code that was accepted but not used up (the linking then failed) is given back in `finally`.
+  // An SMS code that was accepted but not used up (the linking then failed) is given back in `finally`.
   let otpClaim: OtpClaim | null = null;
   let otpSpent = false;
   try {
@@ -58,7 +58,7 @@ export async function POST(req: Request) {
     if (!otpClaim.ok) {
       return otpClaim.reason === "failed"
         ? reply({ error: "تعذر التحقق من الرمز حالياً، حاول لاحقاً" }, 503)
-        : reply({ error: "رمز واتساب غير صحيح أو انتهت صلاحيته. اطلب رمزاً جديداً." }, 400);
+        : reply({ error: "رمز التحقق غير صحيح أو انتهت صلاحيته. اطلب رمزاً جديداً." }, 400);
     }
 
     let identity;
@@ -102,7 +102,7 @@ export async function POST(req: Request) {
     let updated: any;
     const existingPhoneAccount = duplicates?.[0];
     if (existingPhoneAccount) {
-      // The WhatsApp OTP proves ownership of the legacy phone account. Link this exact
+      // The SMS code proves ownership of the legacy phone account. Link this exact
       // provider UID to that account; never use email as a matching key.
       if (existingPhoneAccount.role !== user.role) {
         return reply({ error: "نوع الحساب لا يطابق الحساب المرتبط بهذا الرقم. تواصل مع الدعم." }, 409);

@@ -5,7 +5,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node --test tests/*.test.ts"
+    "test": "node --import ./tests/alias-loader.mjs --test tests/*.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

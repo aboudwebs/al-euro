@@ -36,7 +36,7 @@ function phoneLookupCandidates(value: string): string[] {
  * and is never used to auto-link accounts (including Apple private-relay addresses).
  */
 export async function POST(req: Request) {
-  // A WhatsApp code that was accepted but not used up (the exchange then did not complete) is given back in `finally`.
+  // An SMS code that was accepted but not used up (the exchange then did not complete) is given back in `finally`.
   let otpClaim: OtpClaim | null = null;
   let otpSpent = false;
   try {
@@ -61,7 +61,7 @@ export async function POST(req: Request) {
       if (!otpClaim.ok) {
         return otpClaim.reason === "failed"
           ? reply({ error: "تعذر التحقق من الرمز حالياً، حاول لاحقاً" }, 503)
-          : reply({ error: "رمز واتساب غير صحيح أو انتهت صلاحيته. اطلب رمزاً جديداً." }, 400);
+          : reply({ error: "رمز التحقق غير صحيح أو انتهت صلاحيته. اطلب رمزاً جديداً." }, 400);
       }
       whatsappVerified = true;
     }

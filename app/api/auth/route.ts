@@ -91,7 +91,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  // A WhatsApp code that was accepted but not used up (the sign-up then failed) is given back in `finally`.
+  // An SMS code that was accepted but not used up (the sign-up then failed) is given back in `finally`.
   let otpClaim: OtpClaim | null = null;
   let otpSpent = false;
   try {
@@ -119,10 +119,10 @@ export async function POST(req: Request) {
       const issued = await issueRegistrationOtp(String(phone).trim(), ip);
       if (!issued.ok) {
         if (issued.reason === "throttled") return tooManyRequests(issued.retryAfter ?? 60);
-        if (issued.reason === "unavailable") return json({ error: "خدمة التحقق غير متاحة حالياً، حاول لاحقاً" }, 503);
-        return json({ error: "تعذر إرسال رسالة الواتساب، تأكد من صحة الرقم أو ربط حساب الواتساب" }, 500);
+        if (issued.reason === "unavailable" || issued.reason === "unconfigured") return json({ error: "خدمة التحقق غير متاحة حالياً، حاول لاحقاً" }, 503);
+        return json({ error: "تعذر إرسال الرسالة النصية، تأكد من صحة الرقم وحاول مجدداً" }, 502);
       }
-      return json({ ok: true, otpToken: issued.token, message: "تم إرسال رمز التحقق إلى واتساب بنجاح" });
+      return json({ ok: true, otpToken: issued.token, message: "تم إرسال رمز التحقق برسالة نصية بنجاح" });
     }
 
     const roleIsValid = mode === "login" && isMobileClient && !role
@@ -234,7 +234,7 @@ export async function POST(req: Request) {
 
     if (registrationOtpEnabled()) {
       if (!otpCode || !otpToken) {
-        return json({ error: "يرجى إدخال رمز التحقق المرسل إلى واتساب" }, 400);
+        return json({ error: "يرجى إدخال رمز التحقق المرسل برسالة نصية" }, 400);
       }
       const otpLimited = await rateHit(rateKey("otp-verify-ip", ip), RULES.otpVerifyPerIp);
       if (!otpLimited.allowed) return tooManyRequests(otpLimited.retryAfter);
@@ -425,7 +425,11 @@ export async function PUT(req: Request) {
 
     if (changingPassword) {
       // Every token issued before this moment (other devices, a thief's copy) stops working; this device gets a new one.
-      await bumpTokenVersion(String(user.id));
+      try {
+        await bumpTokenVersion(String(user.id));
+      } catch (err) {
+        console.error("[api/auth] revoke sessions after password change:", err);
+      }
       await notifyUser({
         userId: String(user.id),
         type: "security_password_changed",

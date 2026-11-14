@@ -1,4 +1,4 @@
--- F-04 Session revocation (users.token_version) and F-08 admin two-step verification (TOTP + recovery codes).
+-- F-04 Session revocation (users.token_version) and F-03 admin two-step verification (TOTP + recovery codes).
 -- Idempotent; run manually. Existing sessions stay valid: every token without a version counts as version 0.
 
 alter table public.users add column if not exists token_version integer not null default 0 check (token_version >= 0);

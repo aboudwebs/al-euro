@@ -2,6 +2,7 @@ import { requireAdmin } from "@/lib/admin-guard";
 import { dbFail, fail, isUuid, ok, readJson } from "@/lib/admin-api";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { notifyUser } from "@/lib/push";
+import { bumpTokenVersion, forgetAccountState } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +64,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const { data, error } = await db.from("users").update(updates).eq("id", target.id).select("id, is_active, debt_limit, tier, license_verification_status, license_verification_reviewed_at").single();
   if (error) return dbFail("account update", error, "تعذر حفظ التعديلات");
   if (typeof updates.is_active === "boolean" && target.is_active !== updates.is_active) {
+    // Switching an account off (or on) revokes every token issued before the change, so an old token cannot come back to life.
+    try {
+      await bumpTokenVersion(String(target.id));
+    } catch (err) {
+      console.error("[api/admin/accounts] revoke sessions:", err);
+    }
+    forgetAccountState(String(target.id));
     const accepted = updates.is_active;
     const roleLabel = target.role === "workshop" ? "حساب ورشتك" : "حسابك كمسوق";
     await notifyUser({

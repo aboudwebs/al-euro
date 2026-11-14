@@ -1,8 +1,8 @@
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { bumpTokenVersion, setSession, verifyPassword } from "@/lib/session";
-import { RULES, rateHit, rateKey, rateReset, tooManyRequests } from "@/lib/rate-limit";
+import { RULES, rateHit, rateKey, rateReset, smsDailyBudget, tooManyRequests } from "@/lib/rate-limit";
 import { cleanPhone, dbError, readBody, reply, requireUser } from "@/lib/account-api";
-import { consumeOtp, dropOtp, issueOtp, otpMessage, sendWhatsAppText, whatsappConfigured } from "@/lib/otp";
+import { consumeOtp, dropOtp, issueOtp, otpMessage, sendOtpSms, smsConfigured } from "@/lib/otp";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +10,7 @@ const USER_FIELDS = "id, role, name, phone, city, license, specs, tier, debt_lim
 
 /**
  * Changing the phone number (it is also the sign-in name) takes two steps, both bound to the NEW number:
- *   { mode: "request", newPhone, currentPassword }  -> a 6-digit code is sent to the new number on WhatsApp
+ *   { mode: "request", newPhone, currentPassword }  -> a 6-digit code is sent to the new number by SMS (MsgPlus)
  *   { mode: "confirm", newPhone, code }              -> the number is changed and a fresh session token is returned
  */
 export async function POST(req: Request) {
@@ -36,7 +36,7 @@ export async function POST(req: Request) {
       return after.allowed ? reply({ error: "كلمة المرور الحالية غير صحيحة" }, 403) : tooManyRequests(after.retryAfter);
     }
     await rateReset(key);
-    if (!whatsappConfigured()) return reply({ error: "خدمة إرسال الرموز غير متاحة حالياً، حاول لاحقاً" }, 503);
+    if (!smsConfigured()) return reply({ error: "خدمة إرسال الرموز غير متاحة حالياً، حاول لاحقاً" }, 503);
 
     const { data: taken, error: takenError } = await db
       .from("users").select("id").eq("phone", newPhone).eq("role", auth.user.role).maybeSingle();
@@ -48,12 +48,17 @@ export async function POST(req: Request) {
       if (issued.reason === "throttled") return reply({ error: "انتظر دقيقة قبل طلب رمز جديد (الحد 5 رموز في الساعة)" }, 429);
       return dbError("phone otp issue", issued.error);
     }
-    const sent = await sendWhatsAppText(newPhone, otpMessage("phone_change", issued.code));
+    const daily = await smsDailyBudget();
+    if (!daily.allowed) {
+      await dropOtp(issued.id);
+      return tooManyRequests(daily.retryAfter);
+    }
+    const sent = await sendOtpSms(newPhone, otpMessage("phone_change", issued.code));
     if (!sent) {
       await dropOtp(issued.id);
-      return reply({ error: "تعذر إرسال الرمز إلى هذا الرقم على واتساب، تأكد من الرقم" }, 502);
+      return reply({ error: "تعذر إرسال الرمز إلى هذا الرقم، تأكد من الرقم وحاول مجدداً" }, 502);
     }
-    return reply({ ok: true, message: "تم إرسال رمز التحقق إلى الرقم الجديد على واتساب" });
+    return reply({ ok: true, message: "تم إرسال رمز التحقق إلى الرقم الجديد برسالة نصية" });
   }
 
   if (body.mode === "confirm") {

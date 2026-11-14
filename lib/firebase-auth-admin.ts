@@ -22,7 +22,7 @@ function firebaseAuthAdmin() {
 export type VerifiedFirebaseIdentity = {
   uid: string;
   provider: string;
-  /** Empty until a WhatsApp-verified phone is supplied or Firebase phone auth was used. */
+  /** Empty until an SMS-verified phone is supplied or Firebase phone auth was used. */
   phone: string;
   email: string | null;
   emailVerified: boolean;
@@ -34,7 +34,7 @@ export async function verifyFirebaseIdentityToken(idToken: string, whatsappVerif
   const phone = firebasePhone || whatsappVerifiedPhone;
   if (firebasePhone && whatsappVerifiedPhone &&
       firebasePhone.replace(/[^0-9]/g, "") !== whatsappVerifiedPhone.replace(/[^0-9]/g, "")) {
-    throw new Error("رقم الهاتف في هوية Firebase لا يطابق الرقم الموثّق عبر واتساب");
+    throw new Error("رقم الهاتف في هوية Firebase لا يطابق الرقم الموثّق برمز الرسالة النصية");
   }
 
   const provider = typeof decoded.firebase?.sign_in_provider === "string"

@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { cookies, headers } from "next/headers";
 import { getSupabaseAdmin } from "@/lib/supabase";
+import { tokenMatchesAccount, type AccountState } from "@/lib/session-rules";
 
 export const COOKIE_NAME = "euro_session";
 export const SESSION_AGE = 60 * 60 * 24 * 30; // seconds
@@ -112,7 +113,6 @@ export class SessionStoreError extends Error {
   }
 }
 
-type AccountState = { version: number; active: boolean };
 const STATE_TTL_MS = 10_000;
 const STATE_MAX = 5_000;
 const stateCache = new Map<string, { state: AccountState; expires: number }>();
@@ -153,9 +153,7 @@ async function readAccountState(userId: string, useCache = true): Promise<Accoun
 
 /** True when the (signature-valid) session still matches the account: exists, active, same token version. */
 export async function isSessionCurrent(session: Session): Promise<boolean> {
-  const state = await readAccountState(session.id);
-  if (!state || !state.active) return false;
-  return (session.v ?? 0) === state.version;
+  return tokenMatchesAccount(session.v, await readAccountState(session.id));
 }
 
 async function currentVersion(userId: string): Promise<number> {

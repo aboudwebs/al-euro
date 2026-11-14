@@ -89,7 +89,7 @@ export async function requireUser(options: { requireVerifiedPhone?: boolean } = 
       response: reply({
         code: "PHONE_VERIFICATION_REQUIRED",
         phoneVerificationRequired: true,
-        error: "أكمل توثيق رقم الهاتف عبر واتساب قبل إتمام الشراء أو إرسال الطلبات.",
+        error: "أكمل توثيق رقم الهاتف برمز الرسالة النصية قبل إتمام الشراء أو إرسال الطلبات.",
       }, 403),
     };
   }
@@ -120,7 +120,7 @@ export function optText(body: Record<string, unknown>, key: string, label: strin
   return { value: text || null };
 }
 
-/** Phone numbers are kept as digits only (international format without "+", like the WhatsApp chat id). */
+/** Phone numbers are kept as digits only (international format without "+"). */
 export function cleanPhone(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   const digits = raw.trim().replace(/^\+/, "").replace(/[\s\-()]/g, "");

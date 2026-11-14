@@ -25,9 +25,9 @@ export default function AdminPasswordReset() {
     try {
       const res = await fetch("/api/admin/reset-password", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-reset-token": token },
         cache: "no-store",
-        body: JSON.stringify({ phone: phone.trim(), token, password }),
+        body: JSON.stringify({ phone: phone.trim(), password }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.ok) {

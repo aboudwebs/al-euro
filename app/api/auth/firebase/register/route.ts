@@ -38,7 +38,7 @@ function phoneCandidates(value: string): string[] {
 }
 
 export async function POST(req: Request) {
-  // A WhatsApp code that was accepted but not used up (the sign-up then failed) is given back in `finally`.
+  // An SMS code that was accepted but not used up (the sign-up then failed) is given back in `finally`.
   let otpClaim: OtpClaim | null = null;
   let otpSpent = false;
   try {
@@ -59,15 +59,18 @@ export async function POST(req: Request) {
     const verifiedPhone = typeof body?.phone === "string" ? body.phone.trim() : "";
     const contactPhone = typeof body?.contactPhone === "string" ? body.contactPhone.trim() : "";
 
-    // OAuth registration stores a workshop contact number without treating it as WhatsApp-verified.
-    // WhatsApp verification remains a separate checkout requirement.
+    // OAuth registration stores a workshop contact number without treating it as phone-verified.
+    // Phone verification remains a separate checkout requirement.
     if (!verifiedPhone) {
       let identity;
       try {
         identity = await verifyFirebaseIdentityToken(idToken);
       } catch (error) {
         const message = error instanceof Error ? error.message : "";
-        return reply({ error: message || "تعذر التحقق من هوية Firebase" }, 401);
+        // Only our own Arabic messages reach the client; internal provider errors are logged, never returned.
+        if (message.includes("غير مدعومة") || message.includes("توثيق رقم الهاتف")) return reply({ error: message }, 401);
+        console.error("[api/auth/firebase/register] token verification:", error);
+        return reply({ error: "تعذر التحقق من هوية Firebase" }, 401);
       }
 
       const role = body?.role;
@@ -196,7 +199,7 @@ export async function POST(req: Request) {
     if (!otpClaim.ok) {
       return otpClaim.reason === "failed"
         ? reply({ error: "تعذر التحقق من الرمز حالياً، حاول لاحقاً" }, 503)
-        : reply({ error: "رمز واتساب غير صحيح أو انتهت صلاحيته. اطلب رمزاً جديداً." }, 400);
+        : reply({ error: "رمز التحقق غير صحيح أو انتهت صلاحيته. اطلب رمزاً جديداً." }, 400);
     }
 
     let identity;
@@ -204,7 +207,9 @@ export async function POST(req: Request) {
       identity = await verifyFirebaseIdentityToken(idToken, verifiedPhone);
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
-      return reply({ error: message || "تعذر التحقق من هوية Firebase" }, 401);
+      if (message.includes("غير مدعومة") || message.includes("توثيق رقم الهاتف")) return reply({ error: message }, 401);
+      console.error("[api/auth/firebase/register] token verification:", error);
+      return reply({ error: "تعذر التحقق من هوية Firebase" }, 401);
     }
 
     const role = body?.role;

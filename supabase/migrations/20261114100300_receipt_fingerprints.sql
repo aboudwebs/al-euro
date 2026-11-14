@@ -1,5 +1,6 @@
--- F-05 One receipt, one order. The server stores the SHA-256 of each uploaded Sham Cash receipt; the insert is the lock
--- (parallel requests), and a trigger locks the fingerprint for good once its order is approved.
+-- F-06 One receipt, one order. The server stores the SHA-256 of each uploaded Sham Cash receipt; the insert is the lock
+-- (parallel requests). A receipt stays blocked after its order is cancelled; a trigger also marks the fingerprint as
+-- locked once its order is approved (audit marker, the block itself does not depend on it).
 -- Existing receipts are not back-filled (production has no Sham Cash orders yet). Idempotent; run manually.
 -- This migration does NOT change create_workshop_order, admin_set_order_status or any other function.
 
@@ -18,7 +19,7 @@ create table if not exists public.receipt_fingerprint_events (
   fingerprint text not null,
   user_id     uuid,
   order_id    uuid,
-  event       text not null check (event in ('claimed','blocked_duplicate','reused_after_cancel','stale_claim_taken','locked')),
+  event       text not null check (event in ('claimed','blocked_duplicate','stale_claim_taken','locked')),
   detail      jsonb not null default '{}'::jsonb,
   created_at  timestamptz not null default now()
 );

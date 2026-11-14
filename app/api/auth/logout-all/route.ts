@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { SessionStoreError, bumpTokenVersion, clearSession, getSession } from "@/lib/session";
+import { getSupabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,11 @@ export async function POST() {
     const session = await getSession();
     if (!session) return NextResponse.json({ error: "يرجى تسجيل الدخول" }, { status: 401, headers });
     const version = await bumpTokenVersion(session.id);
+    if (version !== null) {
+      // Signed out everywhere: the account's devices stop receiving pushes too (best effort, the revocation already happened).
+      const { error: pushError } = await getSupabaseAdmin().from("push_tokens").delete().eq("user_id", session.id);
+      if (pushError) console.error("[api/auth/logout-all] push tokens:", pushError.code);
+    }
     await clearSession();
     if (version === null) {
       // The token_version column does not exist yet: nothing could be revoked, so say so instead of pretending.

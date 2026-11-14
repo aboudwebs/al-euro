@@ -1,23 +1,23 @@
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { bumpTokenVersion, hashPassword } from "@/lib/session";
 import { newPasswordError } from "@/lib/password-policy";
-import { RULES, rateHit, rateKey, tooManyRequests } from "@/lib/rate-limit";
+import { RULES, rateHit, rateKey, smsDailyBudget, tooManyRequests } from "@/lib/rate-limit";
 import { clientIp } from "@/lib/http";
 import { isMissingTable, readBody, reply } from "@/lib/account-api";
-import { consumeOtp, dropOtp, issueOtp, otpMessage, sendWhatsAppText, whatsappConfigured } from "@/lib/otp";
+import { consumeOtp, dropOtp, issueOtp, otpMessage, sendOtpSms, smsConfigured } from "@/lib/otp";
 
 export const dynamic = "force-dynamic";
 
 /**
  * Forgot password for workshops and marketers (no signed-in session). The project has no e-mail addresses and no
- * Supabase Auth: the account is the phone number, so the recovery link is replaced by a WhatsApp code sent to the
+ * Supabase Auth: the account is the phone number, so the recovery link is replaced by an SMS code (MsgPlus) sent to the
  * phone number of the account (the same channel as the sign-up code).
  *
  *   { mode: "request", phone, role }                          -> always answers the same text, whether or not the
  *                                                                number is registered
  *   { mode: "confirm", phone, role, code, newPassword }       -> checks the code and sets the new password
  */
-const SENT = "إن كان الرقم مسجلاً لدينا فسيصلك رمز التحقق على واتساب خلال دقيقة.";
+const SENT = "إن كان الرقم مسجلاً لدينا فسيصلك رمز التحقق برسالة نصية خلال دقيقة.";
 const BAD_CODE = "الرمز غير صحيح أو انتهت صلاحيته. اطلب رمزاً جديداً وحاول مجدداً.";
 
 export async function POST(req: Request) {
@@ -41,7 +41,7 @@ export async function POST(req: Request) {
     }
 
     if (body.mode === "request") {
-      if (!whatsappConfigured()) return reply({ error: "خدمة إرسال الرموز غير متاحة حالياً، حاول لاحقاً" }, 503);
+      if (!smsConfigured()) return reply({ error: "خدمة إرسال الرموز غير متاحة حالياً، حاول لاحقاً" }, 503);
       if (!user || !user.is_active) return reply({ ok: true, message: SENT });
 
       const issued = await issueOtp(String(user.id), "password_reset", String(user.phone));
@@ -53,13 +53,19 @@ export async function POST(req: Request) {
         }
         return reply({ ok: true, message: SENT }); // asked again too soon: same answer, no new message
       }
-      // Wait for Green API confirmation. Never tell the user the code was sent when delivery failed.
-      const sent = await sendWhatsAppText(String(user.phone), otpMessage("password_reset", issued.code));
+      // Shared daily ceiling on SMS codes (cost control); the answer is the same neutral text.
+      const daily = await smsDailyBudget();
+      if (!daily.allowed) {
+        await dropOtp(issued.id);
+        return reply({ ok: true, message: SENT });
+      }
+      // Wait for the provider's confirmation. Never tell the user the code was sent when delivery failed.
+      const sent = await sendOtpSms(String(user.phone), otpMessage("password_reset", issued.code));
       if (!sent) {
         await dropOtp(issued.id);
-        return reply({ error: "تعذر إرسال رمز واتساب حالياً. تحقق من ربط الواتساب وحاول مجدداً." }, 502);
+        return reply({ error: "تعذر إرسال الرمز حالياً. حاول مجدداً بعد قليل." }, 502);
       }
-      return reply({ ok: true, message: "تم إرسال رمز التحقق إلى واتساب. أدخله لإكمال تغيير كلمة المرور." });
+      return reply({ ok: true, message: "تم إرسال رمز التحقق برسالة نصية. أدخله لإكمال تغيير كلمة المرور." });
     }
 
     if (body.mode === "confirm") {

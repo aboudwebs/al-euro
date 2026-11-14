@@ -6,6 +6,7 @@ import { PAY_METHOD } from "@/lib/status";
 import { removeImage, storeImage } from "@/lib/uploads";
 import { getStableInvoiceRate } from "@/lib/syr-rates";
 import { attachReceipt, claimReceipt, releaseReceipt } from "@/lib/receipt-fingerprint";
+import { BodyTooLargeError, readFormDataLimited } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
@@ -46,8 +47,9 @@ export async function POST(req: Request) {
 
     let form: FormData;
     try {
-      form = await req.formData();
-    } catch {
+      form = await readFormDataLimited(req);
+    } catch (err) {
+      if (err instanceof BodyTooLargeError) return reply({ error: "حجم الطلب كبير جداً" }, 413);
       return reply({ error: "بيانات الطلب غير صالحة" }, 400);
     }
 

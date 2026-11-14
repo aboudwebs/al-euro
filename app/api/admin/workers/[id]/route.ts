@@ -1,6 +1,17 @@
 import { requireAdmin } from "@/lib/admin-guard";
 import { dbFail, fail, isUuid, ok, readJson } from "@/lib/admin-api";
 import { getSupabaseAdmin } from "@/lib/supabase";
+import { bumpTokenVersion, forgetAccountState } from "@/lib/session";
+
+/** An account switched off or on must not be revived by a token issued before the change: raise its version. */
+async function revokeSessions(userId: string) {
+  try {
+    await bumpTokenVersion(userId);
+  } catch (err) {
+    console.error("[api/admin/workers] revoke sessions:", err);
+  }
+  forgetAccountState(userId);
+}
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +29,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     .select("id, name, phone, is_active, created_at").maybeSingle();
   if (error) return dbFail("worker update", error, "تعذر تحديث حساب الموظف");
   if (!data) return fail("حساب الموظف غير موجود", 404);
+  await revokeSessions(id);
   return ok({ worker: data });
 }
 
@@ -41,5 +53,6 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     .select("id").maybeSingle();
   if (error) return dbFail("worker soft delete", error, "تعذر حذف حساب الموظف");
   if (!data) return fail("تعذر حذف الحساب؛ ربما تم تغييره من مدير آخر", 409);
+  await revokeSessions(id);
   return ok({ deleted: true });
 }

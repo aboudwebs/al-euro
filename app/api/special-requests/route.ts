@@ -5,6 +5,7 @@ import { getSupabaseAdmin } from "@/lib/supabase";
 import { requireUser } from "@/lib/account-api";
 import { SPECIAL_STATUS, splitRequestNotes } from "@/lib/status";
 import { removeImage, storeImage } from "@/lib/uploads";
+import { BodyTooLargeError, readFormDataLimited } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
@@ -29,8 +30,9 @@ export async function POST(req: Request) {
 
     let form: FormData;
     try {
-      form = await req.formData();
-    } catch {
+      form = await readFormDataLimited(req);
+    } catch (err) {
+      if (err instanceof BodyTooLargeError) return reply({ error: "حجم الطلب كبير جداً" }, 413);
       return reply({ error: "بيانات الطلب غير صالحة" }, 400);
     }
 

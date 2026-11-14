@@ -102,14 +102,15 @@ test("password policy: 8 characters for new passwords", () => {
 
 import { receiptDecision } from "../lib/receipt-rules.ts";
 
-test("receipt reuse: only after a never-approved cancellation", () => {
+test("receipt reuse: blocked for any order status, even cancelled; only a stale claim without an order is taken over", () => {
   const now = Date.parse("2026-11-13T12:00:00Z");
   const fresh = "2026-11-13T11:59:00Z";
   const old = "2026-11-13T11:00:00Z";
-  assert.equal(receiptDecision({ order_id: "o1", locked_at: null, created_at: old }, "cancelled", now), "reuse");
-  assert.equal(receiptDecision({ order_id: "o1", locked_at: null, created_at: old }, "pending", now), "blocked");
-  assert.equal(receiptDecision({ order_id: "o1", locked_at: null, created_at: old }, "approved", now), "blocked");
-  assert.equal(receiptDecision({ order_id: "o1", locked_at: "2026-11-13T11:30:00Z", created_at: old }, "cancelled", now), "blocked");
-  assert.equal(receiptDecision({ order_id: null, locked_at: null, created_at: fresh }, null, now), "blocked");
-  assert.equal(receiptDecision({ order_id: null, locked_at: null, created_at: old }, null, now), "stale_claim");
+  for (const _status of ["pending", "approved", "shipped", "delivered", "cancelled"]) {
+    assert.equal(receiptDecision({ order_id: "o1", locked_at: null, created_at: old }, now), "blocked");
+  }
+  assert.equal(receiptDecision({ order_id: "o1", locked_at: "2026-11-13T11:30:00Z", created_at: old }, now), "blocked");
+  assert.equal(receiptDecision({ order_id: null, locked_at: "2026-11-13T11:30:00Z", created_at: old }, now), "blocked");
+  assert.equal(receiptDecision({ order_id: null, locked_at: null, created_at: fresh }, now), "blocked");
+  assert.equal(receiptDecision({ order_id: null, locked_at: null, created_at: old }, now), "stale_claim");
 });

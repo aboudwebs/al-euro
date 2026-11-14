@@ -2,6 +2,7 @@ import { requireStaffAccess } from "@/lib/admin-guard";
 import { fail, ok } from "@/lib/admin-api";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { storeImage } from "@/lib/uploads";
+import { BodyTooLargeError, readFormDataLimited } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
@@ -14,8 +15,9 @@ export async function POST(req: Request) {
 
   let form: FormData;
   try {
-    form = await req.formData();
-  } catch {
+    form = await readFormDataLimited(req);
+  } catch (err) {
+    if (err instanceof BodyTooLargeError) return fail("حجم الملف كبير جداً", 413);
     return fail("بيانات الرفع غير صالحة");
   }
   const stored = await storeImage(BUCKET, guard.admin.id, form.get("image"), { public: true });

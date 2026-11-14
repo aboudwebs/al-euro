@@ -109,3 +109,8 @@ export function dailyOtpCap(): number {
   const value = Number(process.env.OTP_DAILY_CAP);
   return Number.isInteger(value) && value > 0 ? value : 500;
 }
+
+/** One shared ceiling on SMS codes sent per day (all purposes), so a flood can never run up the SMS bill. */
+export async function smsDailyBudget(): Promise<RateDecision> {
+  return rateHit("sms-otp-daily", { limit: dailyOtpCap(), windowSeconds: 24 * 60 * 60, blockSeconds: 60 * 60 });
+}

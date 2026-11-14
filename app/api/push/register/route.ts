@@ -29,6 +29,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "تعذر التحقق من الجهاز" }, { status: 500 });
     }
     const isNewDevice = (existingTokens ?? []).some((row) => row.token !== token);
+    // A device token belongs to the account that is signed in on that device. When the same device signs in with a
+    // different account the token moves to it (the previous account stops receiving pushes there). The move is
+    // logged (never the token itself) so an account that keeps taking tokens from others can be spotted.
+    const { data: owner } = await db.from("push_tokens").select("user_id").eq("token", token).maybeSingle();
+    if (owner && String(owner.user_id) !== String(auth.user.id)) {
+      console.warn("[api/push/register] token rebound to another account", {
+        from: String(owner.user_id).slice(0, 8), to: String(auth.user.id).slice(0, 8),
+      });
+    }
     const { error } = await db.from("push_tokens").upsert({
       user_id: auth.user.id,
       token,

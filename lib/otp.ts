@@ -3,8 +3,8 @@ import { getSupabaseAdmin } from "@/lib/supabase";
 import { getSecret, safeEqual } from "@/lib/session";
 import { hmacHex, timingSafeEqualHex } from "@/lib/keys";
 
-// Sending moved to lib/messaging.ts; re-exported so existing imports keep working.
-export { sendWhatsAppText, whatsappChatId, whatsappConfigured } from "@/lib/messaging";
+// Sending lives in lib/messaging.ts (MsgPlus SMS); re-exported for the routes that send these codes.
+export { sendOtpSms, smsConfigured } from "@/lib/messaging";
 
 /**
  * One-time codes for password recovery and phone change.
@@ -41,7 +41,7 @@ export function codeMatches(storedHash: string, purpose: OtpPurpose, userId: str
 
 export function otpMessage(purpose: OtpPurpose, code: string): string {
   const what = purpose === "password_reset" ? "استعادة كلمة المرور" : "تأكيد رقم الموبايل الجديد";
-  return `رمز ${what} في EURO CARS هو: *${code}*\nصالح لمدة 10 دقائق. لا تشاركه مع أحد.`;
+  return `EURO CARS: رمز ${what} ${code} صالح ${OTP_TTL_MS / 60000} دقائق. لا تشاركه.`;
 }
 
 type PgError = { code?: string; message?: string } | null | undefined;

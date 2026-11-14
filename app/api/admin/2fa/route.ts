@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-guard";
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { verifyPassword } from "@/lib/session";
+import { bumpTokenVersion, setSession, verifyPassword } from "@/lib/session";
 import { RULES, rateHit, rateKey, rateReset, tooManyRequests } from "@/lib/rate-limit";
 import { readJsonLimited } from "@/lib/http";
 import { generateRecoveryCodes, generateTotpSecret, otpauthUri, verifyTotp } from "@/lib/totp";
@@ -16,6 +16,21 @@ const json = (body: unknown, status = 200) => NextResponse.json(body, { status, 
 const NOT_READY = "الميزة غير مفعّلة بعد على الخادم (تحتاج تحديث قاعدة البيانات).";
 
 /**
+ * After the second factor is switched on or off, every other session of this administrator (older cookies, apps,
+ * a stolen token) is revoked by raising the token version. The caller gets a fresh session at once, so the admin who
+ * just finished the change is not signed out. A failure here never undoes the change itself.
+ */
+async function refreshAdminSessions(admin: { id: string; name: string; phone: string }): Promise<string | null> {
+  try {
+    await bumpTokenVersion(admin.id);
+    return await setSession({ id: admin.id, role: "admin", name: admin.name ?? "", phone: admin.phone ?? "" });
+  } catch (err) {
+    console.error("[api/admin/2fa] refresh sessions:", err);
+    return null;
+  }
+}
+
+/**
  * Two-step verification (authenticator app) for the signed-in administrator. It protects the production account only
  * once this admin finishes the enrolment below: until then sign-in is unchanged.
  *
@@ -23,6 +38,7 @@ const NOT_READY = "الميزة غير مفعّلة بعد على الخادم (
  *   POST { action: "begin" }          -> a new secret + otpauth link (not active yet)
  *   POST { action: "confirm", code }  -> the code from the app activates it; returns 8 one-time recovery codes (shown once)
  *   POST { action: "disable", password, code }  -> turns it off (needs the password and a valid app / recovery code)
+ * Confirm and disable revoke this administrator's other sessions and return a fresh session for the caller.
  */
 export async function GET() {
   const guard = await requireAdmin();
@@ -79,7 +95,8 @@ export async function POST(req: Request) {
         .update({ totp_enabled_at: new Date().toISOString(), totp_last_step: step }).eq("id", adminId);
       if (error) throw error;
       await rateReset(key);
-      return json({ ok: true, recoveryCodes: codes });
+      const accessToken = await refreshAdminSessions(guard.admin);
+      return json({ ok: true, recoveryCodes: codes, ...(accessToken ? { accessToken } : {}) });
     }
 
     if (body.action === "disable") {
@@ -99,7 +116,8 @@ export async function POST(req: Request) {
       const { error } = await db.from("users").update({ totp_secret_enc: null, totp_enabled_at: null, totp_last_step: 0 }).eq("id", adminId);
       if (error) throw error;
       await db.from("admin_recovery_codes").delete().eq("user_id", adminId);
-      return json({ ok: true });
+      const accessToken = await refreshAdminSessions(guard.admin);
+      return json({ ok: true, ...(accessToken ? { accessToken } : {}) });
     }
 
     return json({ error: "طلب غير صالح" }, 400);

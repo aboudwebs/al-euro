@@ -53,7 +53,7 @@ export async function POST(req: Request) {
       await dropOtp(issued.id);
       return tooManyRequests(daily.retryAfter);
     }
-    const sent = await sendOtpSms(newPhone, otpMessage("phone_change", issued.code));
+    const sent = await sendOtpSms(newPhone, { code: issued.code, message: otpMessage("phone_change", issued.code) });
     if (!sent) {
       await dropOtp(issued.id);
       return reply({ error: "تعذر إرسال الرمز إلى هذا الرقم، تأكد من الرقم وحاول مجدداً" }, 502);

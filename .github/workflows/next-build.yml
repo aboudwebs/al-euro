@@ -20,7 +20,7 @@ jobs:
         with:
           node-version: 22
       - name: Unit tests (pure security modules)
-        run: node --test tests/*.test.ts
+        run: npm test
   build:
     runs-on: ubuntu-latest
     steps:

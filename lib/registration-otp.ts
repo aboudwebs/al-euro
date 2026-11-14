@@ -60,7 +60,7 @@ export async function issueRegistrationOtp(phone: string, ip: string): Promise<I
     return { ok: false, reason: "unavailable" };
   }
 
-  const sent = await sendOtpSms(phone, registrationOtpMessage(code));
+  const sent = await sendOtpSms(phone, { code, message: registrationOtpMessage(code) });
   if (!sent) {
     await db.from("registration_otp_codes").delete().eq("id", data.id);
     return { ok: false, reason: "undelivered" };

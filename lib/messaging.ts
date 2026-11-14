@@ -2,23 +2,32 @@
  * Outgoing verification codes: SMS through MsgPlus only. WhatsApp / Green API and Firebase phone auth are NOT used to
  * deliver codes any more.
  *
- * The MsgPlus HTTP contract (endpoint, authentication, field names, response format) was not available when this was
- * written, so none of it is hard-coded or guessed. The request is built from server environment settings, which are
- * filled in from MsgPlus's official API documentation and account page:
+ * MsgPlus API v1 (from the official Postman collection): POST https://sms.msgplus.tech/api/v1/send with
+ *   Authorization: Bearer <API key>, X-Timestamp: <unix seconds, fresh on every request>, Accept + Content-Type: application/json
+ *   body { sender_id: <int>, template_id: <int>, numbers: ["963XXXXXXXXX"], vars: { P1: "<value>" } }
+ * The text of the SMS comes from an approved TEMPLATE; only its variables are sent. Success is HTTP 202 with
+ * { success: true, sms_log_id, queued: true }; errors are 400 (TIMESTAMP_REQUIRED, INSUFFICIENT_BALANCE) and 422.
+ *
+ * Everything provider specific is configured by server environment variables (secrets never live in the repository or
+ * the apps, and are never logged):
  *
  *   MSGPLUS_API_URL            https endpoint that sends one SMS (required, https only)
- *   MSGPLUS_BODY_TEMPLATE      JSON object with the field names MsgPlus expects; the strings {{to}}, {{message}} and
- *                              {{sender}} inside its values are replaced (required), e.g. {"to":"{{to}}","text":"{{message}}"}
- *   MSGPLUS_CONTENT_TYPE       "json" (default) or "form" (a flat template is then sent as a urlencoded form)
+ *   MSGPLUS_BODY_TEMPLATE      JSON object (required). The strings {{to}}, {{code}}, {{message}} and {{sender}} inside its
+ *                              values are replaced; numbers and arrays are kept as they are, e.g.
+ *                              {"sender_id":7,"template_id":12,"numbers":["{{to}}"],"vars":{"P1":"{{code}}"}}
+ *                              {{code}} is the bare verification code (digits), {{message}} the full Arabic sentence.
  *   MSGPLUS_AUTH_HEADER        optional header name, e.g. Authorization
- *   MSGPLUS_AUTH_VALUE         optional header value, e.g. the key / "Bearer ..." (secret: environment only)
- *   MSGPLUS_SENDER             optional sender id, used for {{sender}}
+ *   MSGPLUS_AUTH_VALUE         optional header value, e.g. "Bearer <key>" (secret: environment only)
+ *   MSGPLUS_TIMESTAMP_HEADER   header that carries the current unix time in seconds, recomputed for every request.
+ *                              Default X-Timestamp (required by MsgPlus /send); "none" switches it off
+ *   MSGPLUS_CONTENT_TYPE       "json" (default) or "form" (a flat template is then sent as a urlencoded form)
+ *   MSGPLUS_SENDER             optional sender text, used for {{sender}}
  *   MSGPLUS_PHONE_FORMAT       "international" (default, digits like 9639XXXXXXXX), "plus" (+963...) or "local" (09...)
- *   MSGPLUS_SUCCESS_FIELD      optional dotted path in the JSON reply that must equal MSGPLUS_SUCCESS_VALUE;
- *   MSGPLUS_SUCCESS_VALUE      without them any 2xx reply counts as accepted
+ *   MSGPLUS_SUCCESS_FIELD      optional dotted path in the JSON reply that must equal MSGPLUS_SUCCESS_VALUE
+ *   MSGPLUS_SUCCESS_VALUE      (for MsgPlus: success / true); without them any 2xx reply counts as accepted
  *
- * Nothing is sent, and no code is stored as "sent", unless these are set; routes answer "service unavailable".
- * Secrets live in the server environment only (never in the repository or the apps) and are never logged.
+ * Nothing is sent, and no code is stored as "sent", unless these are set correctly; the routes then answer "service
+ * unavailable". "queued" means accepted by MsgPlus, not delivered to the handset.
  */
 
 const SEND_TIMEOUT_MS = 10_000;
@@ -27,6 +36,7 @@ export type SmsSettings = {
   url: string;
   headerName: string;
   headerValue: string;
+  timestampHeader: string;
   contentType: "json" | "form";
   template: Record<string, unknown>;
   sender: string;
@@ -36,6 +46,11 @@ export type SmsSettings = {
 };
 
 type Env = Record<string, string | undefined>;
+
+/** What a verification SMS carries: the bare code (template variable) and the full sentence (free-text providers). */
+export type OtpPayload = { code: string; message: string };
+
+const CODE_RE = /^[0-9]{4,10}$/;
 
 /** Reads and validates the MsgPlus settings; null when the integration is not (correctly) configured. */
 export function readSmsSettings(env: Env = process.env): SmsSettings | null {
@@ -57,6 +72,12 @@ export function readSmsSettings(env: Env = process.env): SmsSettings | null {
   const headerName = (env.MSGPLUS_AUTH_HEADER ?? "").trim();
   const headerValue = env.MSGPLUS_AUTH_VALUE ?? "";
   if (headerName && (!/^[A-Za-z0-9-]+$/.test(headerName) || !headerValue)) return null;
+
+  const rawTimestamp = (env.MSGPLUS_TIMESTAMP_HEADER ?? "X-Timestamp").trim();
+  const timestampHeader = /^(none|off)$/i.test(rawTimestamp) ? "" : rawTimestamp;
+  if (timestampHeader && !/^[A-Za-z0-9-]+$/.test(timestampHeader)) return null;
+  if (timestampHeader && timestampHeader.toLowerCase() === headerName.toLowerCase()) return null;
+
   const successField = (env.MSGPLUS_SUCCESS_FIELD ?? "").trim();
   const successValue = env.MSGPLUS_SUCCESS_VALUE ?? "";
   if (successField && !successValue) return null;
@@ -65,6 +86,7 @@ export function readSmsSettings(env: Env = process.env): SmsSettings | null {
     url,
     headerName,
     headerValue,
+    timestampHeader,
     contentType,
     template: template as Record<string, unknown>,
     sender: (env.MSGPLUS_SENDER ?? "").trim(),
@@ -76,6 +98,11 @@ export function readSmsSettings(env: Env = process.env): SmsSettings | null {
 
 export function smsConfigured(env: Env = process.env): boolean {
   return readSmsSettings(env) !== null;
+}
+
+/** True when the body template expects the bare code ({{code}}), so a send without a valid code must be refused. */
+export function templateNeedsCode(settings: SmsSettings): boolean {
+  return JSON.stringify(settings.template).includes("{{code}}");
 }
 
 /** Recipient number in the format the provider expects. Syrian local mobiles (09XXXXXXXX) get the 963 country code. */
@@ -90,7 +117,7 @@ export function smsRecipient(phone: string, format: SmsSettings["phoneFormat"] =
 
 function fill(value: unknown, values: Record<string, string>): unknown {
   if (typeof value === "string") {
-    return value.replace(/\{\{(to|message|sender)\}\}/g, (_, name: string) => values[name] ?? "");
+    return value.replace(/\{\{(to|code|message|sender)\}\}/g, (_, name: string) => values[name] ?? "");
   }
   if (Array.isArray(value)) return value.map((item) => fill(item, values));
   if (value && typeof value === "object") {
@@ -99,15 +126,26 @@ function fill(value: unknown, values: Record<string, string>): unknown {
   return value;
 }
 
-/** Builds the HTTP request. The values are put into parsed JSON, never spliced into text, so a message cannot break the body. */
-export function buildSmsRequest(settings: SmsSettings, phone: string, message: string): { headers: Record<string, string>; body: string } {
+/**
+ * Builds the HTTP request. The values are put into parsed JSON, never spliced into text, so a message cannot break
+ * the body. The timestamp is taken at call time (unix seconds) because MsgPlus rejects a missing or stale one.
+ */
+export function buildSmsRequest(
+  settings: SmsSettings,
+  phone: string,
+  otp: OtpPayload | string,
+  nowMs: number = Date.now(),
+): { headers: Record<string, string>; body: string } {
+  const payload: OtpPayload = typeof otp === "string" ? { code: "", message: otp } : otp;
   const filled = fill(settings.template, {
     to: smsRecipient(phone, settings.phoneFormat),
-    message,
+    code: payload.code,
+    message: payload.message,
     sender: settings.sender,
   }) as Record<string, unknown>;
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { Accept: "application/json" };
   if (settings.headerName) headers[settings.headerName] = settings.headerValue;
+  if (settings.timestampHeader) headers[settings.timestampHeader] = String(Math.floor(nowMs / 1000));
   if (settings.contentType === "form") {
     headers["Content-Type"] = "application/x-www-form-urlencoded";
     const form = new URLSearchParams();
@@ -122,26 +160,45 @@ function readPath(data: unknown, path: string): unknown {
   return path.split(".").reduce<unknown>((value, key) => (value && typeof value === "object" ? (value as Record<string, unknown>)[key] : undefined), data);
 }
 
+/** The provider's machine error code (e.g. INSUFFICIENT_BALANCE) is safe to log: it carries no number, key or text. */
+function providerErrorCode(data: unknown): string {
+  const code = data && typeof data === "object" ? (data as Record<string, unknown>).code : undefined;
+  return typeof code === "string" && /^[A-Z][A-Z0-9_]{2,39}$/.test(code) ? code : "";
+}
+
 /**
- * Sends one SMS through MsgPlus. Never throws; false means the provider did not accept it (or the integration is not
- * configured). Only the HTTP status is logged: the URL, the key and the phone number are not.
+ * Sends one verification SMS through MsgPlus. Never throws; false means the provider did not accept it (or the
+ * integration is not configured, or the code is missing while the template needs it). Only the HTTP status and the
+ * provider's error code are logged: the URL, the key, the code and the phone number are not.
  */
-export async function sendOtpSms(phone: string, message: string, deps: { env?: Env; fetchImpl?: typeof fetch } = {}): Promise<boolean> {
+export async function sendOtpSms(
+  phone: string,
+  otp: OtpPayload | string,
+  deps: { env?: Env; fetchImpl?: typeof fetch; now?: () => number } = {},
+): Promise<boolean> {
   const settings = readSmsSettings(deps.env ?? process.env);
   if (!settings) {
     console.error("[sms] MsgPlus is not configured (MSGPLUS_API_URL / MSGPLUS_BODY_TEMPLATE)");
     return false;
   }
+  const payload: OtpPayload = typeof otp === "string" ? { code: "", message: otp } : otp;
+  if (templateNeedsCode(settings) && !CODE_RE.test(payload.code)) {
+    console.error("[sms] refused: the template needs a numeric code and none was given");
+    return false;
+  }
   try {
-    const { headers, body } = buildSmsRequest(settings, phone, message);
+    const { headers, body } = buildSmsRequest(settings, phone, payload, (deps.now ?? Date.now)());
     const res = await (deps.fetchImpl ?? fetch)(settings.url, {
       method: "POST",
       headers,
       body,
+      redirect: "manual", // a redirect (e.g. an HTML error page) must never be mistaken for an accepted send
       signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
     });
     if (!res.ok) {
-      console.error("[sms] MsgPlus rejected the request, status", res.status);
+      const data = await res.json().catch(() => null);
+      const code = providerErrorCode(data);
+      console.error("[sms] MsgPlus rejected the request, status", res.status, code ? `code ${code}` : "");
       return false;
     }
     if (settings.successField) {

@@ -60,7 +60,7 @@ export async function POST(req: Request) {
         return reply({ ok: true, message: SENT });
       }
       // Wait for the provider's confirmation. Never tell the user the code was sent when delivery failed.
-      const sent = await sendOtpSms(String(user.phone), otpMessage("password_reset", issued.code));
+      const sent = await sendOtpSms(String(user.phone), { code: issued.code, message: otpMessage("password_reset", issued.code) });
       if (!sent) {
         await dropOtp(issued.id);
         return reply({ error: "تعذر إرسال الرمز حالياً. حاول مجدداً بعد قليل." }, 502);

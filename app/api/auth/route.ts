@@ -19,6 +19,7 @@ import { claimRegistrationOtp, issueRegistrationOtp, registrationOtpEnabled, typ
 import { checkSecondFactor } from "@/lib/admin-2fa";
 import { verifyReferralSignature } from "@/lib/referral-signature";
 import { MAX_PASSWORD, MIN_NEW_PASSWORD } from "@/lib/password-policy";
+import { accountFlags } from "@/lib/account-flags";
 import { recordReferralSignup, referralLookupAllowed, referralLookupFailed } from "@/lib/referral-guard";
 
 export const dynamic = "force-dynamic";
@@ -75,9 +76,18 @@ export async function GET() {
       console.error("[api/auth] identity metadata:", identityError);
     }
     const primaryIdentity = identities?.find((item) => item.email) ?? identities?.[0] ?? null;
+    // Facts the app needs to pick its buttons (add or change the phone, add or change the password, referral link).
+    // A separate best-effort query: if it fails the flags are left out and the app falls back to its defaults;
+    // the sign-in answer above must never fail because of it. The password hash itself is never returned.
+    let flags: Record<string, boolean> = {};
+    const { data: flagRow, error: flagError } = await getSupabaseAdmin()
+      .from("users").select("phone, password_hash, phone_verification_required").eq("id", user.id).maybeSingle();
+    if (flagError) console.error("[api/auth] account flags:", flagError);
+    else if (flagRow) flags = accountFlags(flagRow);
     return json({
       user: {
         ...user,
+        ...flags,
         auth_email: primaryIdentity?.email ?? null,
         auth_provider: primaryIdentity?.provider ?? null,
       },

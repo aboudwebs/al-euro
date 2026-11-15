@@ -1,7 +1,8 @@
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { bumpTokenVersion, setSession, verifyPassword } from "@/lib/session";
 import { RULES, rateHit, rateKey, rateReset, smsDailyBudget, tooManyRequests } from "@/lib/rate-limit";
-import { cleanPhone, dbError, readBody, reply, requireUser } from "@/lib/account-api";
+import { accountFlags } from "@/lib/account-flags";
+import { cleanPhone, dbError, isUndefinedColumn, readBody, reply, requireUser } from "@/lib/account-api";
 import { consumeOtp, dropOtp, issueOtp, otpMessage, sendOtpSms, smsConfigured } from "@/lib/otp";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +13,11 @@ const USER_FIELDS = "id, role, name, phone, city, license, specs, tier, debt_lim
  * Changing the phone number (it is also the sign-in name) takes two steps, both bound to the NEW number:
  *   { mode: "request", newPhone, currentPassword }  -> a 6-digit code is sent to the new number by SMS (MsgPlus)
  *   { mode: "confirm", newPhone, code }              -> the number is changed and a fresh session token is returned
+ *
+ * An account created with e-mail has no phone number and no password yet. Such an account ADDS its number without a
+ * current password (the SMS code to the new number is the proof). An account that has a password must give it; an
+ * account that has a phone but no password must add a password first (nothing else would protect the change).
+ * Confirming a number with the code also marks it verified (phone_verified_at, phone_verification_required=false).
  */
 export async function POST(req: Request) {
   const auth = await requireUser();
@@ -26,16 +32,23 @@ export async function POST(req: Request) {
   const db = getSupabaseAdmin();
 
   if (body.mode === "request") {
-    const current = typeof body.currentPassword === "string" ? body.currentPassword : "";
-    // (The old check compared the stored hash with a freshly salted hash, so it could never match.)
-    const key = rateKey("password-check", auth.user.id);
-    const blocked = await rateHit(key, RULES.loginFailPerAccount, { increment: false });
-    if (!blocked.allowed) return tooManyRequests(blocked.retryAfter);
-    if (!auth.user.password_hash || !verifyPassword(String(auth.user.password_hash), current)) {
-      const after = await rateHit(key, RULES.loginFailPerAccount);
-      return after.allowed ? reply({ error: "كلمة المرور الحالية غير صحيحة" }, 403) : tooManyRequests(after.retryAfter);
+    const hasPassword = Boolean(auth.user.password_hash);
+    const hasPhone = typeof auth.user.phone === "string" && auth.user.phone.trim().length > 0;
+    if (!hasPassword && hasPhone) {
+      return reply({ error: "أضف كلمة مرور لحسابك أولاً ثم غيّر رقم الموبايل" }, 403);
     }
-    await rateReset(key);
+    if (hasPassword) {
+      const current = typeof body.currentPassword === "string" ? body.currentPassword : "";
+      // (The old check compared the stored hash with a freshly salted hash, so it could never match.)
+      const key = rateKey("password-check", auth.user.id);
+      const blocked = await rateHit(key, RULES.loginFailPerAccount, { increment: false });
+      if (!blocked.allowed) return tooManyRequests(blocked.retryAfter);
+      if (!verifyPassword(String(auth.user.password_hash), current)) {
+        const after = await rateHit(key, RULES.loginFailPerAccount);
+        return after.allowed ? reply({ error: "كلمة المرور الحالية غير صحيحة" }, 403) : tooManyRequests(after.retryAfter);
+      }
+      await rateReset(key);
+    }
     if (!smsConfigured()) return reply({ error: "خدمة إرسال الرموز غير متاحة حالياً، حاول لاحقاً" }, 503);
 
     const { data: taken, error: takenError } = await db
@@ -69,8 +82,15 @@ export async function POST(req: Request) {
     if (result === "failed") return reply({ error: "حدث خطأ غير متوقع في الخادم" }, 500);
     if (result !== "ok") return reply({ error: "رمز التحقق غير صحيح أو انتهت صلاحيته" }, 400);
 
-    const { data: user, error } = await db
-      .from("users").update({ phone: newPhone }).eq("id", auth.user.id).eq("is_active", true).select(USER_FIELDS).single();
+    // The code proves the owner holds this number: it is stored as verified. (Old schemas without the verification
+    // columns still get the number.)
+    const verified = { phone: newPhone, phone_verified_at: new Date().toISOString(), phone_verification_required: false };
+    let { data: user, error } = await db
+      .from("users").update(verified).eq("id", auth.user.id).eq("is_active", true).select(USER_FIELDS).single();
+    if (isUndefinedColumn(error)) {
+      ({ data: user, error } = await db
+        .from("users").update({ phone: newPhone }).eq("id", auth.user.id).eq("is_active", true).select(USER_FIELDS).single());
+    }
     if (error?.code === "23505") return reply({ error: "هذا الرقم مسجل مسبقاً بنفس نوع الحساب" }, 409);
     if (error || !user) return dbError("phone update", error, "تعذر تغيير الرقم");
 
@@ -81,7 +101,8 @@ export async function POST(req: Request) {
       console.error("[api/account/phone] revoke sessions:", err);
     }
     const accessToken = await setSession({ id: String(user.id), role: user.role, name: user.name, phone: user.phone, my_ref_code: user.my_ref_code });
-    return reply({ ok: true, user, accessToken });
+    const flags = accountFlags({ phone: user.phone, password_hash: auth.user.password_hash, phone_verification_required: false });
+    return reply({ ok: true, user: { ...user, ...flags }, accessToken });
   }
 
   return reply({ error: "نوع العملية غير صالح" }, 400);

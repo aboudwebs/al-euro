@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/account-api";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { signReferralCode } from "@/lib/referral-signature";
+import { accountFlags } from "@/lib/account-flags";
 
 export const dynamic = "force-dynamic";
 const reply = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
@@ -79,10 +80,21 @@ export async function GET() {
       console.error("[api/marketer/dashboard] AUTH_SECRET is not configured");
       return reply({ error: "إعدادات الأمان غير مكتملة على الخادم" }, 503);
     }
-    const referralSignature = signReferralCode(String(marketer.my_ref_code));
-    const referralUrl = `${referralOrigin}/r?ref=${encodeURIComponent(marketer.my_ref_code)}&sig=${referralSignature}`;
+    // The invitation link is handed out only after the marketer's phone number is added and confirmed by SMS code
+    // (an account made with e-mail alone has none). Until then the answer carries no link; the app shows why.
+    const phoneVerified = accountFlags(auth.user).phone_verified;
+    const referralUrl = phoneVerified
+      ? `${referralOrigin}/r?ref=${encodeURIComponent(marketer.my_ref_code)}&sig=${signReferralCode(String(marketer.my_ref_code))}`
+      : null;
     return reply({
-      marketer: { name: marketer.name, code: marketer.my_ref_code, referralUrl },
+      marketer: {
+        name: marketer.name,
+        code: marketer.my_ref_code,
+        referralUrl,
+        phoneVerified,
+        referralLocked: !phoneVerified,
+        ...(phoneVerified ? {} : { referralLockedMessage: "يجب إضافة وتأكيد رقم الموبايل لتفعيل رابط الإحالة" }),
+      },
       workshops: count ?? 0,
       commissions: {
         available: Math.round(totals.available * 100) / 100,

@@ -6,7 +6,8 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const auth = await requireUser();
+    // Workshops and marketers read the rate in the app; the admin panel's currency page reads it here too.
+    const auth = await requireUser({ allowAdmin: true });
     if (!auth.ok) return auth.response;
     const live = await getStableInvoiceRate();
     if (!live) {

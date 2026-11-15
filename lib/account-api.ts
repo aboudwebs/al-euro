@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { getSession, SessionStoreError } from "@/lib/session";
 import { readJsonLimited } from "@/lib/http";
+import { accountRoleAllowed } from "@/lib/account-flags";
 
 /** Shared helpers of the signed-in customer endpoints under /api/account/* and /api/settings/. */
 
@@ -50,8 +51,11 @@ export type AccountUser = {
   phone_verification_required?: boolean;
 };
 
-/** Re-reads the customer and enforces any pending phone-verification requirement server-side. */
-export async function requireUser(options: { requireVerifiedPhone?: boolean } = {}): Promise<{ ok: true; user: AccountUser } | { ok: false; response: NextResponse }> {
+/**
+ * Re-reads the customer and enforces any pending phone-verification requirement server-side.
+ * `allowAdmin` lets an active admin through too: only for read-only endpoints the admin panel itself uses.
+ */
+export async function requireUser(options: { requireVerifiedPhone?: boolean; allowAdmin?: boolean } = {}): Promise<{ ok: true; user: AccountUser } | { ok: false; response: NextResponse }> {
   let session: Awaited<ReturnType<typeof getSession>>;
   try {
     session = await getSession();
@@ -93,7 +97,7 @@ export async function requireUser(options: { requireVerifiedPhone?: boolean } = 
       }, 403),
     };
   }
-  if (data.role !== "workshop" && data.role !== "marketer") {
+  if (!accountRoleAllowed(data.role, { allowAdmin: options.allowAdmin })) {
     return { ok: false, response: reply({ error: "هذه الخدمة لحسابات الورشات والمسوّقين فقط" }, 403) };
   }
   return { ok: true, user: data as AccountUser };

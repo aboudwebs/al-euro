@@ -2,6 +2,7 @@ import { requireAdmin } from "@/lib/admin-guard";
 import { dbFail, ok } from "@/lib/admin-api";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { LOW_STOCK_THRESHOLD } from "@/lib/status";
+import { loadCommissionTotals } from "@/lib/commission-totals";
 
 export const dynamic = "force-dynamic";
 
@@ -17,5 +18,10 @@ export async function GET() {
   ]);
   if (error) return dbFail("overview", error, "تعذر تحميل الإحصائيات");
   if (refundError) return dbFail("overview refund count", refundError, "تعذر تحميل إحصائيات الاسترداد");
-  return ok({ overview: { ...data, pending_sham_refunds: pendingRefunds ?? 0 } });
+  // The SQL function sums the full amount of every "available" commission, including the part already paid out in
+  // partial payouts. The card shows the net payable amount instead (same rule as the commissions page).
+  const commissions = await loadCommissionTotals(db);
+  if (!commissions.ok) console.error("[admin/overview] net commission totals:", commissions.error);
+  const net = commissions.ok ? { available_commissions: commissions.totals.available } : {};
+  return ok({ overview: { ...data, ...net, pending_sham_refunds: pendingRefunds ?? 0 } });
 }

@@ -2,6 +2,7 @@ import { requireAdmin } from "@/lib/admin-guard";
 import { clampLimit, dbFail, fail, isUuid, ok, readJson } from "@/lib/admin-api";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { COMMISSION_STATUS } from "@/lib/status";
+import { loadCommissionTotals } from "@/lib/commission-totals";
 
 export const dynamic = "force-dynamic";
 
@@ -19,10 +20,10 @@ export async function GET(req: Request) {
   const { data, error } = await query.order("created_at", { ascending: false }).limit(clampLimit(url.searchParams.get("limit")));
   if (error) return dbFail("commissions list", error, "تعذر تحميل العمولات");
 
-  const { data: all, error: totalsError } = await db.from("marketer_commissions").select("status, commission_amount").limit(100000);
-  if (totalsError) return dbFail("commission totals", totalsError, "تعذر حساب الإجماليات");
-  const totals = { held: 0, available: 0, payout_requested: 0, paid: 0 };
-  for (const row of all ?? []) if (row.status in totals) totals[row.status as keyof typeof totals] += Number(row.commission_amount) || 0;
+  // Net totals: partial payouts are subtracted (see lib/commission-math.ts); read-only.
+  const computed = await loadCommissionTotals(db);
+  if (!computed.ok) return dbFail("commission totals", computed.error, "تعذر حساب الإجماليات");
+  const totals = computed.totals;
 
   const userIds = Array.from(new Set((data ?? []).flatMap((c) => [c.marketer_id, c.workshop_id]).filter(Boolean)));
   const orderIds = Array.from(new Set((data ?? []).map((c) => c.order_id).filter(Boolean)));

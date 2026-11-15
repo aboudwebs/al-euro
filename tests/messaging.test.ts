@@ -254,3 +254,80 @@ test("legacy free-text templates ({{message}}) still work next to the code place
   const asString = buildSmsRequest(settings, "0933123456", "just text", NOW);
   assert.equal(JSON.parse(asString.body).text, "just text");
 });
+
+// ---------------------------------------------------------------------------------------------------------------
+// Simple setup: MSGPLUS_API_KEY + MSGPLUS_SENDER_ID + MSGPLUS_TEMPLATE_ID (+ MSGPLUS_OTP_VAR_NAME).
+// ---------------------------------------------------------------------------------------------------------------
+
+const SIMPLE = { MSGPLUS_API_KEY: "TEST-ONLY-NOT-A-REAL-KEY", MSGPLUS_SENDER_ID: "157", MSGPLUS_TEMPLATE_ID: "1", MSGPLUS_OTP_VAR_NAME: "P1" };
+
+test("simple setup: four variables are enough and the request matches the MsgPlus contract", async () => {
+  assert.equal(smsConfigured(SIMPLE), true);
+  const seen: Seen[] = [];
+  const server = (async (url: string | URL | Request, init?: RequestInit) => {
+    const headers = init?.headers as Record<string, string>;
+    seen.push({ url: String(url), headers, body: JSON.parse(String(init?.body)), redirect: init?.redirect });
+    return new Response(JSON.stringify({ success: true, sms_log_id: 1, queued: true }), { status: 202, headers: { "Content-Type": "application/json" } });
+  }) as typeof fetch;
+  assert.equal(await sendOtpSms("0933123456", { code: "482913", message: registrationOtpMessage("482913") }, { env: SIMPLE, fetchImpl: server, now: () => NOW }), true);
+  assert.equal(seen[0].url, "https://sms.msgplus.tech/api/v1/send");
+  assert.deepEqual(seen[0].body, { sender_id: 157, template_id: 1, numbers: ["963933123456"], vars: { P1: "482913" } });
+  assert.equal(seen[0].headers["Authorization"], "Bearer TEST-ONLY-NOT-A-REAL-KEY");
+  assert.equal(seen[0].headers["X-Timestamp"], String(NOW / 1000));
+  assert.equal(seen[0].headers["Accept"], "application/json");
+});
+
+test("simple setup: the default variable is P1, another name is honoured, and success:false is not a send", async () => {
+  const { MSGPLUS_OTP_VAR_NAME: _omit, ...withoutName } = SIMPLE;
+  const a = readSmsSettings(withoutName)!;
+  assert.deepEqual(JSON.parse(buildSmsRequest(a, "0933123456", { code: "123456", message: "m" }, NOW).body).vars, { P1: "123456" });
+  const b = readSmsSettings({ ...SIMPLE, MSGPLUS_OTP_VAR_NAME: "CODE_1" })!;
+  assert.deepEqual(JSON.parse(buildSmsRequest(b, "0933123456", { code: "123456", message: "m" }, NOW).body).vars, { CODE_1: "123456" });
+  const silenced = console.error;
+  console.error = () => {};
+  try {
+    const rejected = (async () => new Response(JSON.stringify({ success: false }), { status: 202 })) as unknown as typeof fetch;
+    assert.equal(await sendOtpSms("0933123456", { code: "123456", message: "m" }, { env: SIMPLE, fetchImpl: rejected }), false);
+  } finally {
+    console.error = silenced;
+  }
+});
+
+test("simple setup: a pasted 'Bearer ' prefix is accepted, bad or missing values mean 'not configured' (nothing is sent)", () => {
+  const pasted = readSmsSettings({ ...SIMPLE, MSGPLUS_API_KEY: "  Bearer TEST-ONLY-NOT-A-REAL-KEY \n" })!;
+  assert.equal(pasted.headerValue, "Bearer TEST-ONLY-NOT-A-REAL-KEY", "no double prefix");
+  assert.equal(smsConfigured({}), false, "nothing set");
+  assert.equal(smsConfigured({ MSGPLUS_SENDER_ID: "157", MSGPLUS_TEMPLATE_ID: "1" }), false, "ids without a key");
+  assert.equal(smsConfigured({ ...SIMPLE, MSGPLUS_SENDER_ID: "" }), false, "missing sender id");
+  assert.equal(smsConfigured({ ...SIMPLE, MSGPLUS_TEMPLATE_ID: "" }), false, "missing template id");
+  assert.equal(smsConfigured({ ...SIMPLE, MSGPLUS_SENDER_ID: "157.5" }), false);
+  assert.equal(smsConfigured({ ...SIMPLE, MSGPLUS_TEMPLATE_ID: "0" }), false);
+  assert.equal(smsConfigured({ ...SIMPLE, MSGPLUS_TEMPLATE_ID: "1; drop" }), false);
+  assert.equal(smsConfigured({ ...SIMPLE, MSGPLUS_OTP_VAR_NAME: "P 1" }), false);
+  assert.equal(smsConfigured({ ...SIMPLE, MSGPLUS_API_KEY: "short" }), false, "too short to be a key");
+  assert.equal(smsConfigured({ ...SIMPLE, MSGPLUS_API_KEY: "has space inside the key" }), false);
+  assert.equal(smsConfigured({ ...SIMPLE, MSGPLUS_API_URL: "http://sms.msgplus.tech/api/v1/send" }), false, "https only");
+});
+
+test("simple setup: the generic variables still override the derived values", () => {
+  const custom = readSmsSettings({ ...SIMPLE, MSGPLUS_API_URL: "https://example.test/send", MSGPLUS_TIMESTAMP_HEADER: "none", MSGPLUS_SUCCESS_FIELD: "ok", MSGPLUS_SUCCESS_VALUE: "yes" })!;
+  assert.equal(custom.url, "https://example.test/send");
+  assert.equal(custom.timestampHeader, "");
+  assert.equal(custom.successField, "ok");
+  const full = readSmsSettings({ ...SIMPLE, MSGPLUS_BODY_TEMPLATE: JSON.stringify({ sender_id: 9, template_id: 9, numbers: ["{{to}}"], vars: { P2: "{{code}}" } }) })!;
+  assert.deepEqual(JSON.parse(buildSmsRequest(full, "0933123456", { code: "123456", message: "m" }, NOW).body), { sender_id: 9, template_id: 9, numbers: ["963933123456"], vars: { P2: "123456" } });
+});
+
+test("simple setup: the key never appears in logs", async () => {
+  const logged: string[] = [];
+  const original = console.error;
+  console.error = (...a: unknown[]) => { logged.push(a.join(" ")); };
+  try {
+    await sendOtpSms("0933123456", { code: "123456", message: "m" }, { env: SIMPLE, fetchImpl: msgplusServer([], { balance: false }), now: () => NOW });
+    await sendOtpSms("0933123456", { code: "123456", message: "m" }, { env: SIMPLE, fetchImpl: (async () => { throw new Error("boom TEST-ONLY-NOT-A-REAL-KEY"); }) as unknown as typeof fetch });
+  } finally {
+    console.error = original;
+  }
+  assert.ok(logged.length >= 2);
+  for (const line of logged) assert.ok(!line.includes("TEST-ONLY-NOT-A-REAL-KEY") && !line.includes("933123456"));
+});

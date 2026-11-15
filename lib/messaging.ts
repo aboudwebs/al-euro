@@ -9,10 +9,20 @@
  * { success: true, sms_log_id, queued: true }; errors are 400 (TIMESTAMP_REQUIRED, INSUFFICIENT_BALANCE) and 422.
  *
  * Everything provider specific is configured by server environment variables (secrets never live in the repository or
- * the apps, and are never logged):
+ * the apps, and are never logged).
  *
- *   MSGPLUS_API_URL            https endpoint that sends one SMS (required, https only)
- *   MSGPLUS_BODY_TEMPLATE      JSON object (required). The strings {{to}}, {{code}}, {{message}} and {{sender}} inside its
+ * SIMPLE SETUP (MsgPlus, recommended): four variables, everything else is derived from the documented contract
+ *   MSGPLUS_API_KEY            the API key (secret; "Bearer " in front of it is added, or accepted if you paste it)
+ *   MSGPLUS_SENDER_ID          integer sender id of the account (GET /senders)
+ *   MSGPLUS_TEMPLATE_ID        integer id of the approved OTP template (GET /templates)
+ *   MSGPLUS_OTP_VAR_NAME       the template variable that carries the code (default P1)
+ *   -> POST https://sms.msgplus.tech/api/v1/send, Authorization: Bearer <key>, success = reply.success === true,
+ *      body {"sender_id":<id>,"template_id":<id>,"numbers":["963..."],"vars":{"<VAR>":"<code>"}}
+ *
+ * ADVANCED / OTHER PROVIDERS: the generic variables below. They override the derived values when set.
+ *
+ *   MSGPLUS_API_URL            https endpoint that sends one SMS (https only; default for the simple setup: MsgPlus v1 /send)
+ *   MSGPLUS_BODY_TEMPLATE      JSON object. The strings {{to}}, {{code}}, {{message}} and {{sender}} inside its
  *                              values are replaced; numbers and arrays are kept as they are, e.g.
  *                              {"sender_id":7,"template_id":12,"numbers":["{{to}}"],"vars":{"P1":"{{code}}"}}
  *                              {{code}} is the bare verification code (digits), {{message}} the full Arabic sentence.
@@ -53,13 +63,42 @@ export type OtpPayload = { code: string; message: string };
 const CODE_RE = /^[0-9]{4,10}$/;
 
 /** Reads and validates the MsgPlus settings; null when the integration is not (correctly) configured. */
+export const MSGPLUS_DEFAULT_URL = "https://sms.msgplus.tech/api/v1/send";
+
+/** Positive integer written as digits (ids must stay numbers in the JSON body). */
+const ID_RE = /^[1-9][0-9]{0,9}$/;
+const VAR_NAME_RE = /^[A-Za-z][A-Za-z0-9_]{0,31}$/;
+
+/** The API key as the user may have pasted it: trimmed, without a leading "Bearer ", visible ASCII only. Null if unusable. */
+function readApiKey(env: Env): string | null {
+  const raw = (env.MSGPLUS_API_KEY ?? "").trim().replace(/^Bearer\s+/i, "");
+  if (!raw) return "";
+  return /^[\x21-\x7E]{8,200}$/.test(raw) ? raw : null;
+}
+
 export function readSmsSettings(env: Env = process.env): SmsSettings | null {
-  const url = (env.MSGPLUS_API_URL ?? "").trim();
+  const apiKey = readApiKey(env);
+  if (apiKey === null) return null; // a key is set but malformed: do not guess
+  const simple = apiKey !== "";
+
+  const url = (env.MSGPLUS_API_URL ?? "").trim() || (simple ? MSGPLUS_DEFAULT_URL : "");
   if (!/^https:\/\//i.test(url)) return null;
+
   let template: unknown;
-  try {
-    template = JSON.parse(env.MSGPLUS_BODY_TEMPLATE ?? "");
-  } catch {
+  const rawTemplate = (env.MSGPLUS_BODY_TEMPLATE ?? "").trim();
+  if (rawTemplate) {
+    try {
+      template = JSON.parse(rawTemplate);
+    } catch {
+      return null;
+    }
+  } else if (simple) {
+    const senderId = (env.MSGPLUS_SENDER_ID ?? "").trim();
+    const templateId = (env.MSGPLUS_TEMPLATE_ID ?? "").trim();
+    const varName = (env.MSGPLUS_OTP_VAR_NAME ?? "").trim() || "P1";
+    if (!ID_RE.test(senderId) || !ID_RE.test(templateId) || !VAR_NAME_RE.test(varName)) return null;
+    template = { sender_id: Number(senderId), template_id: Number(templateId), numbers: ["{{to}}"], vars: { [varName]: "{{code}}" } };
+  } else {
     return null;
   }
   if (!template || typeof template !== "object" || Array.isArray(template)) return null;
@@ -69,8 +108,8 @@ export function readSmsSettings(env: Env = process.env): SmsSettings | null {
   const phoneFormat = (env.MSGPLUS_PHONE_FORMAT ?? "international").trim().toLowerCase();
   if (phoneFormat !== "international" && phoneFormat !== "plus" && phoneFormat !== "local") return null;
 
-  const headerName = (env.MSGPLUS_AUTH_HEADER ?? "").trim();
-  const headerValue = env.MSGPLUS_AUTH_VALUE ?? "";
+  const headerName = (env.MSGPLUS_AUTH_HEADER ?? "").trim() || (simple ? "Authorization" : "");
+  const headerValue = env.MSGPLUS_AUTH_VALUE || (simple ? `Bearer ${apiKey}` : "");
   if (headerName && (!/^[A-Za-z0-9-]+$/.test(headerName) || !headerValue)) return null;
 
   const rawTimestamp = (env.MSGPLUS_TIMESTAMP_HEADER ?? "X-Timestamp").trim();
@@ -78,8 +117,8 @@ export function readSmsSettings(env: Env = process.env): SmsSettings | null {
   if (timestampHeader && !/^[A-Za-z0-9-]+$/.test(timestampHeader)) return null;
   if (timestampHeader && timestampHeader.toLowerCase() === headerName.toLowerCase()) return null;
 
-  const successField = (env.MSGPLUS_SUCCESS_FIELD ?? "").trim();
-  const successValue = env.MSGPLUS_SUCCESS_VALUE ?? "";
+  const successField = (env.MSGPLUS_SUCCESS_FIELD ?? "").trim() || (simple ? "success" : "");
+  const successValue = env.MSGPLUS_SUCCESS_VALUE || (simple ? "true" : "");
   if (successField && !successValue) return null;
 
   return {

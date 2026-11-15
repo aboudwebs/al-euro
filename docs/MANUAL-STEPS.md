@@ -3,36 +3,29 @@
 > **حالة الإنتاج (2026-11-14):** طُبّقت ترحيلات قاعدة البيانات على Supabase (`rfdouihwmpgdqrwzyoob`) وتم التحقق منها (انظر §1). **لم يُنشر أي كود** على Render ولم يُرفع شيء إلى GitHub، ولم تُغيَّر متغيرات Render ولا Firebase.
 > الترتيب: **(1) MsgPlus → (2) متغيرات Render → (3) نشر الخادم → (4) إصدار التطبيق**.
 
-## 0) ⚠️ ربط MsgPlus — الكود جاهز، وتنقصه قيمتان من حسابك
+## 0) ربط MsgPlus — الكود جاهز، والقيم وصلت (إعداد Render ينتظرك)
 
-رموز التحقق **عبر MsgPlus SMS فقط** (لا واتساب/Green API ولا Firebase SMS). المحوّل `lib/messaging.ts` يتبع وثائق MsgPlus API v1 (ملف Postman): `POST https://sms.msgplus.tech/api/v1/send` بترويسات `Authorization: Bearer`, `X-Timestamp` (ثوانٍ، تُحسب لكل طلب), `Accept`, وجسم `sender_id` + `template_id` + `numbers` + `vars`. الإرسال **بقالب معتمد**: نرسل الرمز فقط داخل متغير القالب.
+رموز التحقق **عبر MsgPlus SMS فقط** (لا واتساب/Green API ولا Firebase SMS). المحوّل `lib/messaging.ts` يتبع وثائق MsgPlus API v1: `POST https://sms.msgplus.tech/api/v1/send` بترويسات `Authorization: Bearer`, `X-Timestamp` (ثوانٍ، لكل طلب), `Accept`، وجسم `sender_id` + `template_id` + `numbers` + `vars`. الإرسال **بقالب معتمد**: يُرسل الرمز وحده داخل متغير القالب.
 
-إن نُشر الخادم قبل ضبط المتغيرات: «نسيت كلمة المرور» عبر الرمز وتغيير الهاتف يردّان 503/502 (لا يُخزَّن ولا يُرسَل شيء)، والتسجيل برمز التحقق معطّل أصلاً (`REGISTRATION_OTP_ENABLED=false`)، والدخول العادي لا يتأثر.
-
-### ما ينقص (لم أخترعه ولم أستطع الوصول إلى حسابك)
-1. **`sender_id`**: من `GET /senders` (Postman: Get Senders).
-2. **`template_id` واسم متغير القالب** (مثل `P1`): من `GET /templates`. أنشئ/اعتمد قالباً بهذا النص (يذكر الـ10 دقائق وطوله 54 حرفاً = رسالة واحدة):
-   `EURO CARS: رمز التحقق [[P1]] صالح 10 دقائق. لا تشاركه.`
-3. **المفتاح**: يُوضع في Render فقط. لا ترسله في محادثة ولا تضعه في ملف.
-
-### متغيرات Render (الخدمة `al-euro`) — انسخها بعد استبدال `<…>`
+### متغيرات Render (الخدمة `al-euro`) — أربعة فقط
 | المتغير | القيمة |
 |---|---|
-| `MSGPLUS_API_URL` | `https://sms.msgplus.tech/api/v1/send` |
-| `MSGPLUS_AUTH_HEADER` | `Authorization` |
-| `MSGPLUS_AUTH_VALUE` | `Bearer <مفتاح الـ API>` (سر) |
-| `MSGPLUS_BODY_TEMPLATE` | `{"sender_id":<SENDER_ID>,"template_id":<TEMPLATE_ID>,"numbers":["{{to}}"],"vars":{"P1":"{{code}}"}}` — الرقمان بلا علامات اقتباس، و`P1` = اسم المتغير في قالبك |
-| `MSGPLUS_TIMESTAMP_HEADER` | `X-Timestamp` (الافتراضي، يمكن عدم ضبطه) |
-| `MSGPLUS_PHONE_FORMAT` | `international` (الافتراضي، يعطي `963XXXXXXXXX`) |
-| `MSGPLUS_SUCCESS_FIELD` / `MSGPLUS_SUCCESS_VALUE` | `success` / `true` |
-| `MSGPLUS_CONTENT_TYPE` | `json` (الافتراضي) |
-| `OTP_DAILY_CAP` | اختياري (الافتراضي 500) |
-| `REGISTRATION_OTP_ENABLED` | يبقى `false` حتى ينجح اختبار الرسالة |
+| `MSGPLUS_API_KEY` | **مفتاح الـ API (سر، يوضع في Render فقط)** — يُقبل بدون كلمة Bearer أو معها |
+| `MSGPLUS_SENDER_ID` | `157` |
+| `MSGPLUS_TEMPLATE_ID` | `1` |
+| `MSGPLUS_OTP_VAR_NAME` | `P1` |
 
-لا ضرورة لـ `MSGPLUS_SENDER` (الـ `sender_id` رقم ثابت داخل القالب). إن كان القالب خاطئاً (JSON غير صالح مثلاً) يعدّ الخادم التكامل «غير مُعدّ» ولا يرسل شيئاً.
+الباقي يُشتق تلقائياً (الرابط، `Authorization: Bearer`، `X-Timestamp`، `Accept`، فحص `success=true`). المتغيرات العامة (`MSGPLUS_API_URL`، `MSGPLUS_BODY_TEMPLATE`، …) اختيارية وتتغلّب على المشتق عند ضبطها. **تحقّق من نص القالب رقم 1** في لوحة MsgPlus: يجب أن يحوي المتغير `[[P1]]` فقط ويذكر «10 دقائق»، مثل:
+`EURO CARS: رمز التحقق [[P1]] صالح 10 دقائق. لا تشاركه.`
+(قالب بمتغيرات أخرى يردّ 422 ولا يُرسَل شيء.) إن كانت قيمة غير صالحة (رقم غير صحيح، مفتاح قصير …) يعدّ الخادم التكامل «غير مُعدّ» ولا يرسل شيئاً.
 
-### بعد الضبط: اختبار نهائي (بموافقتك فقط)
-رسالة **واحدة** إلى رقمك أنت من «نسيت كلمة المرور». المتوقع: وصول الرمز خلال دقيقة، صالح 10 دقائق، 5 محاولات، استخدام واحد. رد MsgPlus 202 = «في الطابور» وليس «وصلت»؛ تتبّع التسليم عبر `GET /sms/{id}/status` عند الحاجة. عند رصيد غير كافٍ يسجّل الخادم الرمز `INSUFFICIENT_BALANCE` فقط (بلا رقم ولا مفتاح) — راقب `GET /balance` من وقت لآخر.
+ثم: `REGISTRATION_OTP_ENABLED` يبقى `false`، و`OTP_DAILY_CAP` اختياري (الافتراضي 500).
+
+### ترتيب النشر الآمن
+1. أضف المتغيرات الأربعة في Render (الكود الحالي المنشور لا يقرؤها، فلا أثر).
+2. ارفع `al-euro` فقط إلى `main` (لا ترفع `al-euro-referrals` ولا تطبيق Flutter الآن).
+3. بعد اكتمال النشر: «نسيت كلمة المرور» من حسابك برقمك أنت، مرة واحدة. المتوقع: وصول الرمز خلال دقيقة، صالح 10 دقائق، 5 محاولات، استخدام واحد.
+4. رد MsgPlus 202 = «في الطابور» وليس «وصلت»؛ التتبع عبر `GET /sms/{id}/status`. عند رصيد غير كافٍ يسجّل الخادم الرمز `INSUFFICIENT_BALANCE` فقط (بلا رقم ولا مفتاح).
 
 ### أسئلة لدعم MsgPlus (غير مذكورة في الوثائق)
 مهلة تفاوت `X-Timestamp` المقبولة؟ حدود المعدل؟ وجود بيئة اختبار؟ قيود قوالب رموز التحقق؟ تغطية الأرقام السورية (سيريتل/MTN) وتكلفة الرسالة؟

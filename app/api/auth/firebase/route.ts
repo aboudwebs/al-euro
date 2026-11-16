@@ -53,7 +53,7 @@ export async function POST(req: Request) {
     if (!idToken || idToken.length > 12_000) return reply({ error: "رمز تسجيل الدخول غير صالح" }, 400);
 
     const phone = typeof body?.phone === "string" ? body.phone.trim() : "";
-    let whatsappVerified = false;
+    let otpVerified = false;
     if (phone) {
       const otpLimited = await rateHit(rateKey("otp-verify-ip", clientIp(req)), RULES.otpVerifyPerIp);
       if (!otpLimited.allowed) return tooManyRequests(otpLimited.retryAfter);
@@ -63,12 +63,12 @@ export async function POST(req: Request) {
           ? reply({ error: "تعذر التحقق من الرمز حالياً، حاول لاحقاً" }, 503)
           : reply({ error: "رمز التحقق غير صحيح أو انتهت صلاحيته. اطلب رمزاً جديداً." }, 400);
       }
-      whatsappVerified = true;
+      otpVerified = true;
     }
 
     let identity;
     try {
-      identity = await verifyFirebaseIdentityToken(idToken, whatsappVerified ? phone : "");
+      identity = await verifyFirebaseIdentityToken(idToken, otpVerified ? phone : "");
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
       if (message.includes("غير مدعومة") || message.includes("توثيق رقم الهاتف")) {
@@ -95,7 +95,7 @@ export async function POST(req: Request) {
     if (linked) {
       userId = String(linked.user_id);
     } else {
-      if (!whatsappVerified && !identity.phone) {
+      if (!otpVerified && !identity.phone) {
         return reply({
           registrationRequired: true,
           provider: identity.provider,
@@ -172,7 +172,7 @@ export async function POST(req: Request) {
       return reply({ error: "هذه الطريقة مخصصة لحسابات الورشات والمسوّقين" }, 403);
     }
 
-    if (whatsappVerified || (identity.provider === "phone" && identity.phone)) {
+    if (otpVerified || (identity.provider === "phone" && identity.phone)) {
       const { error: verificationUpdateError } = await db.from("users")
         .update({ phone_verified_at: new Date().toISOString(), phone_verification_required: false })
         .eq("id", user.id);

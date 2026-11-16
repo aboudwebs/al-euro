@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 
 type Role = "workshop" | "marketer";
 type RequestInfo = { id: string; requestedAt: string; dueAt: string; graceDays: number };
@@ -20,7 +20,7 @@ export default function DeletionRequestForm() {
   const [notice, setNotice] = useState("");
   const [request, setRequest] = useState<RequestInfo | null>(null);
 
-  async function sendCode(event: React.FormEvent<HTMLFormElement>) {
+  async function sendCode(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true); setError(""); setNotice("");
     try {

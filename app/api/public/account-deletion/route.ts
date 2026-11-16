@@ -64,7 +64,8 @@ export async function POST(req: Request) {
     });
   }
 
-  if (action !== "confirm-code" || !validRole(body.role)) {
+  const role = body.role;
+  if (action !== "confirm-code" || !validRole(role)) {
     return reply({ error: "نوع الحساب أو العملية غير صالح." }, 400);
   }
   const code = typeof body.otpCode === "string" ? body.otpCode.trim() : "";
@@ -74,7 +75,7 @@ export async function POST(req: Request) {
   const ipLimit = await rateHit(rateKey("deletion-otp-verify-ip", clientIp(req)), RULES.otpVerifyPerIp);
   if (!ipLimit.allowed) return tooManyRequests(ipLimit.retryAfter);
 
-  let claim: OtpClaim | null = await claimRegistrationOtp(phone, code, token);
+  const claim: OtpClaim = await claimRegistrationOtp(phone, code, token);
   if (!claim.ok) {
     return claim.reason === "failed"
       ? reply({ error: "تعذر التحقق من الرمز حالياً. حاول لاحقاً." }, 503)
@@ -85,7 +86,7 @@ export async function POST(req: Request) {
   const { data: users, error: userError } = await db.from("users")
     .select("id, role, debt_balance")
     .eq("phone", phone)
-    .eq("role", body.role)
+    .eq("role", role)
     .limit(2);
   if (userError) {
     await releaseOtp(claim);

@@ -32,6 +32,14 @@ BEGIN
     LIMIT 1;
     IF v_marketer_id IS NOT NULL THEN
       PERFORM pg_advisory_xact_lock(hashtextextended(v_marketer_id::text, 0));
+      -- Re-check after taking the same lock as the deletion worker. If deletion won the race,
+      -- fail this insert; the workshop can retry after the marketer is anonymized.
+      SELECT u.is_active INTO account_active
+      FROM public.users u
+      WHERE u.id = v_marketer_id AND u.role = 'marketer';
+      IF account_active IS DISTINCT FROM true THEN
+        RAISE EXCEPTION 'المسوّق المرتبط بالحساب غير نشط. أعد المحاولة قبل إنشاء الطلب';
+      END IF;
     END IF;
   END IF;
 

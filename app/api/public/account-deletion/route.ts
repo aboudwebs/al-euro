@@ -135,14 +135,7 @@ export async function POST(req: Request) {
     const { count: pendingPayouts, error: payoutError } = await db.from("marketer_payout_requests")
       .select("id", { count: "exact", head: true })
       .eq("marketer_id", user.id).eq("status", "pending");
-    if (payoutError) {
-      await releaseOtp(claim);
-      return reply({ error: "تعذر التحقق من طلبات السحب. حاول لاحقاً." }, 503);
-    }
-    if ((pendingPayouts ?? 0) > 0) {
-      await releaseOtp(claim);
-      return reply({ error: "لديك طلب سحب قيد المراجعة. انتظر تسويته قبل حذف الحساب." }, 409);
-    }
+
     if (payoutError) {
       await releaseOtp(claim);
       return reply({ error: "تعذر التحقق من طلبات السحب. حاول لاحقاً." }, 503);

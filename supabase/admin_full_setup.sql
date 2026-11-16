@@ -36,7 +36,7 @@ begin
       ('users',                'debt_limit',       '0'),
       ('users',                'debt_balance',     '0'),
       ('users',                'cashback_balance', '0'),
-      ('users',                'tier',             '''Bronze'''),
+      ('users',                'tier',             '''Standard'''),
       ('parts',                'created_at',       'now()'),
       ('parts',                'is_active',        'true'),
       ('parts',                'stock',            '0'),
@@ -65,7 +65,8 @@ alter table public.orders               alter column status set default 'pending
 alter table public.special_requests     alter column status set default 'new';
 alter table public.marketer_commissions alter column status set default 'held';
 
-update public.users set tier = 'Bronze' where tier is null and role = 'workshop';
+update public.users set tier = 'Standard' where tier is null and role = 'workshop';
+update public.users set tier = 'Elite' where tier = 'VIP';
 
 -- orders.order_number: add a sequence default only if the column has none
 do $$
@@ -100,7 +101,7 @@ begin
   for c in
     select * from (values
       ('users',                'users_role_check',                  $d$check (role in ('workshop','marketer','admin','worker'))$d$),
-      ('users',                'users_tier_check',                  $d$check (tier in ('Bronze','Silver','Gold','Platinum','VIP'))$d$),
+      ('users',                'users_tier_check',                  $d$check (tier in ('Standard','Bronze','Silver','Gold','Platinum','Elite'))$d$),
       ('orders',               'orders_pay_method_check',           $d$check (pay_method in ('sham','cod','debt'))$d$),
       ('orders',               'orders_status_check',               $d$check (status in ('pending','approved','shipped','delivered','cancelled'))$d$),
       ('orders',               'orders_user_role_check',            $d$check (user_role in ('workshop','marketer'))$d$),

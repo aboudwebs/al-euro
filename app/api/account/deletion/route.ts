@@ -150,6 +150,13 @@ export async function POST(req: Request) {
 
   if (auth.user.role === "marketer") {
     const { count: pendingPayouts, error: payoutError } = await db.from("marketer_payout_requests")
+      .select("id", { count: "exact", head: true })
+      .eq("marketer_id", auth.user.id).eq("status", "pending");
+    if (payoutError) return dbError("deletion payout requests check", payoutError, "تعذر التحقق من طلبات السحب");
+    if ((pendingPayouts ?? 0) > 0) {
+      return reply({ error: "لديك طلب سحب قيد المراجعة. انتظر تسويته قبل حذف الحساب." }, 409);
+    }
+
     const { data: hasOpenReferredOrders, error: referredOrdersError } = await db.rpc(
       "marketer_has_open_referred_orders",
       { p_marketer_id: auth.user.id },
@@ -158,8 +165,6 @@ export async function POST(req: Request) {
     if (hasOpenReferredOrders === true) {
       return reply({ error: "لديك طلبات مفتوحة لدى ورش مرتبطة بك. انتظر إكمالها أو إلغاءها حتى لا تضيع عمولتك." }, 409);
     }
-      .select("id", { count: "exact", head: true })
-      .eq("marketer_id", auth.user.id).eq("status", "pending");
     if (payoutError) return dbError("deletion payout requests check", payoutError, "تعذر التحقق من طلبات السحب");
     if ((pendingPayouts ?? 0) > 0) {
       return reply({ error: "لديك طلب سحب قيد المراجعة. انتظر تسويته قبل حذف الحساب." }, 409);

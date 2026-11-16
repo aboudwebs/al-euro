@@ -103,10 +103,10 @@ BEGIN
     INSERT INTO public.account_deletion_firebase_cleanup_queue(provider_uid)
     SELECT DISTINCT i.provider_uid
     FROM public.user_auth_identities i
-    WHERE i.user_id=r.user_id
+    WHERE i.user_id=r.user_id AND i.provider='google.com'
       AND NOT EXISTS (
         SELECT 1 FROM public.user_auth_identities other
-        WHERE other.provider_uid=i.provider_uid AND other.user_id<>r.user_id
+        WHERE other.provider='google.com' AND other.provider_uid=i.provider_uid AND other.user_id<>r.user_id
       )
     ON CONFLICT(provider_uid) DO NOTHING;
 

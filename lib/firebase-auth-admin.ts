@@ -56,3 +56,18 @@ export async function verifyFirebaseIdentityToken(idToken: string, whatsappVerif
     emailVerified: decoded.email_verified === true,
   };
 }
+
+
+/** Permanently removes a Firebase Auth account after the EURO deletion worker verifies its UID is not shared. */
+export async function deleteFirebaseAuthUser(uid: string): Promise<void> {
+  if (!uid || uid.length > 256) throw new Error("Invalid Firebase UID");
+  try {
+    await firebaseAuthAdmin().deleteUser(uid);
+  } catch (error) {
+    const code = typeof error === "object" && error !== null && "code" in error
+      ? String((error as { code?: unknown }).code)
+      : "";
+    if (code === "auth/user-not-found") return;
+    throw error;
+  }
+}

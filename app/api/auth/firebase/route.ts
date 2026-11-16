@@ -132,6 +132,9 @@ export async function POST(req: Request) {
       }
 
       const matchedUser = matches[0];
+      if (!matchedUser.is_active) {
+        return reply({ error: "هذا الحساب غير نشط ولا يمكن إعادة ربطه. تواصل مع الإدارة." }, 403);
+      }
       userId = String(matchedUser.id);
       const { error: identityInsertError } = await db.from("user_auth_identities").insert({
         user_id: userId,

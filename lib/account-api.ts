@@ -55,7 +55,7 @@ export type AccountUser = {
  * Re-reads the customer and enforces any pending phone-verification requirement server-side.
  * `allowAdmin` lets an active admin through too: only for read-only endpoints the admin panel itself uses.
  */
-export async function requireUser(options: { requireVerifiedPhone?: boolean; allowAdmin?: boolean } = {}): Promise<{ ok: true; user: AccountUser } | { ok: false; response: NextResponse }> {
+export async function requireUser(options: { requireVerifiedPhone?: boolean; allowAdmin?: boolean; rejectPendingDeletion?: boolean } = {}): Promise<{ ok: true; user: AccountUser } | { ok: false; response: NextResponse }> {
   let session: Awaited<ReturnType<typeof getSession>>;
   try {
     session = await getSession();
@@ -87,6 +87,25 @@ export async function requireUser(options: { requireVerifiedPhone?: boolean; all
     return { ok: false, response: reply({ error: "تعذر التحقق من الحساب" }, 500) };
   }
   if (!data || !data.is_active) return { ok: false, response: reply({ error: "الحساب غير مفعّل" }, 403) };
+  if (options.rejectPendingDeletion === true) {
+    const { data: pendingDeletion, error: deletionError } = await db
+      .from("account_deletion_requests")
+      .select("id")
+      .eq("user_id", session.id)
+      .eq("status", "pending")
+      .limit(1)
+      .maybeSingle();
+    if (deletionError) {
+      console.error("[api/account] pending deletion guard:", deletionError);
+      return { ok: false, response: reply({ error: "تعذر التحقق من حالة الحساب. حاول لاحقاً." }, 503) };
+    }
+    if (pendingDeletion) {
+      return { ok: false, response: reply({
+        code: "ACCOUNT_DELETION_PENDING",
+        error: "يوجد طلب حذف حساب قيد الانتظار. ألغِ طلب الحذف أولاً قبل تنفيذ عمليات جديدة.",
+      }, 409) };
+    }
+  }
   if (options.requireVerifiedPhone === true && data.phone_verification_required === true) {
     return {
       ok: false,

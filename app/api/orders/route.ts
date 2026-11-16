@@ -42,7 +42,7 @@ export async function POST(req: Request) {
     claimedReceipt = null;
   };
   try {
-    const auth = await requireUser({ requireVerifiedPhone: true });
+    const auth = await requireUser({ requireVerifiedPhone: true, rejectPendingDeletion: true });
     if (!auth.ok) return auth.response;
 
     let form: FormData;

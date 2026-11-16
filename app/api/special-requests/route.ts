@@ -25,7 +25,7 @@ function text(form: FormData, key: string, max: number): string {
 export async function POST(req: Request) {
   let uploadedPath: string | null = null;
   try {
-    const auth = await requireUser();
+    const auth = await requireUser({ rejectPendingDeletion: true });
     if (!auth.ok) return auth.response;
 
     let form: FormData;

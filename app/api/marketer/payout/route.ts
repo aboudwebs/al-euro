@@ -5,7 +5,7 @@ import { getSupabaseAdmin } from "@/lib/supabase";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
-  const auth = await requireUser({ rejectPendingDeletion: true });
+  const auth = await requireUser();
   if (!auth.ok) return auth.response;
   if (auth.user.role !== "marketer") {
     return NextResponse.json(

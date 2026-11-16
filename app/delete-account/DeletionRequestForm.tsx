@@ -97,7 +97,6 @@ export default function DeletionRequestForm() {
             رمز التحقق
               <input value={code} onChange={e => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))} required inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="••••••" className="mt-2 w-full rounded-xl border border-white/15 bg-black/25 px-4 py-3 text-center text-xl tracking-[0.35em] outline-none focus:border-emerald-400" dir="ltr" />
             </label>
-          </div>
           <p className="text-xs leading-6 text-white/50">أدخل الرمز الذي وصلك عبر وسيلة التحقق الموضحة أعلاه.</p>
           <div className="flex flex-col gap-2 sm:flex-row">
             <button disabled={busy} className="flex-1 rounded-xl bg-emerald-500 px-4 py-3 font-bold text-slate-950 hover:bg-emerald-400 disabled:opacity-50">

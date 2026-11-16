@@ -143,6 +143,14 @@ export async function POST(req: Request) {
       await releaseOtp(claim);
       return reply({ error: "لديك طلب سحب قيد المراجعة. انتظر تسويته قبل حذف الحساب." }, 409);
     }
+    if (payoutError) {
+      await releaseOtp(claim);
+      return reply({ error: "تعذر التحقق من طلبات السحب. حاول لاحقاً." }, 503);
+    }
+    if ((pendingPayouts ?? 0) > 0) {
+      await releaseOtp(claim);
+      return reply({ error: "لديك طلب سحب قيد المراجعة. انتظر تسويته قبل حذف الحساب." }, 409);
+    }
 
     const { data: hasOpenReferredOrders, error: referredOrdersError } = await db.rpc(
       "marketer_has_open_referred_orders",

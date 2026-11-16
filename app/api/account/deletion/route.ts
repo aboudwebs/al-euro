@@ -188,9 +188,9 @@ export async function DELETE() {
   if (!auth.ok) return auth.response;
   const { data, error } = await getSupabaseAdmin().from("account_deletion_requests")
     .update({ status: "cancelled", cancelled_at: new Date().toISOString() })
-    .eq("user_id", auth.user.id).eq("status", "pending").gt("due_at", new Date().toISOString())
+    .eq("user_id", auth.user.id).eq("status", "pending")
     .select("id").maybeSingle();
   if (error) return dbError("deletion cancel", error, "تعذر إلغاء الطلب");
-  if (!data) return reply({ error: "لا يوجد طلب حذف قابل للإلغاء" }, 404);
+  if (!data) return reply({ error: "لا يوجد طلب حذف قيد الانتظار؛ ربما اكتمل الحذف بالفعل" }, 404);
   return reply({ ok: true });
 }

@@ -35,7 +35,7 @@ inside Postgres functions (`admin_*`) so they are atomic. Only the server (servi
 ## Public privacy and account deletion
 - Privacy policy: `https://control-panel-euro-cars.onrender.com/privacy`
 - External account deletion: `https://control-panel-euro-cars.onrender.com/delete-account`
-- The public deletion page verifies phone ownership with a one-time MsgPlus SMS code, checks outstanding debts, orders, special requests and marketer payouts, then records the same 30-day deletion request used by the app.
+- The public deletion page verifies phone ownership with a one-time MsgPlus SMS code, checks outstanding debts, orders, special requests and marketer payouts, then records the same 30-day deletion request used by the app. A pending request remains cancellable until the deletion worker completes it; this avoids locking out users when outstanding balances delay processing.
 - Add these URLs to the Google Play Console (Privacy Policy and Account deletion). Keep MsgPlus credentials configured in Render before relying on the external SMS verification flow.
 
 ## Firebase push notifications

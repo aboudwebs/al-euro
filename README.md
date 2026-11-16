@@ -47,7 +47,7 @@ Apply the two SQL migrations in `supabase/migrations/` in timestamp order before
 The app registers device tokens at sign-in, refreshes them when FCM rotates them, unregisters them on sign-out, shows foreground notifications, and routes notification taps to the relevant app section. Server events persist each notification once before attempting FCM delivery.
 
 For debt reminders, create a daily Render Cron Job that sends:
-`GET https://al-euro-cdzo.onrender.com/api/cron/debt-reminders`
+`GET https://control-panel-euro-cars.onrender.com/api/cron/debt-reminders`
 with header `Authorization: Bearer <CRON_SECRET>`. It sends one reminder when a workshop is 25–30 days from its latest debit entry.
 
 Admin operational announcements (maintenance, release notes and important messages) can be sent through `POST /api/admin/notifications` using an admin session. This endpoint is restricted to active workshops and marketers; it is not a marketing broadcast channel.

@@ -78,7 +78,7 @@ BEGIN
     '*/15 * * * *',
     $job$
       SELECT net.http_post(
-        url := 'https://al-euro-cdzo.onrender.com/api/cron/account-deletions',
+        url := 'https://control-panel-euro-cars.onrender.com/api/cron/account-deletions',
         headers := jsonb_build_object(
           'Content-Type', 'application/json',
           'Authorization', 'Bearer ' || (

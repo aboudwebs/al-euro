@@ -13,6 +13,7 @@ export default function DeletionRequestForm() {
   const [phone, setPhone] = useState("");
   const [role, setRole] = useState<Role>("workshop");
   const [otpToken, setOtpToken] = useState("");
+  const [channel, setChannel] = useState<"sms" | "email">("sms");
   const [code, setCode] = useState("");
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -26,11 +27,12 @@ export default function DeletionRequestForm() {
     try {
       const response = await fetch("/api/public/account-deletion", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "send-code", phone: phone.trim() }),
+        body: JSON.stringify({ action: "send-code", phone: phone.trim(), role }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "تعذر إرسال رمز التحقق.");
-      setOtpToken(data.otpToken);
+      setOtpToken(data.otpToken || "");
+      setChannel(data.channel === "email" ? "email" : "sms");
       setSent(true);
       setNotice(data.message || "إذا كان الرقم مرتبطاً بحساب، سيصلك رمز التحقق.");
     } catch (err) {
@@ -44,7 +46,7 @@ export default function DeletionRequestForm() {
     try {
       const response = await fetch("/api/public/account-deletion", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "confirm-code", phone: phone.trim(), role, otpCode: code.trim(), otpToken }),
+        body: JSON.stringify({ action: "confirm-code", phone: phone.trim(), role, channel, otpCode: code.trim(), otpToken }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "تعذر تسجيل طلب الحذف.");
@@ -62,7 +64,7 @@ export default function DeletionRequestForm() {
         <div className="space-y-4">
           <div className="rounded-xl border border-emerald-400/25 bg-emerald-400/10 p-4 text-emerald-100">
             <p className="font-bold">تم تسجيل طلب حذف الحساب</p>
-            <p className="mt-2 text-sm leading-7">تبقى بياناتك الشخصية خلال مهلة الاسترجاع، ثم تُزال أو تُخفى بعد انتهائها. يمكنك إلغاء الطلب خلال 30 يوماً من داخل التطبيق.</p>
+            <p className="mt-2 text-sm leading-7">تبقى بياناتك الشخصية خلال مهلة الاسترجاع، ثم تُزال أو تُخفى بعد انتهائها. يمكنك إلغاء الطلب من داخل التطبيق ما دام تنفيذه لم يكتمل.</p>
           </div>
           <dl className="grid gap-3 rounded-xl bg-black/20 p-4 text-sm sm:grid-cols-2">
             <div><dt className="text-white/55">تاريخ الطلب</dt><dd className="mt-1 font-semibold">{formatDate(request.requestedAt)}</dd></div>
@@ -71,17 +73,6 @@ export default function DeletionRequestForm() {
         </div>
       ) : !sent ? (
         <form onSubmit={sendCode} className="space-y-4">
-          <label className="block text-sm font-semibold">
-            رقم الهاتف المسجّل بالحساب
-            <input value={phone} onChange={e => setPhone(e.target.value)} required inputMode="tel" autoComplete="tel" placeholder="09xxxxxxxx أو 9639xxxxxxxx" className="mt-2 w-full rounded-xl border border-white/15 bg-black/25 px-4 py-3 text-left text-base outline-none focus:border-emerald-400" dir="ltr" />
-          </label>
-          <button disabled={busy} className="w-full rounded-xl bg-emerald-500 px-4 py-3 font-bold text-slate-950 transition hover:bg-emerald-400 disabled:opacity-50">
-            {busy ? "جارٍ الإرسال…" : "إرسال رمز التحقق"}
-          </button>
-          <p className="text-xs leading-6 text-white/50">سنرسل رمزاً لمرة واحدة إلى الرقم المدخل للتحقق من ملكية الحساب.</p>
-        </form>
-      ) : (
-        <form onSubmit={confirmCode} className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block text-sm font-semibold">
               نوع الحساب
@@ -91,11 +82,23 @@ export default function DeletionRequestForm() {
               </select>
             </label>
             <label className="block text-sm font-semibold">
-              رمز التحقق
+              رقم الهاتف المسجّل بالحساب
+              <input value={phone} onChange={e => setPhone(e.target.value)} required inputMode="tel" autoComplete="tel" placeholder="09xxxxxxxx أو 9639xxxxxxxx" className="mt-2 w-full rounded-xl border border-white/15 bg-black/25 px-4 py-3 text-left text-base outline-none focus:border-emerald-400" dir="ltr" />
+            </label>
+          </div>
+          <button disabled={busy} className="w-full rounded-xl bg-emerald-500 px-4 py-3 font-bold text-slate-950 transition hover:bg-emerald-400 disabled:opacity-50">
+            {busy ? "جارٍ الإرسال…" : "إرسال رمز التحقق"}
+          </button>
+          <p className="text-xs leading-6 text-white/50">نرسل رمزاً عبر SMS، أو إلى البريد الإلكتروني الموثّق المرتبط بالحساب إذا تعذّر إرسال الرسالة النصية.</p>
+        </form>
+      ) : (
+        <form onSubmit={confirmCode} className="space-y-4">
+          <label className="block text-sm font-semibold">
+            رمز التحقق
               <input value={code} onChange={e => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))} required inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="••••••" className="mt-2 w-full rounded-xl border border-white/15 bg-black/25 px-4 py-3 text-center text-xl tracking-[0.35em] outline-none focus:border-emerald-400" dir="ltr" />
             </label>
           </div>
-          <p className="text-xs leading-6 text-white/50">أدخل الرمز الذي وصلك برسالة SMS إلى {phone}.</p>
+          <p className="text-xs leading-6 text-white/50">أدخل الرمز الذي وصلك عبر وسيلة التحقق الموضحة أعلاه.</p>
           <div className="flex flex-col gap-2 sm:flex-row">
             <button disabled={busy} className="flex-1 rounded-xl bg-emerald-500 px-4 py-3 font-bold text-slate-950 hover:bg-emerald-400 disabled:opacity-50">
               {busy ? "جارٍ التحقق…" : "تأكيد وتسجيل طلب الحذف"}

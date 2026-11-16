@@ -178,7 +178,7 @@ export async function POST(req: Request) {
   const channel = body.channel;
   const code = typeof body.otpCode === "string" ? body.otpCode.trim() : "";
   const token = typeof body.otpToken === "string" ? body.otpToken.trim() : "";
-  if (!/^\\d{6}$/.test(code) || (channel === "sms" && !token)) {
+  if (!/^\d{6}$/.test(code) || (channel === "sms" && !token)) {
     return reply({ error: "أدخل رمز التحقق المكوّن من 6 أرقام." }, 400);
   }
 

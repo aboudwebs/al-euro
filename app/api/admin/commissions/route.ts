@@ -25,6 +25,22 @@ export async function GET(req: Request) {
   if (!computed.ok) return dbFail("commission totals", computed.error, "تعذر حساب الإجماليات");
   const totals = computed.totals;
 
+  // Attach per-commission allocations so the card shows the remaining payable amount,
+  // not the original gross commission after a partial payout has already been made/reserved.
+  const commissionIds = (data ?? []).map((c) => c.id);
+  const { data: allocations, error: allocationsError } = commissionIds.length
+    ? await db.from("marketer_payout_allocations").select("commission_id, amount, status").in("commission_id", commissionIds)
+    : { data: [], error: null };
+  if (allocationsError) return dbFail("commission allocations", allocationsError, "تعذر حساب رصيد العمولات");
+
+  const allocated = new Map<string, { pending: number; paid: number }>();
+  for (const row of allocations ?? []) {
+    const item = allocated.get(row.commission_id) ?? { pending: 0, paid: 0 };
+    if (row.status === "pending") item.pending += Number(row.amount) || 0;
+    if (row.status === "paid") item.paid += Number(row.amount) || 0;
+    allocated.set(row.commission_id, item);
+  }
+
   const userIds = Array.from(new Set((data ?? []).flatMap((c) => [c.marketer_id, c.workshop_id]).filter(Boolean)));
   const orderIds = Array.from(new Set((data ?? []).map((c) => c.order_id).filter(Boolean)));
   const names: Record<string, string> = {};
@@ -40,12 +56,21 @@ export async function GET(req: Request) {
 
   return ok({
     totals,
-    commissions: (data ?? []).map((c) => ({
+    commissions: (data ?? []).map((c) => {
+      const amounts = allocated.get(c.id) ?? { pending: 0, paid: 0 };
+      const hasAllocations = amounts.pending > 0 || amounts.paid > 0;
+      const legacyPaid = c.status === "paid" && !hasAllocations ? Number(c.commission_amount) || 0 : 0;
+      const legacyReserved = c.status === "payout_requested" && !hasAllocations ? Number(c.commission_amount) || 0 : 0;
+      return {
       ...c,
+      paid_amount: Math.round((amounts.paid + legacyPaid) * 100) / 100,
+      reserved_amount: Math.round((amounts.pending + legacyReserved) * 100) / 100,
+      remaining_amount: Math.max(0, Math.round(((Number(c.commission_amount) || 0) - amounts.paid - amounts.pending - legacyPaid - legacyReserved) * 100) / 100),
       marketer_name: names[String(c.marketer_id)] ?? "—",
       workshop_name: names[String(c.workshop_id)] ?? "—",
       order_number: numbers[String(c.order_id)] ?? null,
-    })),
+      };
+    }),
   });
 }
 

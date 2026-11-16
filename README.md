@@ -35,7 +35,7 @@ inside Postgres functions (`admin_*`) so they are atomic. Only the server (servi
 ## Public privacy and account deletion
 - Privacy policy: `https://control-panel-euro-cars.onrender.com/privacy`
 - External account deletion: `https://control-panel-euro-cars.onrender.com/delete-account`
-- The public deletion page verifies phone ownership with a one-time MsgPlus SMS code, with verified-email fallback when SMS is unavailable, checks outstanding debts, orders, special requests and marketer payouts, then records the same 30-day deletion request used by the app. A pending request remains cancellable until the deletion worker completes it; this avoids locking out users when outstanding balances delay processing.
+- The public deletion page verifies phone ownership with a one-time MsgPlus SMS code, with verified-email fallback when SMS is unavailable, checks outstanding debts, cashback, orders, special requests, referred-workshop open orders, marketer commissions and payout allocations, then records the same 30-day deletion request used by the app. A pending request remains cancellable until the deletion worker completes it; this avoids locking out users when outstanding balances delay processing.
 - Add these URLs to the Google Play Console (Privacy Policy and Account deletion). Keep MsgPlus credentials configured in Render before relying on the external SMS verification flow.
 
 ## Firebase push notifications
@@ -52,10 +52,10 @@ Apply the two SQL migrations in `supabase/migrations/` in timestamp order before
 
 The app registers device tokens at sign-in, refreshes them when FCM rotates them, unregisters them on sign-out, shows foreground notifications, and routes notification taps to the relevant app section. Server events persist each notification once before attempting FCM delivery.
 
-Debt reminders are scheduled by Supabase pg_cron through migration `20261116180000_schedule_daily_debt_reminders.sql`:
+Debt reminders are scheduled by Supabase pg_cron through migration `20261116154020_schedule_daily_debt_reminders.sql`:
 - Runs daily at 06:00 UTC (09:00 Syria time).
 - Calls `GET https://control-panel-euro-cars.onrender.com/api/cron/debt-reminders`.
 - The bearer secret is stored in Render as `CRON_SECRET` and mirrored in Supabase Vault as `euro_debt_reminder_cron_secret`; never put it in source control.
-- It sends one reminder when a workshop is 25–30 days from its latest debit entry. Do not create a duplicate Render Cron Job.
+- It sends one reminder when a workshop is 25–30 days from its latest debit entry. Both scheduled HTTP calls allow 60 seconds for Render cold starts. Do not create a duplicate Render Cron Job.
 
 Admin operational announcements (maintenance, release notes and important messages) can be sent through `POST /api/admin/notifications` using an admin session. This endpoint is restricted to active workshops and marketers; it is not a marketing broadcast channel.

@@ -14,7 +14,7 @@ function authorized(req: Request): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-/** Run once daily from a Render Cron Job. Reminds workshops 5 days before the 30-day debt deadline. */
+/** Run once daily from Supabase pg_cron. Reminds workshops 5 days before the 30-day debt deadline. */
 export async function GET(req: Request) {
   if (!authorized(req)) return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
 

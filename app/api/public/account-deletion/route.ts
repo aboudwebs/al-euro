@@ -25,6 +25,28 @@ function requestJson(row: { id: string; requested_at: string; due_at: string }) 
 function validPhone(value: unknown): value is string {
   return typeof value === "string" && /^\+?[0-9]{8,15}$/.test(value.trim());
 }
+
+/** Resolve equivalent Syrian mobile formats without matching by an unsafe suffix. */
+function phoneLookupVariants(value: string): string[] {
+  const raw = value.trim();
+  const digits = raw.replace(/\D/g, "");
+  const variants = new Set<string>([raw]);
+  let international = digits.startsWith("00") ? digits.slice(2) : digits;
+
+  if (international.startsWith("0") && international.length === 10) {
+    international = `963${international.slice(1)}`;
+  } else if (international.startsWith("9") && international.length === 9) {
+    international = `963${international}`;
+  }
+
+  if (international.startsWith("963") && international.length === 12) {
+    variants.add(international);
+    variants.add(`+${international}`);
+    variants.add(`00${international}`);
+    variants.add(`0${international.slice(3)}`);
+  }
+  return [...variants];
+}
 function validRole(value: unknown): value is AccountRole {
   return value === "workshop" || value === "marketer";
 }
@@ -66,7 +88,7 @@ async function issueEmailFallback(phone: string, role: AccountRole, ip: string) 
 
   const db = getSupabaseAdmin();
   const { data: users, error: userError } = await db.from("users")
-    .select("id").eq("phone", phone).eq("role", role).limit(2);
+    .select("id").in("phone", phoneLookupVariants(phone)).eq("role", role).limit(2);
   if (userError) return { ok: false as const, reason: "unavailable" as const };
   if (!users || users.length !== 1) return { ok: true as const, sent: false as const };
 
@@ -199,7 +221,7 @@ export async function POST(req: Request) {
     claim = smsClaim;
     const { data: users, error: userError } = await db.from("users")
       .select("id, role, debt_balance, cashback_balance")
-      .eq("phone", phone).eq("role", role).limit(2);
+      .in("phone", phoneLookupVariants(phone)).eq("role", role).limit(2);
     if (userError) {
       await releaseOtp(claim);
       return reply({ error: "تعذر التحقق من الحساب. حاول لاحقاً." }, 503);
@@ -216,7 +238,7 @@ export async function POST(req: Request) {
   } else {
     const { data: users, error: userError } = await db.from("users")
       .select("id, role, debt_balance, cashback_balance")
-      .eq("phone", phone).eq("role", role).limit(2);
+      .in("phone", phoneLookupVariants(phone)).eq("role", role).limit(2);
     if (userError) return reply({ error: "تعذر التحقق من الحساب. حاول لاحقاً." }, 503);
     if (!users?.length) return reply({ error: "رمز التحقق غير صحيح أو انتهت صلاحيته." }, 400);
     if (users.length !== 1) return reply({ error: "يوجد أكثر من حساب من هذا النوع مرتبط بالرقم. تواصل مع الدعم." }, 409);

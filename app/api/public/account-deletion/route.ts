@@ -133,6 +133,18 @@ export async function POST(req: Request) {
 
   if (user.role === "marketer") {
     const { count: pendingPayouts, error: payoutError } = await db.from("marketer_payout_requests")
+    const { data: hasOpenReferredOrders, error: referredOrdersError } = await db.rpc(
+      "marketer_has_open_referred_orders",
+      { p_marketer_id: user.id },
+    );
+    if (referredOrdersError) {
+      await releaseOtp(claim);
+      return reply({ error: "تعذر التحقق من طلبات الورش المرتبطة. حاول لاحقاً." }, 503);
+    }
+    if (hasOpenReferredOrders === true) {
+      await releaseOtp(claim);
+      return reply({ error: "لديك طلبات مفتوحة لدى ورش مرتبطة بك. انتظر إكمالها أو إلغاءها حتى لا تضيع عمولتك." }, 409);
+    }
       .select("id", { count: "exact", head: true })
       .eq("marketer_id", user.id).eq("status", "pending");
     if (payoutError) {

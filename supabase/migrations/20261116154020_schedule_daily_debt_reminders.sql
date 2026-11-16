@@ -19,7 +19,7 @@ BEGIN
               WHERE name='euro_debt_reminder_cron_secret'
             )
           ),
-          timeout_milliseconds := 10000
+          timeout_milliseconds := 60000
         );
       $job$
     );
@@ -36,7 +36,7 @@ BEGIN
               WHERE name='euro_debt_reminder_cron_secret'
             )
           ),
-          timeout_milliseconds := 10000
+          timeout_milliseconds := 60000
         );
       $job$
     );

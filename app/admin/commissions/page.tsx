@@ -47,7 +47,7 @@ export default function CommissionsPage() {
                     <p className="break-words text-sm font-semibold text-white">{c.marketer_name}</p>
                     <p className="mt-1 break-words text-xs text-white/50">{c.workshop_name}</p>
                   </div>
-                  <Badge tone={COMMISSION_TONE[c.status]}>{COMMISSION_STATUS_LABEL[c.status]}</Badge>
+                  <Badge tone={COMMISSION_TONE[c.status]}>{c.paid_amount > 0 && c.remaining_amount > 0 ? "مدفوعة جزئياً" : c.paid_amount > 0 && c.remaining_amount === 0 ? "مدفوعة" : c.reserved_amount > 0 ? "بطلب تحويل" : COMMISSION_STATUS_LABEL[c.status]}</Badge>
                 </div>
                 <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
                   <div>

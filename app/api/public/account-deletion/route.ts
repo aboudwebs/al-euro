@@ -156,15 +156,6 @@ export async function POST(req: Request) {
       await releaseOtp(claim);
       return reply({ error: "لديك طلبات مفتوحة لدى ورش مرتبطة بك. انتظر إكمالها أو إلغاءها حتى لا تضيع عمولتك." }, 409);
     }
-    if (payoutError) {
-      await releaseOtp(claim);
-      return reply({ error: "تعذر التحقق من طلبات السحب. حاول لاحقاً." }, 503);
-    }
-    if ((pendingPayouts ?? 0) > 0) {
-      await releaseOtp(claim);
-      return reply({ error: "لديك طلب سحب قيد المراجعة. انتظر تسويته قبل حذف الحساب." }, 409);
-    }
-
     const { count: unsettled, error: commissionError } = await db.from("marketer_commissions")
       .select("id", { count: "exact", head: true })
       .eq("marketer_id", user.id).in("status", ["held", "available", "payout_requested"]);

@@ -84,7 +84,7 @@ export async function POST(req: Request) {
 
   const db = getSupabaseAdmin();
   const { data: users, error: userError } = await db.from("users")
-    .select("id, role, debt_balance")
+    .select("id, role, debt_balance, cashback_balance")
     .eq("phone", phone)
     .eq("role", role)
     .limit(2);
@@ -101,6 +101,10 @@ export async function POST(req: Request) {
   if (Number(user.debt_balance ?? 0) > 0) {
     await releaseOtp(claim);
     return reply({ error: "لا يمكن إكمال الطلب مع وجود دين مستحق. سدّد الرصيد أولاً أو تواصل مع الدعم." }, 409);
+  }
+  if (Number(user.cashback_balance ?? 0) > 0) {
+    await releaseOtp(claim);
+    return reply({ error: "لديك رصيد كاش باك متاح. استخدمه قبل طلب حذف الحساب حتى لا تفقد قيمته." }, 409);
   }
 
   const { count: activeOrders, error: ordersError } = await db.from("orders")

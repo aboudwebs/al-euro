@@ -132,6 +132,9 @@ export async function POST(req: Request) {
   if (Number(auth.user.debt_balance ?? 0) > 0) {
     return reply({ error: "لا يمكن طلب حذف الحساب وعليه رصيد دين. سدّد الرصيد أو تواصل مع الإدارة." }, 409);
   }
+  if (Number(auth.user.cashback_balance ?? 0) > 0) {
+    return reply({ error: "لديك رصيد كاش باك متاح. استخدمه قبل طلب حذف الحساب حتى لا تفقد قيمته." }, 409);
+  }
   const { count: active, error: activeError } = await db.from("orders").select("id", { count: "exact", head: true })
     .eq("user_id", auth.user.id).in("status", ["pending", "approved", "shipped"]);
   if (activeError) return dbError("deletion orders check", activeError, "تعذر التحقق من الطلبات");

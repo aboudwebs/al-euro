@@ -12,7 +12,7 @@ function reply(body: unknown, status = 200) {
 export async function POST(req: Request) {
   try {
     const authorization = req.headers.get("authorization") ?? "";
-    const token = authorization.match(/^Bearer\\s+(.+)$/i)?.[1] ?? "";
+    const token = authorization.match(/^Bearer\s+(.+)$/i)?.[1] ?? "";
     if (token.length < 32 || token.length > 256) return reply({ error: "Unauthorized" }, 401);
 
     const db = getSupabaseAdmin();

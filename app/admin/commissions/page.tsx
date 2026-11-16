@@ -11,7 +11,7 @@ export default function CommissionsPage() {
   const [filter, setFilter] = useState<Filter>("available");
   const [expanded, setExpanded] = useState<string | null>(null);
   const { data, error, loading, reload } = useApi<{ commissions: AdminCommission[]; totals: Record<CommissionStatus, number> }>(`/api/admin/commissions${filter === "all" ? "" : `?status=${filter}`}`);
-  const list = data?.commissions ?? [];
+  const list = (data?.commissions ?? []) as (AdminCommission & { remaining_amount: number; paid_amount: number; reserved_amount: number })[];
   return (
     <>
       <PageHead title="عمولات المسوّقين" sub={`عمولة ${COMMISSION_RATE * 100}% على الطلبات المُسلَّمة للورشات المُحالة. المعلّقة تُفرَج عند تسديد دين الورشة. لا تُسجّل أي عمولة كمدفوعة إلا بعد إرسال المسوّق طلب سحب ومراجعته من قسم طلبات السحب.`}>
@@ -51,8 +51,9 @@ export default function CommissionsPage() {
                 </div>
                 <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
                   <div>
-                    <p className="text-xs text-white/50">قيمة العمولة</p>
-                    <p className="mt-1 text-xl font-bold tabular-nums text-gold">{money(c.commission_amount)}</p>
+                    <p className="text-xs text-white/50">المتبقي المستحق</p>
+                    <p className="mt-1 text-xl font-bold tabular-nums text-gold">{money(c.remaining_amount)}</p>
+                    <p className="mt-1 text-[11px] text-white/45">إجمالي العمولة: {money(c.commission_amount)}</p>
                   </div>
                   <button type="button" className="btn2 !px-3 !py-2 text-xs" aria-expanded={isOpen} onClick={() => setExpanded(isOpen ? null : c.id)}>
                     {isOpen ? "إخفاء التفاصيل" : "عرض التفاصيل"}
@@ -64,6 +65,10 @@ export default function CommissionsPage() {
                     <div className="min-w-0"><p className="text-xs text-white/45">الورشة</p><p className="mt-1 break-words text-white">{c.workshop_name}</p></div>
                     <div><p className="text-xs text-white/45">رقم الطلب</p><p className="mt-1 text-white">{c.order_number ? `#${c.order_number}` : "—"}</p></div>
                     <div><p className="text-xs text-white/45">مبلغ الطلب</p><p className="mt-1 text-white">{money(c.order_amount)}</p></div>
+                    <div><p className="text-xs text-white/45">العمولة الأصلية</p><p className="mt-1 text-white">{money(c.commission_amount)}</p></div>
+                    <div><p className="text-xs text-white/45">مدفوع منها</p><p className="mt-1 text-white">{money(c.paid_amount)}</p></div>
+                    <div><p className="text-xs text-white/45">محجوز بطلب سحب</p><p className="mt-1 text-white">{money(c.reserved_amount)}</p></div>
+                    <div><p className="text-xs text-white/45">المتبقي المستحق</p><p className="mt-1 font-semibold text-emerald-400">{money(c.remaining_amount)}</p></div>
                     <div><p className="text-xs text-white/45">تاريخ تسجيل العمولة</p><p className="mt-1 text-white/80">{fmtDate(c.created_at)}</p></div>
                     <div><p className="text-xs text-white/45">الحالة</p><div className="mt-1"><Badge tone={COMMISSION_TONE[c.status]}>{COMMISSION_STATUS_LABEL[c.status]}</Badge></div></div>
                   </div>

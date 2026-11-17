@@ -34,7 +34,7 @@ export default function AdminLogin() {
       }
       window.location.href = role === "worker" ? "/admin/orders" : "/admin";
     } catch {
-      setError("تعذر الاتصال بالخادم. حاول مجدداً.");
+      setError("تعذر الوصول إلى الخادم. تحقق من اتصالك بالإنترنت وحاول مجدداً.");
     } finally {
       setLoading(false);
     }

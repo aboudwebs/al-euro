@@ -252,77 +252,8 @@ export async function POST(req: Request) {
     claim = emailClaim;
   }
 
-  if (Number(user.debt_balance ?? 0) > 0) {
-    await releaseOtp(claim);
-    return reply({ error: "لا يمكن إكمال الطلب مع وجود دين مستحق. سدّد الرصيد أولاً أو تواصل مع الدعم." }, 409);
-  }
-  if (Number(user.cashback_balance ?? 0) > 0) {
-    await releaseOtp(claim);
-    return reply({ error: "لديك رصيد كاش باك متاح. استخدمه قبل طلب حذف الحساب حتى لا تفقد قيمته." }, 409);
-  }
-
-  const { count: activeOrders, error: ordersError } = await db.from("orders")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", user.id).in("status", ["pending", "approved", "shipped"]);
-  if (ordersError) {
-    await releaseOtp(claim);
-    return reply({ error: "تعذر التحقق من الطلبات. حاول لاحقاً." }, 503);
-  }
-  if ((activeOrders ?? 0) > 0) {
-    await releaseOtp(claim);
-    return reply({ error: "لديك طلبات قيد التنفيذ. انتظر إكمالها أو إلغاءها قبل طلب حذف الحساب." }, 409);
-  }
-
-  const { count: activeSpecial, error: specialError } = await db.from("special_requests")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", user.id).in("status", ["new", "priced", "ordered"]);
-  if (specialError) {
-    await releaseOtp(claim);
-    return reply({ error: "تعذر التحقق من الطلبات الخاصة. حاول لاحقاً." }, 503);
-  }
-  if ((activeSpecial ?? 0) > 0) {
-    await releaseOtp(claim);
-    return reply({ error: "لديك طلبات قطع خاصة قيد المعالجة. انتظر إكمالها أو إلغاءها أولاً." }, 409);
-  }
-
-  if (user.role === "marketer") {
-    const { count: pendingPayouts, error: payoutError } = await db.from("marketer_payout_requests")
-      .select("id", { count: "exact", head: true })
-      .eq("marketer_id", user.id).eq("status", "pending");
-
-    if (payoutError) {
-      await releaseOtp(claim);
-      return reply({ error: "تعذر التحقق من طلبات السحب. حاول لاحقاً." }, 503);
-    }
-    if ((pendingPayouts ?? 0) > 0) {
-      await releaseOtp(claim);
-      return reply({ error: "لديك طلب سحب قيد المراجعة. انتظر تسويته قبل حذف الحساب." }, 409);
-    }
-
-    const { data: hasOpenReferredOrders, error: referredOrdersError } = await db.rpc(
-      "marketer_has_open_referred_orders",
-      { p_marketer_id: user.id },
-    );
-    if (referredOrdersError) {
-      await releaseOtp(claim);
-      return reply({ error: "تعذر التحقق من طلبات الورش المرتبطة. حاول لاحقاً." }, 503);
-    }
-    if (hasOpenReferredOrders === true) {
-      await releaseOtp(claim);
-      return reply({ error: "لديك طلبات مفتوحة لدى ورش مرتبطة بك. انتظر إكمالها أو إلغاءها حتى لا تضيع عمولتك." }, 409);
-    }
-    const { count: unsettled, error: commissionError } = await db.from("marketer_commissions")
-      .select("id", { count: "exact", head: true })
-      .eq("marketer_id", user.id).in("status", ["held", "available", "payout_requested"]);
-    if (commissionError) {
-      await releaseOtp(claim);
-      return reply({ error: "تعذر التحقق من العمولات. حاول لاحقاً." }, 503);
-    }
-    if ((unsettled ?? 0) > 0) {
-      await releaseOtp(claim);
-      return reply({ error: "لديك عمولات غير مسوّاة. تواصل مع الإدارة لتسويتها قبل حذف الحساب." }, 409);
-    }
-  }
+  // Debts, cashback, commissions, payout requests and open commercial records are retained
+  // for settlement and do not block removal of the user's personal identity.
 
   const { data: existing, error: existingError } = await db.from("account_deletion_requests")
     .select(FIELDS).eq("user_id", user.id).eq("status", "pending").maybeSingle();

@@ -33,13 +33,13 @@ const BAD_CREDENTIALS = "بيانات الدخول غير صحيحة. تحقق �
 /** Accept Syrian phone numbers in local (09...) and international (+9639...) form. */
 function phoneLookupCandidates(value: string): string[] {
   const trimmed = value.trim();
-  const digits = trimmed.replace(/\\D/g, "");
+  const digits = trimmed.replace(/\D/g, "");
   let local = digits;
   if (digits.startsWith("00963")) local = `0${digits.slice(5)}`;
   else if (digits.startsWith("963")) local = `0${digits.slice(3)}`;
   else if (digits.startsWith("9") && digits.length === 9) local = `0${digits}`;
 
-  if (!/^09\\d{8}$/.test(local)) return [...new Set([trimmed, digits])];
+  if (!/^09\d{8}$/.test(local)) return [...new Set([trimmed, digits])];
   return [...new Set([local, `+963${local.slice(1)}`, `963${local.slice(1)}`, `00963${local.slice(1)}`, digits, trimmed])];
 }
 

@@ -167,7 +167,15 @@ async function currentVersion(userId: string): Promise<number> {
  */
 export async function mintAccessToken(session: Omit<Session, "iat" | "v">): Promise<string> {
   const v = await currentVersion(session.id);
-  return signSession({ ...session, iat: Date.now(), v });
+  // Database profile fields may be NULL (notably legacy admin accounts). Keep the signed
+  // payload compatible with verifySession(), which requires strings for display fields.
+  return signSession({
+    ...session,
+    name: typeof session.name === "string" ? session.name : "",
+    phone: typeof session.phone === "string" ? session.phone : "",
+    iat: Date.now(),
+    v,
+  });
 }
 
 /**

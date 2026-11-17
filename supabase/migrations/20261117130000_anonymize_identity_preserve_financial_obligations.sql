@@ -27,9 +27,6 @@ BEGIN
       SELECT 1 FROM public.users u
       WHERE u.id = r.user_id AND u.role = 'admin'
     ) THEN
-      UPDATE public.account_deletion_requests
-      SET status = 'rejected'
-      WHERE id = r.id;
       CONTINUE;
     END IF;
 

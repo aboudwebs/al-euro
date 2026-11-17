@@ -75,7 +75,11 @@ export async function GET() {
       .eq("id", session.id)
       .single();
 
-    if (error || !user || !user.is_active) {
+    if (error) {
+      console.error("[api/auth] profile lookup:", error);
+      return json({ error: "تعذر التحقق من الحساب مؤقتاً" }, 503);
+    }
+    if (!user || !user.is_active) {
       await clearSession();
       return json({ user: null });
     }

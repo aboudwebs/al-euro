@@ -4,7 +4,7 @@ import type { NextRequest } from "next/server";
 const SECRET = process.env.AUTH_SECRET;
 
 type Role = "workshop" | "marketer" | "admin" | "worker";
-type Session = { role: Role; name: string; phone: string; iat: number };
+type Session = { id: string; role: Role; name: string; phone: string; iat: number };
 
 function base64UrlToUint8Array(value: string): Uint8Array {
   const padding = "=".repeat((4 - (value.length % 4)) % 4);
@@ -40,15 +40,15 @@ async function verifySession(token?: string): Promise<Session | null> {
     const now = Date.now();
     if (
       (payload.role !== "workshop" && payload.role !== "marketer" && payload.role !== "admin" && payload.role !== "worker") ||
-      typeof payload.name !== "string" ||
-      typeof payload.phone !== "string" ||
+      typeof payload.id !== "string" ||
+      !payload.id ||
       typeof payload.iat !== "number" ||
       !Number.isFinite(payload.iat) ||
       payload.iat <= 0 ||
       payload.iat > now + 60_000 ||
       now - payload.iat > 30 * 24 * 60 * 60 * 1000
     ) { console.warn("[admin-session] payload_invalid"); return null; }
-    return { role: payload.role, name: payload.name, phone: payload.phone, iat: payload.iat };
+    return { id: payload.id, role: payload.role, name: typeof payload.name === "string" ? payload.name : "", phone: typeof payload.phone === "string" ? payload.phone : "", iat: payload.iat };
   } catch (error) {
     console.error("[admin-session] verification_exception:", error instanceof Error ? error.name : "unknown");
     return null;

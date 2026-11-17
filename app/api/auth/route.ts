@@ -30,6 +30,19 @@ const NO_STORE = { "Cache-Control": "no-store" };
 /** Same answer for an unknown account and a wrong password, so the form cannot be used to find registered numbers. */
 const BAD_CREDENTIALS = "بيانات الدخول غير صحيحة. تحقق من الرقم وكلمة المرور.";
 
+/** Accept Syrian phone numbers in local (09...) and international (+9639...) form. */
+function phoneLookupCandidates(value: string): string[] {
+  const trimmed = value.trim();
+  const digits = trimmed.replace(/\\D/g, "");
+  let local = digits;
+  if (digits.startsWith("00963")) local = `0${digits.slice(5)}`;
+  else if (digits.startsWith("963")) local = `0${digits.slice(3)}`;
+  else if (digits.startsWith("9") && digits.length === 9) local = `0${digits}`;
+
+  if (!/^09\\d{8}$/.test(local)) return [...new Set([trimmed, digits])];
+  return [...new Set([local, `+963${local.slice(1)}`, `963${local.slice(1)}`, `00963${local.slice(1)}`, digits, trimmed])];
+}
+
 function json(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: NO_STORE });
 }
@@ -157,7 +170,8 @@ export async function POST(req: Request) {
     if (mode === "login") {
       // Brute-force protection: failed attempts per account and per address; success clears the account counter.
       // If the counter store fails the limiter keeps counting in memory (lib/rate-limit.ts): it never switches off.
-      const accountKey = rateKey("login-account", role ?? "any", cleanPhone);
+      const phoneCandidates = role === "worker" ? [cleanPhone] : phoneLookupCandidates(cleanPhone);
+      const accountKey = rateKey("login-account", role ?? "any", phoneCandidates[0]);
       const addressKey = rateKey("login-ip", ip);
       const blocked = await rateHit(accountKey, RULES.loginFailPerAccount, { increment: false });
       if (!blocked.allowed) return tooManyRequests(blocked.retryAfter);
@@ -174,7 +188,7 @@ export async function POST(req: Request) {
         return json({ error: BAD_CREDENTIALS }, 401);
       };
 
-      let userLookup = db.from("users").select(`${USER_FIELDS}, password_hash`).eq("phone", cleanPhone);
+      let userLookup = db.from("users").select(`${USER_FIELDS}, password_hash`).in("phone", phoneCandidates);
       if (role) userLookup = userLookup.eq("role", role);
       else userLookup = userLookup.in("role", ["workshop", "marketer"]);
       const { data: matchedUsers, error: findError } = await userLookup.limit(2);

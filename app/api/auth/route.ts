@@ -111,7 +111,7 @@ export async function GET() {
     console.error("[api/auth] GET:", err);
     // A database outage must not look like "signed out" (the app would drop the session).
     if (err instanceof SessionStoreError) return json({ error: "الخدمة غير متاحة مؤقتاً" }, 503);
-    return json({ user: null });
+    return json({ error: "تعذر التحقق من الجلسة مؤقتاً" }, 500);
   }
 }
 

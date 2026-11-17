@@ -24,7 +24,7 @@ export async function api<T = Record<string, unknown>>(url: string, init?: { met
     if (!res.ok) return { ok: false, status: res.status, data: null, error: data?.error || "تعذر تنفيذ الطلب" };
     return { ok: true, status: res.status, data, error: "" };
   } catch {
-    return { ok: false, status: 0, data: null, error: "تعذر الاتصال بالخادم" };
+    return { ok: false, status: 0, data: null, error: "تعذر الوصول إلى الخادم. تحقق من اتصالك بالإنترنت وحاول مجدداً." };
   }
 }
 

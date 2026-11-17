@@ -251,6 +251,7 @@ export async function POST(req: Request) {
       // Explicitly attach the browser session to this exact response. This avoids relying on
       // implicit cookie mutation propagation when a custom NextResponse is returned.
       if (!isMobileClient) {
+        console.info("[admin-login] success; response_cookie_attached:", response.cookies.has(COOKIE_NAME));
         response.cookies.set(COOKIE_NAME, accessToken, {
           httpOnly: true,
           secure: process.env.NODE_ENV === "production",

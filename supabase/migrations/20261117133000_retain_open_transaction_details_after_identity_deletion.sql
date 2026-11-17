@@ -179,6 +179,8 @@ BEGIN
         referred_by_code = NULL,
         loyalty_season_started_at = NULL,
         loyalty_season_spend = 0,
+        deleted_at = COALESCE(deleted_at, now()),
+        deleted_by = NULL,
         is_active = false,
         license_verification_status = NULL,
         license_verification_workshop_name = NULL,

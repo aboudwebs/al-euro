@@ -14,10 +14,11 @@ function base64UrlToUint8Array(value: string): Uint8Array {
 }
 
 async function verifySession(token?: string): Promise<Session | null> {
-  if (!token || !SECRET) return null;
+  if (!token) { console.warn("[admin-session] cookie_missing"); return null; }
+  if (!SECRET) { console.error("[admin-session] auth_secret_missing_in_middleware"); return null; }
   try {
     const parts = token.split(".");
-    if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
+    if (parts.length !== 2 || !parts[0] || !parts[1]) { console.warn("[admin-session] token_format_invalid"); return null; }
     const encoder = new TextEncoder();
     const payloadText = new TextDecoder().decode(base64UrlToUint8Array(parts[0]));
     const signature = base64UrlToUint8Array(parts[1]);
@@ -34,7 +35,7 @@ async function verifySession(token?: string): Promise<Session | null> {
       Uint8Array.from(signature).buffer,
       encoder.encode(payloadText)
     );
-    if (!valid) return null;
+    if (!valid) { console.warn("[admin-session] signature_invalid"); return null; }
     const payload = JSON.parse(payloadText) as Partial<Session>;
     const now = Date.now();
     if (
@@ -46,9 +47,10 @@ async function verifySession(token?: string): Promise<Session | null> {
       payload.iat <= 0 ||
       payload.iat > now + 60_000 ||
       now - payload.iat > 30 * 24 * 60 * 60 * 1000
-    ) return null;
+    ) { console.warn("[admin-session] payload_invalid"); return null; }
     return { role: payload.role, name: payload.name, phone: payload.phone, iat: payload.iat };
-  } catch {
+  } catch (error) {
+    console.error("[admin-session] verification_exception:", error instanceof Error ? error.name : "unknown");
     return null;
   }
 }

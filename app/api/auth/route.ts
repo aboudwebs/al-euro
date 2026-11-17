@@ -3,6 +3,8 @@ import crypto from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import {
   SessionStoreError,
+  COOKIE_NAME,
+  SESSION_AGE,
   bumpTokenVersion,
   clearSession,
   getSession,
@@ -245,7 +247,19 @@ export async function POST(req: Request) {
       const safeUser = existingUser.role === "worker"
         ? { id: existingUser.id, role: existingUser.role, name: existingUser.name, phone: existingUser.phone, is_active: existingUser.is_active, created_at: existingUser.created_at }
         : publicUser;
-      return json({ ok: true, user: safeUser, ...(isMobileClient ? { accessToken } : {}) });
+      const response = json({ ok: true, user: safeUser, ...(isMobileClient ? { accessToken } : {}) });
+      // Explicitly attach the browser session to this exact response. This avoids relying on
+      // implicit cookie mutation propagation when a custom NextResponse is returned.
+      if (!isMobileClient) {
+        response.cookies.set(COOKIE_NAME, accessToken, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax",
+          path: "/",
+          maxAge: SESSION_AGE,
+        });
+      }
+      return response;
     }
 
     // ------------------------------------------------------------------------------------------ sign up

@@ -60,7 +60,11 @@ const isUnder = (pathname: string, base: string) =>
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  const session = await verifySession(req.cookies.get("euro_session")?.value);
+  const sessionCookie = req.cookies.get("euro_session")?.value;
+  if (isUnder(pathname, "/admin") && pathname !== "/admin/login") {
+    console.info("[admin-session] protected_path:", pathname, "cookie_present:", Boolean(sessionCookie));
+  }
+  const session = await verifySession(sessionCookie);
 
   // Password recovery must work without an existing admin session.
   if (isUnder(pathname, "/admin/reset-password")) {

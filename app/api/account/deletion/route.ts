@@ -129,48 +129,8 @@ export async function POST(req: Request) {
     return reply({ error: `الرمز غير صحيح. المحاولات المتبقية: ${Math.max(0, MAX_ATTEMPTS - attempts - 1)}` }, 400);
   }
 
-  if (Number(auth.user.debt_balance ?? 0) > 0) {
-    return reply({ error: "لا يمكن طلب حذف الحساب وعليه رصيد دين. سدّد الرصيد أو تواصل مع الإدارة." }, 409);
-  }
-  if (Number(auth.user.cashback_balance ?? 0) > 0) {
-    return reply({ error: "لديك رصيد كاش باك متاح. استخدمه قبل طلب حذف الحساب حتى لا تفقد قيمته." }, 409);
-  }
-  const { count: active, error: activeError } = await db.from("orders").select("id", { count: "exact", head: true })
-    .eq("user_id", auth.user.id).in("status", ["pending", "approved", "shipped"]);
-  if (activeError) return dbError("deletion orders check", activeError, "تعذر التحقق من الطلبات");
-  if ((active ?? 0) > 0) return reply({ error: "لديك طلبات قيد التنفيذ. انتظر اكتمالها أو إلغاءها ثم أعد المحاولة." }, 409);
-
-  const { count: activeSpecial, error: specialError } = await db.from("special_requests")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", auth.user.id).in("status", ["new", "priced", "ordered"]);
-  if (specialError) return dbError("deletion special requests check", specialError, "تعذر التحقق من الطلبات الخاصة");
-  if ((activeSpecial ?? 0) > 0) {
-    return reply({ error: "لديك طلبات قطع خاصة قيد المعالجة. انتظر إكمالها أو إلغاءها قبل حذف الحساب." }, 409);
-  }
-
-  if (auth.user.role === "marketer") {
-    const { count: pendingPayouts, error: payoutError } = await db.from("marketer_payout_requests")
-      .select("id", { count: "exact", head: true })
-      .eq("marketer_id", auth.user.id).eq("status", "pending");
-
-    const { data: hasOpenReferredOrders, error: referredOrdersError } = await db.rpc(
-      "marketer_has_open_referred_orders",
-      { p_marketer_id: auth.user.id },
-    );
-    if (referredOrdersError) return dbError("deletion referred orders check", referredOrdersError, "تعذر التحقق من طلبات الورش المرتبطة");
-    if (hasOpenReferredOrders === true) {
-      return reply({ error: "لديك طلبات مفتوحة لدى ورش مرتبطة بك. انتظر إكمالها أو إلغاءها حتى لا تضيع عمولتك." }, 409);
-    }
-    if (payoutError) return dbError("deletion payout requests check", payoutError, "تعذر التحقق من طلبات السحب");
-    if ((pendingPayouts ?? 0) > 0) {
-      return reply({ error: "لديك طلب سحب قيد المراجعة. انتظر تسويته قبل حذف الحساب." }, 409);
-    }
-
-    const { count: owed, error: owedError } = await db.from("marketer_commissions").select("id", { count: "exact", head: true })
-      .eq("marketer_id", auth.user.id).in("status", ["held", "available", "payout_requested"]);
-    if (owedError) return dbError("deletion commissions check", owedError, "تعذر التحقق من العمولات");
-    if ((owed ?? 0) > 0) return reply({ error: "لديك عمولات أو مبالغ محجوزة غير مسوّاة. تواصل مع الإدارة قبل حذف الحساب." }, 409);
-  }
+  // Financial balances, commissions, payouts and open commercial records do not block identity deletion.
+  // The deletion worker anonymizes identity while retaining the records needed for accounting and settlement.
 
   const { data: existing, error: existingError } = await db.from("account_deletion_requests").select(FIELDS)
     .eq("user_id", auth.user.id).eq("status", "pending").maybeSingle();

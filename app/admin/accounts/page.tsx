@@ -114,7 +114,7 @@ function AccountCard({ a, onChanged }: { a: AdminAccount; onChanged: () => void 
             <div className="space-y-2">
               {a.customer_orders.map((order) => (
                 <div key={order.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-2 last:border-0">
-                  <span className="text-xs text-white/65">طلب #{order.order_number ?? "—"} · {fmtDate(order.created_at)}</span>
+                  <span className="text-xs text-white/65">طلب #{order.customer_order_number ?? order.order_number ?? "—"} · {fmtDate(order.created_at)}</span>
                   <span className="text-sm font-semibold text-white">{money(order.total_amount)}</span>
                   <span className="text-xs text-white/55">{order.status === "pending" ? "قيد المراجعة" : order.status === "approved" ? "تمت الموافقة" : order.status === "shipped" ? "تم الشحن" : order.status === "delivered" ? "تم التسليم" : order.status === "cancelled" ? "ملغي" : order.status}</span>
                 </div>

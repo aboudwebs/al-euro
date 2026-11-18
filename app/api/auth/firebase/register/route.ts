@@ -179,6 +179,7 @@ export async function POST(req: Request) {
         await db.from("users").delete().eq("id", created.id);
         return reply({ error: identityError.code === "23505" ? "طريقة الدخول مرتبطة بحساب آخر." : "تعذر حفظ هوية تسجيل الدخول" }, identityError.code === "23505" ? 409 : 500);
       }
+      otpSpent = role === "customer";
 
       if (validatedReferralCode) {
         await recordReferralSignup({ newUserId: String(created.id), newUserPhone: workshopPhone, referralCode: validatedReferralCode, ip });

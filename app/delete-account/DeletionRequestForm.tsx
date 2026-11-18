@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 
-type Role = "workshop" | "marketer";
+type Role = "workshop" | "marketer" | "customer";
 type RequestInfo = { id: string; requestedAt: string; dueAt: string; graceDays: number };
 
 function formatDate(value: string) {
@@ -79,6 +79,7 @@ export default function DeletionRequestForm() {
               <select value={role} onChange={e => setRole(e.target.value as Role)} className="mt-2 w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400">
                 <option value="workshop">ورشة</option>
                 <option value="marketer">مسوّق</option>
+                 <option value="customer">زبون مستقل</option>
               </select>
             </label>
             <label className="block text-sm font-semibold">

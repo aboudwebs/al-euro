@@ -118,12 +118,12 @@ export async function GET() {
     if (flagError) console.error("[api/auth] account flags:", flagError);
     else if (flagRow) flags = accountFlags(flagRow);
     return json({
-      user: {
+      user: publicAccount({
         ...user,
         ...flags,
         auth_email: primaryIdentity?.email ?? null,
         auth_provider: primaryIdentity?.provider ?? null,
-      },
+      }),
     });
   } catch (err) {
     console.error("[api/auth] GET:", err);
@@ -510,7 +510,7 @@ export async function PUT(req: Request) {
       phone: user.phone ?? "",
       my_ref_code: user.my_ref_code,
     });
-    return json({ ok: true, user, ...(changingPassword ? { accessToken } : {}) });
+    return json({ ok: true, user: publicAccount(user), ...(changingPassword ? { accessToken } : {}) });
   } catch (err) {
     return serverError("PUT", err, "حدث خطأ أثناء تحديث البيانات");
   }

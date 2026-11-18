@@ -18,7 +18,7 @@ export async function GET(req: Request) {
   const q = cleanSearch(url.searchParams.get("q"));
 
   const db = getSupabaseAdmin();
-  let query = db.from("users").select(FIELDS).in("role", role === "workshop" || role === "marketer" ? [role] : ["workshop", "marketer"]);
+  let query = db.from("users").select(FIELDS).in("role", role === "workshop" || role === "marketer" || role === "customer" ? [role] : ["workshop", "marketer", "customer"]);
   if (status === "active") query = query.eq("is_active", true);
   if (status === "inactive") query = query.eq("is_active", false);
   if (q) query = query.or(`name.ilike.*${q}*,phone.ilike.*${q}*,city.ilike.*${q}*`);

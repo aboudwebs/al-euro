@@ -81,7 +81,7 @@ export async function GET(req: Request) {
   const customerOrders: Record<string, { id: string; order_number: number | null; total_amount: number; pay_method: string; status: string; created_at: string }[]> = {};
   if (customerIds.length) {
     const { data: orders, error: ordersError } = await db.from("orders")
-      .select("id,user_id,order_number,total_amount,pay_method,status,created_at")
+      .select("id,user_id,order_number,customer_order_number,total_amount,pay_method,status,created_at")
       .in("user_id", customerIds)
       .order("created_at", { ascending: false })
       .limit(Math.min(customerIds.length * 10, 500));
@@ -91,6 +91,7 @@ export async function GET(req: Request) {
       if (list.length < 10) list.push({
         id: order.id,
         order_number: order.order_number,
+        customer_order_number: order.customer_order_number,
         total_amount: Number(order.total_amount) || 0,
         pay_method: order.pay_method,
         status: order.status,

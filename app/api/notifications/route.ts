@@ -5,7 +5,7 @@ import { getSupabaseAdmin } from "@/lib/supabase";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const auth = await requireUser();
+  const auth = await requireUser({ allowCustomer: true });
   if (!auth.ok) return auth.response;
   const { data, error } = await getSupabaseAdmin().from("user_notifications")
     .select("id,type,title,body,order_id,read_at,created_at")
@@ -18,7 +18,7 @@ export async function GET() {
 }
 
 export async function POST() {
-  const auth = await requireUser();
+  const auth = await requireUser({ allowCustomer: true });
   if (!auth.ok) return auth.response;
   const { error } = await getSupabaseAdmin().from("user_notifications")
     .update({ read_at: new Date().toISOString() })

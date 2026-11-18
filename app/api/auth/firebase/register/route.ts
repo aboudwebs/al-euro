@@ -205,7 +205,7 @@ export async function POST(req: Request) {
         id: String(created.id), role: created.role, name: created.name ?? "",
         phone: created.phone ?? "", my_ref_code: created.my_ref_code,
       });
-      return reply({ ok: true, accessToken, user: created, phoneVerificationRequired: true });
+      return reply({ ok: true, accessToken, user: created, phoneVerificationRequired: role !== "customer" });
     }
 
     const otpLimited = await rateHit(rateKey("otp-verify-ip", ip), RULES.otpVerifyPerIp);

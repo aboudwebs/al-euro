@@ -8,7 +8,7 @@ import { readJsonLimited } from "@/lib/http";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
-  const auth = await requireUser();
+  const auth = await requireUser({ allowCustomer: true });
   if (!auth.ok) return auth.response;
   try {
     const body = (await readJsonLimited(req, 16 * 1024)) as Record<string, unknown> | null;
@@ -68,7 +68,7 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
-  const auth = await requireUser();
+  const auth = await requireUser({ allowCustomer: true });
   if (!auth.ok) return auth.response;
   try {
     let body: Record<string, unknown> = {};

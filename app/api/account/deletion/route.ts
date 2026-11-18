@@ -51,7 +51,7 @@ async function sendDeletionCode(email: string, code: string) {
 }
 
 export async function GET() {
-  const auth = await requireUser();
+  const auth = await requireUser({ allowCustomer: true });
   if (!auth.ok) return auth.response;
   const { data, error } = await getSupabaseAdmin().from("account_deletion_requests")
     .select(FIELDS).eq("user_id", auth.user.id).eq("status", "pending").maybeSingle();
@@ -64,7 +64,7 @@ export async function GET() {
 
 /** POST { action: "send-code" } or { action: "confirm-code", code }. */
 export async function POST(req: Request) {
-  const auth = await requireUser();
+  const auth = await requireUser({ allowCustomer: true });
   if (!auth.ok) return auth.response;
   const body = await readBody(req);
   const action = body?.action;
@@ -153,7 +153,7 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE() {
-  const auth = await requireUser();
+  const auth = await requireUser({ allowCustomer: true });
   if (!auth.ok) return auth.response;
   const { data, error } = await getSupabaseAdmin().from("account_deletion_requests")
     .update({ status: "cancelled", cancelled_at: new Date().toISOString() })

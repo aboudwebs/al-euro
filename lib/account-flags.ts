@@ -20,5 +20,5 @@ export function accountFlags(row: FlagRow): { has_password: boolean; phone_verif
 
 /** Customer endpoints serve workshops and marketers; a few read-only ones (the exchange rate) also serve the admin. */
 export function accountRoleAllowed(role: unknown, options: { allowAdmin?: boolean } = {}): boolean {
-  return role === "workshop" || role === "marketer" || (options.allowAdmin === true && role === "admin");
+  return role === "workshop" || role === "marketer" || role === "customer" || (options.allowAdmin === true && role === "admin");
 }

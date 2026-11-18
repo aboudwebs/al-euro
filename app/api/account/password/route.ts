@@ -92,7 +92,7 @@ export async function POST(req: Request) {
 
 /** Stores the new hash, ends every other session and gives this device a new token. */
 async function finish(
-  user: { id: string; role: "workshop" | "marketer" | "admin"; name: string; phone: string },
+  user: { id: string; role: "workshop" | "marketer" | "customer" | "admin"; name: string; phone: string },
   hash: string,
   only: "first" | null,
 ) {

@@ -28,7 +28,7 @@ export async function POST(req: Request) {
     if (!body) return reply({ error: "بيانات الطلب غير صالحة" }, 400);
 
     const role = body.role;
-    if (role !== "workshop" && role !== "marketer") return reply({ error: "نوع الحساب غير صالح" }, 400);
+    if (role !== "workshop" && role !== "marketer" && role !== "customer") return reply({ error: "نوع الحساب غير صالح" }, 400);
     const phone = typeof body.phone === "string" ? body.phone.trim() : "";
     if (phone.length < 8 || phone.length > 20) return reply({ error: "أدخل رقم الموبايل المسجل في حسابك" }, 400);
 

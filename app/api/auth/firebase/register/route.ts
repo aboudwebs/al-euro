@@ -108,7 +108,7 @@ export async function POST(req: Request) {
           id: String(existingUser.id), role: existingUser.role, name: existingUser.name ?? "",
           phone: existingUser.phone ?? "", my_ref_code: existingUser.my_ref_code,
         });
-        return reply({ ok: true, accessToken, user: existingUser, phoneVerificationRequired: true });
+        return reply({ ok: true, accessToken, user: existingUser, phoneVerificationRequired: existingUser.role !== "customer" });
       }
 
       const refCode = typeof body?.refCode === "string" ? body.refCode.trim().slice(0, 80) : "";
@@ -125,6 +125,7 @@ export async function POST(req: Request) {
       }
 
       const optionalName = typeof body?.name === "string" ? body.name.trim() : "";
+      if (role === "customer" && (optionalName.length < 2 || optionalName.length > 100)) return reply({ error: "الاسم يجب أن يكون بين حرفين و100 حرف" }, 400);
       const optionalCity = typeof body?.city === "string" ? body.city.trim() : "";
       const optionalSpec = typeof body?.spec === "string" ? body.spec.trim() : "";
       const optionalLicense = typeof body?.license === "string" ? body.license.trim() : "";

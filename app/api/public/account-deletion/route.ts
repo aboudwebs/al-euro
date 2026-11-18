@@ -14,7 +14,7 @@ const FIELDS = "id, requested_at, due_at";
 const EMAIL_OTP_TTL_MS = 10 * 60 * 1000;
 const EMAIL_RESEND_WAIT_MS = 60 * 1000;
 const EMAIL_MAX_ATTEMPTS = 5;
-type AccountRole = "workshop" | "marketer";
+type AccountRole = "workshop" | "marketer" | "customer";
 
 function reply(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: NO_STORE });
@@ -48,7 +48,7 @@ function phoneLookupVariants(value: string): string[] {
   return [...variants];
 }
 function validRole(value: unknown): value is AccountRole {
-  return value === "workshop" || value === "marketer";
+  return value === "workshop" || value === "marketer" || value === "customer";
 }
 async function releaseOtp(claim: OtpClaim | null) {
   if (claim?.ok) await claim.release();

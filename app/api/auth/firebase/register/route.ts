@@ -221,8 +221,8 @@ export async function POST(req: Request) {
     const refCode = typeof body?.refCode === "string" ? body.refCode.trim().slice(0, 80) : "";
     const refSignature = typeof body?.refSignature === "string" ? body.refSignature.trim() : "";
 
-    if (role !== "workshop" && role !== "marketer") {
-      return reply({ error: "اختر نوع الحساب: ورشة أو مسوّق" }, 400);
+    if (role !== "workshop" && role !== "marketer" && role !== "customer") {
+      return reply({ error: "اختر نوع الحساب بشكل صحيح" }, 400);
     }
     if (name.length < 2 || name.length > 100) return reply({ error: "الاسم يجب أن يكون بين حرفين و100 حرف" }, 400);
     if (role === "workshop" && ((!license && !manualVerification) || !city || !spec)) {
@@ -236,7 +236,7 @@ export async function POST(req: Request) {
     const { data: existing, error: existingError } = await db.from("users")
       .select("id")
       .in("phone", phoneCandidates(identity.phone))
-      .in("role", ["workshop", "marketer"])
+      .in("role", ["workshop", "marketer", "customer"])
       .limit(1);
     if (existingError) {
       console.error("[api/auth/firebase/register] existing phone lookup:", existingError);

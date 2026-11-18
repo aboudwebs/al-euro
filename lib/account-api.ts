@@ -38,7 +38,7 @@ export function dbError(context: string, err: PgError, fallback = "حدث خطأ
 
 export type AccountUser = {
   id: string;
-  role: "workshop" | "marketer" | "admin";
+  role: "workshop" | "marketer" | "customer" | "admin";
   name: string;
   phone: string;
   city: string | null;
@@ -117,7 +117,7 @@ export async function requireUser(options: { requireVerifiedPhone?: boolean; all
     };
   }
   if (!accountRoleAllowed(data.role, { allowAdmin: options.allowAdmin })) {
-    return { ok: false, response: reply({ error: "هذه الخدمة لحسابات الورشات والمسوّقين فقط" }, 403) };
+    return { ok: false, response: reply({ error: "هذه الخدمة غير متاحة لنوع حسابك" }, 403) };
   }
   return { ok: true, user: data as AccountUser };
 }

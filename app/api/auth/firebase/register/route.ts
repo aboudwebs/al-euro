@@ -82,16 +82,7 @@ export async function POST(req: Request) {
       if ((role === "workshop" || role === "customer") && canonicalPhone(workshopPhone).length < 8) {
         return reply({ error: role === "customer" ? "رقم الهاتف إلزامي ويجب أن يكون صحيحاً" : "رقم هاتف الورشة إلزامي ويجب أن يكون صحيحاً" }, 400);
       }
-      if (role === "customer") {
-        const otpLimited = await rateHit(rateKey("otp-verify-ip", ip), RULES.otpVerifyPerIp);
-        if (!otpLimited.allowed) return tooManyRequests(otpLimited.retryAfter);
-        otpClaim = await claimRegistrationOtp(workshopPhone, body?.otpCode, body?.otpToken);
-        if (!otpClaim.ok) {
-          return otpClaim.reason === "failed"
-            ? reply({ error: "تعذر التحقق من الرمز حالياً، حاول لاحقاً" }, 503)
-            : reply({ error: "رمز التحقق غير صحيح أو انتهت صلاحيته. اطلب رمزاً جديداً." }, 400);
-        }
-      }
+
 
       const db = getSupabaseAdmin();
       const { data: linked, error: linkedError } = await db.from("user_auth_identities")
@@ -117,6 +108,17 @@ export async function POST(req: Request) {
           phone: existingUser.phone ?? "", my_ref_code: existingUser.my_ref_code,
         });
         return reply({ ok: true, accessToken, user: existingUser, phoneVerificationRequired: existingUser.role !== "customer" });
+      }
+
+      if (role === "customer") {
+        const otpLimited = await rateHit(rateKey("otp-verify-ip", ip), RULES.otpVerifyPerIp);
+        if (!otpLimited.allowed) return tooManyRequests(otpLimited.retryAfter);
+        otpClaim = await claimRegistrationOtp(workshopPhone, body?.otpCode, body?.otpToken);
+        if (!otpClaim.ok) {
+          return otpClaim.reason === "failed"
+            ? reply({ error: "تعذر التحقق من الرمز حالياً، حاول لاحقاً" }, 503)
+            : reply({ error: "رمز التحقق غير صحيح أو انتهت صلاحيته. اطلب رمزاً جديداً." }, 400);
+        }
       }
 
       const refCode = typeof body?.refCode === "string" ? body.refCode.trim().slice(0, 80) : "";

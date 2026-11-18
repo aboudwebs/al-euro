@@ -18,7 +18,7 @@ export function accountFlags(row: FlagRow): { has_password: boolean; phone_verif
   };
 }
 
-/** Customer endpoints serve workshops and marketers; a few read-only ones (the exchange rate) also serve the admin. */
+/** Account endpoints serve workshops and marketers by default; customer access must be explicitly opted in per route. */
 export function accountRoleAllowed(role: unknown, options: { allowAdmin?: boolean; allowCustomer?: boolean } = {}): boolean {
   return role === "workshop" || role === "marketer"
     || (options.allowCustomer === true && role === "customer")

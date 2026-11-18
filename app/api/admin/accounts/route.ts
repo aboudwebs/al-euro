@@ -98,8 +98,22 @@ export async function GET(req: Request) {
       });
     }
   }
-  const enrichedAccounts = accounts.map((account) => account.role === "customer"
-    ? { ...account, customer_orders: customerOrders[account.id] ?? [] }
-    : account);
+  const enrichedAccounts = accounts.map((account) => {
+    if (account.role !== "customer") return account;
+    const {
+      debt_limit: _debtLimit,
+      debt_balance: _debtBalance,
+      cashback_balance: _cashbackBalance,
+      tier: _tier,
+      loyalty_season_spend: _loyaltySpend,
+      loyalty_season_started_at: _loyaltyStartedAt,
+      marketer_commissions: _commissions,
+      referred_by_code: _referredBy,
+      referred_by_name: _referredByName,
+      my_ref_code: _myRefCode,
+      ...customerAccount
+    } = account;
+    return { ...customerAccount, customer_orders: customerOrders[account.id] ?? [] };
+  });
   return ok({ accounts: enrichedAccounts });
 }

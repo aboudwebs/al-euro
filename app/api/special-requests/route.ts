@@ -25,7 +25,7 @@ function text(form: FormData, key: string, max: number): string {
 export async function POST(req: Request) {
   let uploadedPath: string | null = null;
   try {
-    const auth = await requireUser({ rejectPendingDeletion: true });
+    const auth = await requireUser({ rejectPendingDeletion: true, allowCustomer: true });
     if (!auth.ok) return auth.response;
 
     let form: FormData;
@@ -130,7 +130,7 @@ export async function POST(req: Request) {
 /** The signed-in customer's own special requests, with the admin's quote and reply. */
 export async function GET() {
   try {
-    const auth = await requireUser();
+    const auth = await requireUser({ allowCustomer: true });
     if (!auth.ok) return auth.response;
 
     const { data, error } = await getSupabaseAdmin()

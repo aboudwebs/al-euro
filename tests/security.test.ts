@@ -4,6 +4,16 @@ import crypto from "node:crypto";
 import { tokenMatchesAccount } from "../lib/session-rules.ts";
 import { deriveKey, hmacHex } from "../lib/keys.ts";
 import { signReferralCode, verifyReferralSignature } from "../lib/referral-signature.ts";
+import { accountRoleAllowed } from "../lib/account-flags.ts";
+
+test("independent customer role is opt-in and never inherits workshop or marketer privileges", () => {
+  assert.equal(accountRoleAllowed("customer"), false, "default account APIs reject independent customers");
+  assert.equal(accountRoleAllowed("customer", { allowCustomer: true }), true, "only explicitly opted-in account APIs accept them");
+  assert.equal(accountRoleAllowed("workshop"), true);
+  assert.equal(accountRoleAllowed("marketer"), true);
+  assert.equal(accountRoleAllowed("admin"), false);
+  assert.equal(accountRoleAllowed("admin", { allowAdmin: true }), true);
+});
 
 function withSecret<T>(secret: string | undefined, fn: () => T): T {
   const before = process.env.AUTH_SECRET;

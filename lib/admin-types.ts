@@ -58,7 +58,7 @@ export type AccountInfo = {
   license_verification_evidence?: string | null;
   license_verification_notes?: string | null;
   license_verification_reviewed_at?: string | null;
-  tier: Tier | null;
+  tier?: Tier | null;
   debt_limit?: number | null;
   debt_balance?: number | null;
   referred_by_code?: string | null;
@@ -66,12 +66,12 @@ export type AccountInfo = {
 
 export type AdminAccount = AccountInfo & {
   specs: string[] | null;
-  cashback_balance: number | null;
-  loyalty_season_spend: number | null;
-  loyalty_season_started_at: string | null;
-  my_ref_code: string | null;
+  cashback_balance?: number | null;
+  loyalty_season_spend?: number | null;
+  loyalty_season_started_at?: string | null;
+  my_ref_code?: string | null;
   marketer_commissions?: { available: number; held: number; requested: number; paid: number; total: number } | null;
-  referred_by_name: string | null;
+  referred_by_name?: string | null;
   is_active: boolean;
   created_at: string;
   customer_orders?: { id: string; order_number: number | null; total_amount: number; pay_method: string; status: string; created_at: string }[];

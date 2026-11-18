@@ -6,7 +6,7 @@ import { api, Badge, Empty, ErrorBox, fmtDate, money, PageHead, Spinner, Tabs, t
 import type { AdminAccount } from "@/lib/admin-types";
 import { ROLE_LABEL, TIER_LABEL, type Tier } from "@/lib/status";
 
-type Role = "all" | "workshop" | "marketer";
+type Role = "all" | "workshop" | "marketer" | "customer";
 type State = "all" | "active" | "inactive";
 
 function AccountCard({ a, onChanged }: { a: AdminAccount; onChanged: () => void }) {
@@ -17,6 +17,8 @@ function AccountCard({ a, onChanged }: { a: AdminAccount; onChanged: () => void 
   const [evidence, setEvidence] = useState(a.license_verification_evidence || "");
   const [verificationNotes, setVerificationNotes] = useState(a.license_verification_notes || "");
   const isWorkshop = a.role === "workshop";
+  const isMarketer = a.role === "marketer";
+  const isIndependentCustomer = a.role === "customer";
   const isManualVerificationAccount = isWorkshop && !a.license;
   const needsManualVerification = isManualVerificationAccount && a.license_verification_status !== "verified";
   const dirty = isWorkshop && Number(limit) !== (Number(a.debt_limit) || 0);
@@ -85,7 +87,7 @@ function AccountCard({ a, onChanged }: { a: AdminAccount; onChanged: () => void 
         </div>
       )}
 
-      {!isWorkshop && (
+      {isMarketer && (
         <div className="space-y-3 rounded-2xl border border-white/10 bg-black/30 p-3 text-sm">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="font-semibold text-white">ملخص عمولات المسوّق</p>
@@ -102,6 +104,23 @@ function AccountCard({ a, onChanged }: { a: AdminAccount; onChanged: () => void 
             <strong className="text-white">{money(a.marketer_commissions?.total)}</strong>
           </div>
           <p className="text-xs leading-5 text-white/45">المعلّقة مرتبطة بديون الورش المُحالة، والمتاحة جاهزة لطلب التحويل.</p>
+        </div>
+      )}
+
+      {isIndependentCustomer && (
+        <div className="space-y-2 rounded-2xl border border-white/10 bg-black/30 p-3 text-sm">
+          <p className="font-semibold text-white">طلبات الزبون</p>
+          {a.customer_orders?.length ? (
+            <div className="space-y-2">
+              {a.customer_orders.map((order) => (
+                <div key={order.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-2 last:border-0">
+                  <span className="text-xs text-white/65">طلب #{order.order_number ?? "—"} · {fmtDate(order.created_at)}</span>
+                  <span className="text-sm font-semibold text-white">{money(order.total_amount)}</span>
+                  <span className="text-xs text-white/55">{order.status === "pending" ? "قيد المراجعة" : order.status === "approved" ? "تمت الموافقة" : order.status === "shipped" ? "تم الشحن" : order.status === "delivered" ? "تم التسليم" : order.status === "cancelled" ? "ملغي" : order.status}</span>
+                </div>
+              ))}
+            </div>
+          ) : <p className="text-xs text-white/45">لا توجد طلبات حتى الآن.</p>}
         </div>
       )}
 
@@ -154,9 +173,9 @@ function AccountsInner() {
 
   return (
     <>
-      <PageHead title="الشركات والورشات" sub="التحقق من التسجيلات، تفعيل أو تعليق الحسابات، ومتابعة الولاء والكاش باك وسقف الدين" />
+      <PageHead title="الشركات والورشات" sub="إدارة حسابات الورش والمسوقين والزبائن المستقلين" />
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <Tabs<Role> value={role} onChange={setRole} items={[{ value: "all", label: "الكل" }, { value: "workshop", label: "ورشات" }, { value: "marketer", label: "مسوّقون" }]} />
+        <Tabs<Role> value={role} onChange={setRole} items={[{ value: "all", label: "الكل" }, { value: "workshop", label: "ورشات" }, { value: "marketer", label: "مسوّقون" }, { value: "customer", label: "الزبائن المستقلون" }]} />
         <Tabs<State> value={state} onChange={setState} items={[{ value: "all", label: "كل الحالات" }, { value: "inactive", label: "بانتظار التفعيل" }, { value: "active", label: "مفعّلة" }]} />
         <div className="relative min-w-[200px] flex-1">
           <Search size={16} className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-white/45" />

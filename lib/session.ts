@@ -6,7 +6,7 @@ import { tokenMatchesAccount, type AccountState } from "@/lib/session-rules";
 export const COOKIE_NAME = "euro_session";
 export const SESSION_AGE = 60 * 60 * 24 * 30; // seconds
 
-export type Role = "workshop" | "marketer" | "admin" | "worker";
+export type Role = "workshop" | "marketer" | "customer" | "admin" | "worker";
 
 export type Session = {
   id: string;
@@ -82,7 +82,7 @@ export function verifySession(token: string | undefined | null): Session | null 
     const now = Date.now();
     if (
       typeof session.id !== "string" ||
-      (session.role !== "workshop" && session.role !== "marketer" && session.role !== "admin" && session.role !== "worker") ||
+      (session.role !== "workshop" && session.role !== "marketer" && session.role !== "customer" && session.role !== "admin" && session.role !== "worker") ||
       typeof session.name !== "string" ||
       typeof session.phone !== "string" ||
       typeof session.iat !== "number" ||

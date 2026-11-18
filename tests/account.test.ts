@@ -22,9 +22,11 @@ test("flags: has_password follows the stored hash and never exposes it", () => {
   assert.ok(!JSON.stringify(flags).includes("scrypt"));
 });
 
-test("account endpoints: workshops and marketers; the admin only where it is asked for", () => {
+test("account endpoints: workshops and marketers by default; customers and admins only when explicitly allowed", () => {
   assert.equal(accountRoleAllowed("workshop"), true);
   assert.equal(accountRoleAllowed("marketer"), true);
+  assert.equal(accountRoleAllowed("customer"), false);
+  assert.equal(accountRoleAllowed("customer", { allowCustomer: true }), true);
   assert.equal(accountRoleAllowed("admin"), false);
   assert.equal(accountRoleAllowed("admin", { allowAdmin: true }), true);
   assert.equal(accountRoleAllowed("worker", { allowAdmin: true }), false, "workers stay out");

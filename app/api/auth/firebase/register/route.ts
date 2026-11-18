@@ -297,7 +297,7 @@ export async function POST(req: Request) {
         role,
         name,
         phone,
-        password_hash: hashPassword(crypto.randomBytes(32).toString("base64url")),
+        password_hash: role === "customer" ? hashPassword(customerPassword) : hashPassword(crypto.randomBytes(32).toString("base64url")),
         license: role === "workshop" ? (license || null) : null,
         license_verification_status: role === "workshop" && !license ? "pending" : null,
         city: city || null,

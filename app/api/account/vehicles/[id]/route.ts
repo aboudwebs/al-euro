@@ -9,7 +9,7 @@ const FIELDS = "id, name, vin, make, model, year, notes";
 /** Body: any of { vin, name, make, model, year, notes }. Every query is limited to the signed-in user's own rows. */
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const auth = await requireUser();
+  const auth = await requireUser({ allowCustomer: true });
   if (!auth.ok) return auth.response;
   if (!isUuid(id)) return reply({ error: "معرّف المركبة غير صالح" }, 400);
   const body = await readBody(req);
@@ -33,7 +33,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const auth = await requireUser();
+  const auth = await requireUser({ allowCustomer: true });
   if (!auth.ok) return auth.response;
   if (!isUuid(id)) return reply({ error: "معرّف المركبة غير صالح" }, 400);
 

@@ -9,7 +9,7 @@ const FIELDS = "id, label, governorate, area, street, details, phone, is_default
 /** Body: any of { label, governorate, area, street, details, phone, isDefault }. Only the owner's address can change. */
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const auth = await requireUser();
+  const auth = await requireUser({ allowCustomer: true });
   if (!auth.ok) return auth.response;
   if (!isUuid(id)) return reply({ error: "معرّف العنوان غير صالح" }, 400);
   const body = await readBody(req);
@@ -41,7 +41,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const auth = await requireUser();
+  const auth = await requireUser({ allowCustomer: true });
   if (!auth.ok) return auth.response;
   if (!isUuid(id)) return reply({ error: "معرّف العنوان غير صالح" }, 400);
 

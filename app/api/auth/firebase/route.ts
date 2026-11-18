@@ -111,7 +111,7 @@ export async function POST(req: Request) {
         .from("users")
         .select("id, role, name, phone, my_ref_code, is_active")
         .in("phone", phoneLookupCandidates(identity.phone))
-        .in("role", ["workshop", "marketer"])
+        .in("role", ["workshop", "marketer", "customer"])
         .limit(2);
 
       if (userLookupError) {
@@ -168,8 +168,8 @@ export async function POST(req: Request) {
         error: "حسابك قيد المراجعة من قِبل الإدارة، وسيتم تفعيله بعد التحقق من البيانات.",
       }, 403);
     }
-    if (user.role !== "workshop" && user.role !== "marketer") {
-      return reply({ error: "هذه الطريقة مخصصة لحسابات الورشات والمسوّقين" }, 403);
+    if (user.role !== "workshop" && user.role !== "marketer" && user.role !== "customer") {
+      return reply({ error: "هذه الطريقة غير متاحة لنوع الحساب" }, 403);
     }
 
     if (otpVerified || (identity.provider === "phone" && identity.phone)) {

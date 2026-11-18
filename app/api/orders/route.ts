@@ -72,6 +72,9 @@ export async function POST(req: Request) {
     if (pay !== PAY_METHOD.sham && pay !== PAY_METHOD.cod && pay !== PAY_METHOD.debt && pay !== PAY_METHOD.cashback) {
       return reply({ error: "طريقة دفع غير صالحة" }, 400);
     }
+    if (auth.user.role === "customer" && (pay !== PAY_METHOD.sham && pay !== PAY_METHOD.cod || cashbackUsed !== 0)) {
+      return reply({ error: "حساب الزبون المستقل يقبل شام كاش أو التسليم باليد فقط، دون كاش باك أو دين" }, 403);
+    }
 
     let requested: Record<string, unknown>;
     try {

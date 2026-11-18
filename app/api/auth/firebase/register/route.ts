@@ -74,12 +74,22 @@ export async function POST(req: Request) {
       }
 
       const role = body?.role;
-      if (role !== "workshop" && role !== "marketer") {
-        return reply({ error: "اختر نوع الحساب: ورشة أو مسوّق" }, 400);
+      if (role !== "workshop" && role !== "marketer" && role !== "customer") {
+        return reply({ error: "اختر نوع الحساب بشكل صحيح" }, 400);
       }
       const workshopPhone = phoneDigits(contactPhone);
-      if (role === "workshop" && canonicalPhone(workshopPhone).length < 8) {
-        return reply({ error: "رقم هاتف الورشة إلزامي ويجب أن يكون صحيحاً" }, 400);
+      if ((role === "workshop" || role === "customer") && canonicalPhone(workshopPhone).length < 8) {
+        return reply({ error: role === "customer" ? "رقم الهاتف إلزامي ويجب أن يكون صحيحاً" : "رقم هاتف الورشة إلزامي ويجب أن يكون صحيحاً" }, 400);
+      }
+      if (role === "customer") {
+        const otpLimited = await rateHit(rateKey("otp-verify-ip", ip), RULES.otpVerifyPerIp);
+        if (!otpLimited.allowed) return tooManyRequests(otpLimited.retryAfter);
+        otpClaim = await claimRegistrationOtp(workshopPhone, body?.otpCode, body?.otpToken);
+        if (!otpClaim.ok) {
+          return otpClaim.reason === "failed"
+            ? reply({ error: "تعذر التحقق من الرمز حالياً، حاول لاحقاً" }, 503)
+            : reply({ error: "رمز التحقق غير صحيح أو انتهت صلاحيته. اطلب رمزاً جديداً." }, 400);
+        }
       }
 
       const db = getSupabaseAdmin();
@@ -119,9 +129,9 @@ export async function POST(req: Request) {
       const optionalSpec = typeof body?.spec === "string" ? body.spec.trim() : "";
       const optionalLicense = typeof body?.license === "string" ? body.license.trim() : "";
       const specs = optionalSpec ? optionalSpec.split(/[,،]/).map((item: string) => item.trim()).filter(Boolean) : [];
-      if (role === "workshop") {
+      if (role === "workshop" || role === "customer") {
         const { data: duplicatePhone, error: duplicatePhoneError } = await db.from("users")
-          .select("id").in("phone", phoneCandidates(workshopPhone)).in("role", ["workshop", "marketer"]).limit(1);
+          .select("id").in("phone", phoneCandidates(workshopPhone)).in("role", ["workshop", "marketer", "customer"]).limit(1);
         if (duplicatePhoneError) {
           console.error("[api/auth/firebase/register] contact phone lookup:", duplicatePhoneError);
           return reply({ error: "تعذر التحقق من رقم الهاتف" }, 500);
@@ -135,7 +145,7 @@ export async function POST(req: Request) {
         const result = await db.from("users").insert({
           role,
           name: optionalName.length >= 2 ? optionalName : null,
-          phone: role === "workshop" ? workshopPhone : null,
+          phone: role === "workshop" || role === "customer" ? workshopPhone : null,
           password_hash: null,
           license: role === "workshop" ? (optionalLicense || null) : null,
           license_verification_status: role === "workshop" && !optionalLicense ? "pending" : null,
@@ -145,8 +155,11 @@ export async function POST(req: Request) {
           referred_by_code: validatedReferralCode,
           tier: role === "workshop" ? "Standard" : undefined,
           is_active: role !== "workshop",
-          phone_verified_at: null,
-          phone_verification_required: true,
+          phone_verified_at: role === "customer" ? new Date().toISOString() : null,
+          phone_verification_required: role !== "customer",
+          debt_limit: role === "customer" ? 0 : undefined,
+          debt_balance: role === "customer" ? 0 : undefined,
+          cashback_balance: role === "customer" ? 0 : undefined,
         }).select("id, role, name, phone, my_ref_code, is_active, tier, city, license, license_verification_status, specs, created_at").single();
         if (!result.error) { created = result.data; createError = null; break; }
         createError = result.error;

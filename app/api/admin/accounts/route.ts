@@ -78,7 +78,7 @@ export async function GET(req: Request) {
     } : null, referred_by_name: u.referred_by_code ? marketers[u.referred_by_code] ?? null : null };
   });
   const customerIds = (data ?? []).filter((u) => u.role === "customer").map((u) => u.id);
-  const customerOrders: Record<string, { id: string; order_number: number | null; total_amount: number; pay_method: string; status: string; created_at: string }[]> = {};
+  const customerOrders: Record<string, { id: string; order_number: number | null; customer_order_number: number | null; total_amount: number; pay_method: string; status: string; created_at: string }[]> = {};
   if (customerIds.length) {
     const { data: orders, error: ordersError } = await db.from("orders")
       .select("id,user_id,order_number,customer_order_number,total_amount,pay_method,status,created_at")

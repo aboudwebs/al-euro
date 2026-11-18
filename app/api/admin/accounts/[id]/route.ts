@@ -20,7 +20,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const { data: target, error: findError } = await db.from("users").select("id, role, is_active, license, license_verification_status").eq("id", id).maybeSingle();
   if (findError) return dbFail("account lookup", findError);
   if (!target) return fail("الحساب غير موجود", 404);
-  if (target.role !== "workshop" && target.role !== "marketer") return fail("لا يمكن تعديل حسابات الإدارة من هنا", 403);
+  if (target.role !== "workshop" && target.role !== "marketer" && target.role !== "customer") return fail("لا يمكن تعديل هذا الحساب من هنا", 403);
 
   const updates: Record<string, unknown> = {};
 
@@ -72,13 +72,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
     forgetAccountState(String(target.id));
     const accepted = updates.is_active;
-    const roleLabel = target.role === "workshop" ? "حساب ورشتك" : "حسابك كمسوق";
+    const roleLabel = target.role === "workshop" ? "حساب ورشتك" : target.role === "customer" ? "حسابك كزبون مستقل" : "حسابك كمسوق";
     await notifyUser({
       userId: String(target.id),
       type: accepted ? "account_approved" : "account_status",
       title: accepted ? "تم قبول الحساب" : "تحديث حالة الحساب",
       body: accepted
-        ? (target.role === "workshop" ? "تم قبول حساب ورشتك، يمكنك البدء بالشراء" : "تم تفعيل حسابك كمسوق")
+        ? (target.role === "workshop" ? "تم قبول حساب ورشتك، يمكنك البدء بالشراء" : target.role === "customer" ? "تم تفعيل حسابك كزبون مستقل، يمكنك البدء بالشراء" : "تم تفعيل حسابك كمسوق")
         : "نعتذر، لم تتم الموافقة على حسابك",
       eventKey: `account:${target.id}:${accepted ? "approved" : "disabled"}:${new Date().toISOString()}`,
       data: { screen: "account" },

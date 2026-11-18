@@ -20,7 +20,7 @@ const USER_FIELDS = "id, role, name, phone, city, license, specs, tier, debt_lim
  * Confirming a number with the code also marks it verified (phone_verified_at, phone_verification_required=false).
  */
 export async function POST(req: Request) {
-  const auth = await requireUser();
+  const auth = await requireUser({ allowCustomer: true });
   if (!auth.ok) return auth.response;
   const body = await readBody(req);
   if (!body) return reply({ error: "بيانات الطلب غير صالحة" }, 400);

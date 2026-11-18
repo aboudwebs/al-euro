@@ -211,7 +211,7 @@ export async function POST(req: Request) {
         id: String(created.id), role: created.role, name: created.name ?? "",
         phone: created.phone ?? "", my_ref_code: created.my_ref_code,
       });
-      return reply({ ok: true, accessToken, user: created, phoneVerificationRequired: role !== "customer" });
+      return reply({ ok: true, accessToken, user: role === "customer" ? { id: created.id, role: created.role, name: created.name, phone: created.phone, is_active: created.is_active, created_at: created.created_at } : created, phoneVerificationRequired: role !== "customer" });
     }
 
     const otpLimited = await rateHit(rateKey("otp-verify-ip", ip), RULES.otpVerifyPerIp);
@@ -377,7 +377,7 @@ export async function POST(req: Request) {
       phone: created.phone,
       my_ref_code: created.my_ref_code,
     });
-    return reply({ ok: true, accessToken, user: created });
+    return reply({ ok: true, accessToken, user: role === "customer" ? { id: created.id, role: created.role, name: created.name, phone: created.phone, is_active: created.is_active, created_at: created.created_at } : created });
   } catch (error) {
     console.error("[api/auth/firebase/register] POST:", error);
     return reply({ error: "حدث خطأ غير متوقع في الخادم" }, 500);

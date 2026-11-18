@@ -59,7 +59,7 @@ function AccountCard({ a, onChanged }: { a: AdminAccount; onChanged: () => void 
         {isManualVerificationAccount && a.license_verification_reviewed_at && <div><dt className="text-xs text-white/45">تاريخ المراجعة</dt><dd className="text-white">{fmtDate(a.license_verification_reviewed_at)}</dd></div>}
         {isWorkshop && <div><dt className="text-xs text-white/45">الاختصاص</dt><dd className="text-white">{a.specs?.length ? a.specs.join("، ") : "—"}</dd></div>}
         {isWorkshop && <div><dt className="text-xs text-white/45">أُحيلت بواسطة</dt><dd className="text-white">{a.referred_by_code ? `${a.referred_by_name ?? "—"} (${a.referred_by_code})` : "—"}</dd></div>}
-        {!isWorkshop && <div><dt className="text-xs text-white/45">كود الإحالة</dt><dd className="text-white" dir="ltr" style={{ textAlign: "right" }}>{a.my_ref_code || "—"}</dd></div>}
+        {isMarketer && <div><dt className="text-xs text-white/45">كود الإحالة</dt><dd className="text-white" dir="ltr" style={{ textAlign: "right" }}>{a.my_ref_code || "—"}</dd></div>}
         {isWorkshop && <div><dt className="text-xs text-white/45">الدين الحالي</dt><dd className={Number(a.debt_balance) > 0 ? "font-semibold text-[#FF9F0A]" : "text-white"}>{money(a.debt_balance)}</dd></div>}
       </dl>
 
@@ -173,7 +173,7 @@ function AccountsInner() {
 
   return (
     <>
-      <PageHead title="الشركات والورشات" sub="إدارة حسابات الورش والمسوقين والزبائن المستقلين" />
+      <PageHead title="الحسابات" sub="إدارة حسابات الورش والمسوقين والزبائن المستقلين" />
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Tabs<Role> value={role} onChange={setRole} items={[{ value: "all", label: "الكل" }, { value: "workshop", label: "ورشات" }, { value: "marketer", label: "مسوّقون" }, { value: "customer", label: "الزبائن المستقلون" }]} />
         <Tabs<State> value={state} onChange={setState} items={[{ value: "all", label: "كل الحالات" }, { value: "inactive", label: "بانتظار التفعيل" }, { value: "active", label: "مفعّلة" }]} />

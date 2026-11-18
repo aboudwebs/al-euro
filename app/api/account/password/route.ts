@@ -25,7 +25,7 @@ const BAD_CODE = "الرمز غير صحيح أو انتهت صلاحيته. ا�
  *                                       signed in (new `accessToken`), every other session ends.
  */
 export async function POST(req: Request) {
-  const auth = await requireUser();
+  const auth = await requireUser({ allowCustomer: true });
   if (!auth.ok) return auth.response;
   const body = await readBody(req);
   const mode = typeof body?.mode === "string" ? body.mode : "change";

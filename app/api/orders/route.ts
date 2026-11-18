@@ -42,7 +42,7 @@ export async function POST(req: Request) {
     claimedReceipt = null;
   };
   try {
-    const auth = await requireUser({ requireVerifiedPhone: true, rejectPendingDeletion: true });
+    const auth = await requireUser({ requireVerifiedPhone: true, rejectPendingDeletion: true, allowCustomer: true });
     if (!auth.ok) return auth.response;
 
     let form: FormData;
@@ -342,7 +342,7 @@ export async function POST(req: Request) {
 /** The signed-in customer's own orders (status, and the reason when an order was rejected / cancelled). */
 export async function GET() {
   try {
-    const auth = await requireUser();
+    const auth = await requireUser({ allowCustomer: true });
     if (!auth.ok) return auth.response;
 
     const db = getSupabaseAdmin();

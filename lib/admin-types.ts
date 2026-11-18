@@ -16,7 +16,7 @@ export type AdminOrder = {
   user_id: string;
   customer_name: string;
   customer_phone: string;
-  user_role: "workshop" | "marketer";
+  user_role: "workshop" | "marketer" | "customer";
   items: OrderItem[] | null;
   total_amount: number;
   amount_due?: number | null;
@@ -49,7 +49,7 @@ export type AccountInfo = {
   id: string;
   name: string;
   phone: string;
-  role: "workshop" | "marketer" | "admin";
+  role: "workshop" | "marketer" | "customer" | "admin";
   city: string | null;
   license: string | null;
   license_verification_status?: "pending" | "verified" | "rejected" | null;

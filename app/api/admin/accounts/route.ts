@@ -77,5 +77,29 @@ export async function GET(req: Request) {
       total: Math.round((commissions.available + commissions.held + commissions.requested + commissions.paid) * 100) / 100,
     } : null, referred_by_name: u.referred_by_code ? marketers[u.referred_by_code] ?? null : null };
   });
-  return ok({ accounts });
+  const customerIds = (data ?? []).filter((u) => u.role === "customer").map((u) => u.id);
+  const customerOrders: Record<string, { id: string; order_number: number | null; total_amount: number; pay_method: string; status: string; created_at: string }[]> = {};
+  if (customerIds.length) {
+    const { data: orders, error: ordersError } = await db.from("orders")
+      .select("id,user_id,order_number,total_amount,pay_method,status,created_at")
+      .in("user_id", customerIds)
+      .order("created_at", { ascending: false })
+      .limit(Math.min(customerIds.length * 10, 500));
+    if (ordersError) return dbFail("independent customer orders", ordersError, "تعذر تحميل طلبات الزبائن المستقلين");
+    for (const order of orders ?? []) {
+      const list = customerOrders[order.user_id] ??= [];
+      if (list.length < 10) list.push({
+        id: order.id,
+        order_number: order.order_number,
+        total_amount: Number(order.total_amount) || 0,
+        pay_method: order.pay_method,
+        status: order.status,
+        created_at: order.created_at,
+      });
+    }
+  }
+  const enrichedAccounts = accounts.map((account) => account.role === "customer"
+    ? { ...account, customer_orders: customerOrders[account.id] ?? [] }
+    : account);
+  return ok({ accounts: enrichedAccounts });
 }

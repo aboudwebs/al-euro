@@ -10,7 +10,7 @@ const FIELDS = "id, name, vin, make, model, year, notes";
 
 /** The signed-in customer's registered vehicles. Only rows of this user are ever returned. */
 export async function GET() {
-  const auth = await requireUser();
+  const auth = await requireUser({ allowCustomer: true });
   if (!auth.ok) return auth.response;
   const { data, error } = await getSupabaseAdmin()
     .from("user_vehicles")
@@ -27,7 +27,7 @@ export async function GET() {
 
 /** Body: { vin, name?, make?, model?, year?, notes? } */
 export async function POST(req: Request) {
-  const auth = await requireUser();
+  const auth = await requireUser({ allowCustomer: true });
   if (!auth.ok) return auth.response;
   const body = await readBody(req);
   if (!body) return reply({ error: "بيانات الطلب غير صالحة" }, 400);

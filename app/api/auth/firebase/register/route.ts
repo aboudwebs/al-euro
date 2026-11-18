@@ -9,6 +9,7 @@ import { verifyReferralSignature } from "@/lib/referral-signature";
 import { RULES, rateHit, rateKey, tooManyRequests } from "@/lib/rate-limit";
 import { BodyTooLargeError, clientIp, readJsonLimited } from "@/lib/http";
 import { recordReferralSignup } from "@/lib/referral-guard";
+import { newPasswordError } from "@/lib/password-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -125,7 +126,12 @@ export async function POST(req: Request) {
       }
 
       const optionalName = typeof body?.name === "string" ? body.name.trim() : "";
+      const customerPassword = typeof body?.password === "string" ? body.password : "";
       if (role === "customer" && (optionalName.length < 2 || optionalName.length > 100)) return reply({ error: "الاسم يجب أن يكون بين حرفين و100 حرف" }, 400);
+      if (role === "customer") {
+        const passwordError = newPasswordError(customerPassword);
+        if (passwordError) return reply({ error: passwordError }, 400);
+      }
       const optionalCity = typeof body?.city === "string" ? body.city.trim() : "";
       const optionalSpec = typeof body?.spec === "string" ? body.spec.trim() : "";
       const optionalLicense = typeof body?.license === "string" ? body.license.trim() : "";
@@ -147,7 +153,7 @@ export async function POST(req: Request) {
           role,
           name: optionalName.length >= 2 ? optionalName : null,
           phone: role === "workshop" || role === "customer" ? workshopPhone : null,
-          password_hash: null,
+          password_hash: role === "customer" ? hashPassword(customerPassword) : null,
           license: role === "workshop" ? (optionalLicense || null) : null,
           license_verification_status: role === "workshop" && !optionalLicense ? "pending" : null,
           city: optionalCity || null,
@@ -229,6 +235,7 @@ export async function POST(req: Request) {
 
     const role = body?.role;
     const name = typeof body?.name === "string" ? body.name.trim() : "";
+    const customerPassword = typeof body?.password === "string" ? body.password : "";
     const license = typeof body?.license === "string" ? body.license.trim() : "";
     const city = typeof body?.city === "string" ? body.city.trim() : "";
     const spec = typeof body?.spec === "string" ? body.spec.trim() : "";
@@ -240,6 +247,10 @@ export async function POST(req: Request) {
       return reply({ error: "اختر نوع الحساب بشكل صحيح" }, 400);
     }
     if (name.length < 2 || name.length > 100) return reply({ error: "الاسم يجب أن يكون بين حرفين و100 حرف" }, 400);
+    if (role === "customer") {
+      const passwordError = newPasswordError(customerPassword);
+      if (passwordError) return reply({ error: passwordError }, 400);
+    }
     if (role === "workshop" && ((!license && !manualVerification) || !city || !spec)) {
       return reply({ error: "أدخل الترخيص أو اختر التحقق اليدوي، وحدد المدينة والاختصاص" }, 400);
     }

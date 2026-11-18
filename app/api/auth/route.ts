@@ -351,7 +351,7 @@ export async function POST(req: Request) {
         tier: role === "workshop" ? "Standard" : undefined,
         is_active: role !== "workshop",
         phone_verified_at: role === "customer" ? new Date().toISOString() : undefined,
-        phone_verification_required: false,
+        phone_verification_required: role === "customer" ? false : undefined,
         debt_limit: role === "customer" ? 0 : undefined,
         debt_balance: role === "customer" ? 0 : undefined,
         cashback_balance: role === "customer" ? 0 : undefined,

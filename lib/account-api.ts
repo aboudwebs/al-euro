@@ -55,7 +55,7 @@ export type AccountUser = {
  * Re-reads the customer and enforces any pending phone-verification requirement server-side.
  * `allowAdmin` lets an active admin through too: only for read-only endpoints the admin panel itself uses.
  */
-export async function requireUser(options: { requireVerifiedPhone?: boolean; allowAdmin?: boolean; rejectPendingDeletion?: boolean } = {}): Promise<{ ok: true; user: AccountUser } | { ok: false; response: NextResponse }> {
+export async function requireUser(options: { requireVerifiedPhone?: boolean; allowAdmin?: boolean; allowCustomer?: boolean; rejectPendingDeletion?: boolean } = {}): Promise<{ ok: true; user: AccountUser } | { ok: false; response: NextResponse }> {
   let session: Awaited<ReturnType<typeof getSession>>;
   try {
     session = await getSession();
@@ -116,7 +116,7 @@ export async function requireUser(options: { requireVerifiedPhone?: boolean; all
       }, 403),
     };
   }
-  if (!accountRoleAllowed(data.role, { allowAdmin: options.allowAdmin })) {
+  if (!accountRoleAllowed(data.role, { allowAdmin: options.allowAdmin, allowCustomer: options.allowCustomer })) {
     return { ok: false, response: reply({ error: "هذه الخدمة غير متاحة لنوع حسابك" }, 403) };
   }
   return { ok: true, user: data as AccountUser };

@@ -137,11 +137,12 @@ export async function POST(req: Request) {
     let role = requestedRole as string | undefined;
     const isMobileClient = client === "mobile";
 
-    const allowedRoles = mode === "login" ? (isMobileClient ? ["workshop", "marketer"] : ["workshop", "marketer", "admin", "worker"]) : ["workshop", "marketer"];
+    const allowedRoles = mode === "login" ? (isMobileClient ? ["workshop", "marketer", "customer"] : ["workshop", "marketer", "customer", "admin", "worker"]) : ["workshop", "marketer", "customer"];
 
     if (mode === "send-otp") {
-      // Registration without phone proof stays on until REGISTRATION_OTP_ENABLED=true is set on the server.
-      if (!registrationOtpEnabled()) return json({ ok: true, otpRequired: false });
+      // Independent customers must always prove phone ownership during registration.
+      const otpRequired = registrationOtpEnabled() || requestedRole === "customer";
+      if (!otpRequired) return json({ ok: true, otpRequired: false });
       if (!phone || String(phone).trim().length < 8) {
         return json({ error: "يرجى إدخال رقم موبايل صالح" }, 400);
       }
@@ -196,7 +197,7 @@ export async function POST(req: Request) {
 
       let userLookup = db.from("users").select(`${USER_FIELDS}, password_hash`).in("phone", phoneCandidates);
       if (role) userLookup = userLookup.eq("role", role);
-      else userLookup = userLookup.in("role", ["workshop", "marketer"]);
+      else userLookup = userLookup.in("role", ["workshop", "marketer", "customer"]);
       const { data: matchedUsers, error: findError } = await userLookup.limit(2);
       if (findError) return serverError("lookup", findError, "خطأ في الاتصال بقاعدة البيانات");
 
@@ -275,7 +276,7 @@ export async function POST(req: Request) {
       return json({ error: `كلمة المرور يجب أن تكون ${MIN_NEW_PASSWORD} أحرف على الأقل` }, 400);
     }
 
-    if (registrationOtpEnabled()) {
+    if (registrationOtpEnabled() || role === "customer") {
       if (!otpCode || !otpToken) {
         return json({ error: "يرجى إدخال رمز التحقق المرسل برسالة نصية" }, 400);
       }
@@ -349,6 +350,11 @@ export async function POST(req: Request) {
         referred_by_code: validatedReferralCode,
         tier: role === "workshop" ? "Standard" : undefined,
         is_active: role !== "workshop",
+        phone_verified_at: role === "customer" ? new Date().toISOString() : undefined,
+        phone_verification_required: false,
+        debt_limit: role === "customer" ? 0 : undefined,
+        debt_balance: role === "customer" ? 0 : undefined,
+        cashback_balance: role === "customer" ? 0 : undefined,
       }).select(USER_FIELDS).single();
 
       if (!result.error) {

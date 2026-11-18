@@ -74,7 +74,7 @@ export type AdminAccount = AccountInfo & {
   referred_by_name?: string | null;
   is_active: boolean;
   created_at: string;
-  customer_orders?: { id: string; order_number: number | null; total_amount: number; pay_method: string; status: string; created_at: string }[];
+  customer_orders?: { id: string; order_number: number | null; customer_order_number: number | null; total_amount: number; pay_method: string; status: string; created_at: string }[];
 };
 
 export type LedgerEntry = {

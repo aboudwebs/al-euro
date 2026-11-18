@@ -47,7 +47,7 @@ function AccountCard({ a, onChanged }: { a: AdminAccount; onChanged: () => void 
         </div>
         <div className="flex flex-wrap gap-1.5">
           <Badge tone={isWorkshop ? "info" : "gold"}>{ROLE_LABEL[a.role]}</Badge>
-          <Badge tone={a.is_active ? "ok" : "warn"}>{a.is_active ? "مفعّل" : "غير مفعّل"}</Badge>
+          <Badge tone={a.is_active ? "ok" : "warn"}>{a.is_active ? (isIndependentCustomer ? "نشط" : "مفعّل") : (isIndependentCustomer ? "محظور" : "غير مفعّل")}</Badge>
         </div>
       </div>
 

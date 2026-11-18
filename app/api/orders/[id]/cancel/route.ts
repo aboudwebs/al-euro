@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const auth = await requireUser();
+  const auth = await requireUser({ allowCustomer: true });
   if (!auth.ok) return auth.response;
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
     return NextResponse.json({ error: "معرّف الطلب غير صالح" }, { status: 400 });

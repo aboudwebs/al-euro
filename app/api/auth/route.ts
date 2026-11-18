@@ -362,7 +362,7 @@ export async function POST(req: Request) {
         specs: specsArray,
         my_ref_code: generatedRefCode,
         referred_by_code: validatedReferralCode,
-        tier: role === "workshop" ? "Standard" : undefined,
+        tier: role === "customer" ? null : role === "workshop" ? "Standard" : undefined,
         is_active: role !== "workshop",
         phone_verified_at: role === "customer" ? new Date().toISOString() : undefined,
         phone_verification_required: role === "customer" ? false : undefined,

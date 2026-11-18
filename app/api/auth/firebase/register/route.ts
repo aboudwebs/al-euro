@@ -104,7 +104,14 @@ export async function POST(req: Request) {
         const { data: existingUser, error } = await db.from("users")
           .select("id, role, name, phone, my_ref_code, is_active").eq("id", linked.user_id).maybeSingle();
         if (error || !existingUser) return reply({ error: "حساب EURO المرتبط غير موجود" }, 404);
+        if (existingUser.role !== role) {
+          return reply({ error: "طريقة Google مرتبطة مسبقاً بنوع حساب آخر. سجّل الدخول بنوع الحساب المرتبط." }, 409);
+        }
+        if (role === "customer" && canonicalPhone(existingUser.phone) !== canonicalPhone(workshopPhone)) {
+          return reply({ error: "حساب Google مرتبط برقم هاتف مختلف. استخدم تسجيل الدخول أو تواصل مع الدعم لتغيير الرقم." }, 409);
+        }
         if (!existingUser.is_active) return reply({ pendingApproval: true, message: "حسابك قيد المراجعة من قِبل الإدارة." }, 403);
+        otpSpent = role === "customer";
         const accessToken = await mintAccessToken({
           id: String(existingUser.id), role: existingUser.role, name: existingUser.name ?? "",
           phone: existingUser.phone ?? "", my_ref_code: existingUser.my_ref_code,

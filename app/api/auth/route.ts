@@ -54,6 +54,20 @@ function serverError(context: string, err: unknown, message = "حدث خطأ غ�
   return json({ error: message }, 500);
 }
 
+function publicAccount(user: Record<string, any>) {
+  if (user.role !== "customer") return user;
+  const {
+    tier: _tier,
+    debt_limit: _debtLimit,
+    debt_balance: _debtBalance,
+    cashback_balance: _cashbackBalance,
+    my_ref_code: _referralCode,
+    ...safe
+  } = user;
+  return safe;
+}
+
+
 /** A password check against a throw-away hash, so an unknown phone number costs the same time as a wrong password. */
 let decoyHash: string | null = null;
 function burnPasswordCheck(password: string) {
@@ -251,7 +265,7 @@ export async function POST(req: Request) {
       const { password_hash: _omit, ...publicUser } = existingUser;
       const safeUser = existingUser.role === "worker"
         ? { id: existingUser.id, role: existingUser.role, name: existingUser.name, phone: existingUser.phone, is_active: existingUser.is_active, created_at: existingUser.created_at }
-        : publicUser;
+        : publicAccount(publicUser);
       const response = json({ ok: true, user: safeUser, ...(isMobileClient ? { accessToken } : {}) });
       // Explicitly attach the browser session to this exact response. This avoids relying on
       // implicit cookie mutation propagation when a custom NextResponse is returned.
@@ -403,7 +417,7 @@ export async function POST(req: Request) {
       phone: newUser.phone,
       my_ref_code: newUser.my_ref_code,
     });
-    return json({ ok: true, user: newUser, ...(isMobileClient ? { accessToken } : {}) });
+    return json({ ok: true, user: publicAccount(newUser), ...(isMobileClient ? { accessToken } : {}) });
   } catch (err) {
     return serverError("POST", err);
   } finally {

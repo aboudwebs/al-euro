@@ -109,7 +109,7 @@ function AccountCard({ a, onChanged }: { a: AdminAccount; onChanged: () => void 
 
       {isIndependentCustomer && (
         <div className="space-y-2 rounded-2xl border border-white/10 bg-black/30 p-3 text-sm">
-          <p className="font-semibold text-white">طلبات الزبون</p>
+          <p className="font-semibold text-white">طلبات العميل</p>
           {a.customer_orders?.length ? (
             <div className="space-y-2">
               {a.customer_orders.map((order) => (
@@ -173,9 +173,9 @@ function AccountsInner() {
 
   return (
     <>
-      <PageHead title="الحسابات" sub="إدارة حسابات الورش والمسوقين والزبائن المستقلين" />
+      <PageHead title="الحسابات" sub="إدارة حسابات الورش والمسوقين والعملاء" />
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <Tabs<Role> value={role} onChange={setRole} items={[{ value: "all", label: "الكل" }, { value: "workshop", label: "ورشات" }, { value: "marketer", label: "مسوّقون" }, { value: "customer", label: "الزبائن المستقلون" }]} />
+        <Tabs<Role> value={role} onChange={setRole} items={[{ value: "all", label: "الكل" }, { value: "workshop", label: "ورشات" }, { value: "marketer", label: "مسوّقون" }, { value: "customer", label: "العملاء" }]} />
         <Tabs<State> value={state} onChange={setState} items={[{ value: "all", label: "كل الحالات" }, { value: "inactive", label: "بانتظار التفعيل" }, { value: "active", label: "مفعّلة" }]} />
         <div className="relative min-w-[200px] flex-1">
           <Search size={16} className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-white/45" />

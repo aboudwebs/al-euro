@@ -102,7 +102,7 @@ export const TIER_LABEL: Record<Tier, string> = {
   Elite: "النخبة Elite — 15% كاش باك",
 };
 
-export const ROLE_LABEL = { workshop: "ورشة", marketer: "مسوّق", customer: "زبون مستقل", admin: "إدارة", worker: "موظف" } as const;
+export const ROLE_LABEL = { workshop: "ورشة", marketer: "مسوّق", customer: "عميل", admin: "إدارة", worker: "موظف" } as const;
 
 export const ADMIN_NOTE_MARKER = "[ملاحظة الإدارة]";
 export function splitRequestNotes(notes: string | null | undefined): { customer: string; admin: string } {

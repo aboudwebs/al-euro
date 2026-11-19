@@ -85,7 +85,7 @@ export async function GET(req: Request) {
       .in("user_id", customerIds)
       .order("created_at", { ascending: false })
       .limit(Math.min(customerIds.length * 10, 500));
-    if (ordersError) return dbFail("independent customer orders", ordersError, "تعذر تحميل طلبات الزبائن المستقلين");
+    if (ordersError) return dbFail("customer orders", ordersError, "تعذر تحميل طلبات العملاء");
     for (const order of orders ?? []) {
       const list = customerOrders[order.user_id] ??= [];
       if (list.length < 10) list.push({

@@ -128,7 +128,7 @@ export async function POST(req: Request) {
       const optionalName = typeof body?.name === "string" ? body.name.trim() : "";
       const customerPassword = typeof body?.password === "string" ? body.password : "";
       if (role === "customer" && (optionalName.length < 2 || optionalName.length > 100)) return reply({ error: "الاسم يجب أن يكون بين حرفين و100 حرف" }, 400);
-      if (role === "customer") {
+      if (role === "customer" && customerPassword) {
         const passwordError = newPasswordError(customerPassword);
         if (passwordError) return reply({ error: passwordError }, 400);
       }
@@ -153,7 +153,7 @@ export async function POST(req: Request) {
           role,
           name: optionalName.length >= 2 ? optionalName : null,
           phone: role === "workshop" ? workshopPhone : role === "customer" && workshopPhone ? workshopPhone : null,
-          password_hash: role === "customer" ? hashPassword(customerPassword) : null,
+          password_hash: role === "customer" && customerPassword ? hashPassword(customerPassword) : null,
           license: role === "workshop" ? (optionalLicense || null) : null,
           license_verification_status: role === "workshop" && !optionalLicense ? "pending" : null,
           city: optionalCity || null,

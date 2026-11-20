@@ -79,8 +79,11 @@ export async function POST(req: Request) {
         return reply({ error: "اختر نوع الحساب بشكل صحيح" }, 400);
       }
       const workshopPhone = phoneDigits(contactPhone);
-      if ((role === "workshop" || role === "customer") && canonicalPhone(workshopPhone).length < 8) {
-        return reply({ error: role === "customer" ? "رقم الهاتف إلزامي ويجب أن يكون صحيحاً" : "رقم هاتف الورشة إلزامي ويجب أن يكون صحيحاً" }, 400);
+      if (role === "workshop" && canonicalPhone(workshopPhone).length < 8) {
+        return reply({ error: "رقم هاتف الورشة إلزامي ويجب أن يكون صحيحاً" }, 400);
+      }
+      if (role === "customer" && workshopPhone && canonicalPhone(workshopPhone).length < 8) {
+        return reply({ error: "رقم الهاتف غير صحيح" }, 400);
       }
 
 
@@ -98,27 +101,15 @@ export async function POST(req: Request) {
         if (existingUser.role !== role) {
           return reply({ error: "طريقة Google مرتبطة مسبقاً بنوع حساب آخر. سجّل الدخول بنوع الحساب المرتبط." }, 409);
         }
-        if (role === "customer" && canonicalPhone(existingUser.phone) !== canonicalPhone(workshopPhone)) {
+        if (role === "customer" && workshopPhone && canonicalPhone(existingUser.phone) !== canonicalPhone(workshopPhone)) {
           return reply({ error: "حساب Google مرتبط برقم هاتف مختلف. استخدم تسجيل الدخول أو تواصل مع الدعم لتغيير الرقم." }, 409);
         }
         if (!existingUser.is_active) return reply({ pendingApproval: true, message: "حسابك قيد المراجعة من قِبل الإدارة." }, 403);
-        otpSpent = role === "customer";
         const accessToken = await mintAccessToken({
           id: String(existingUser.id), role: existingUser.role, name: existingUser.name ?? "",
           phone: existingUser.phone ?? "", my_ref_code: existingUser.my_ref_code,
         });
         return reply({ ok: true, accessToken, user: existingUser, phoneVerificationRequired: existingUser.role !== "customer" });
-      }
-
-      if (role === "customer") {
-        const otpLimited = await rateHit(rateKey("otp-verify-ip", ip), RULES.otpVerifyPerIp);
-        if (!otpLimited.allowed) return tooManyRequests(otpLimited.retryAfter);
-        otpClaim = await claimRegistrationOtp(workshopPhone, body?.otpCode, body?.otpToken);
-        if (!otpClaim.ok) {
-          return otpClaim.reason === "failed"
-            ? reply({ error: "تعذر التحقق من الرمز حالياً، حاول لاحقاً" }, 503)
-            : reply({ error: "رمز التحقق غير صحيح أو انتهت صلاحيته. اطلب رمزاً جديداً." }, 400);
-        }
       }
 
       const refCode = typeof body?.refCode === "string" ? body.refCode.trim().slice(0, 80) : "";
@@ -145,7 +136,7 @@ export async function POST(req: Request) {
       const optionalSpec = typeof body?.spec === "string" ? body.spec.trim() : "";
       const optionalLicense = typeof body?.license === "string" ? body.license.trim() : "";
       const specs = optionalSpec ? optionalSpec.split(/[,،]/).map((item: string) => item.trim()).filter(Boolean) : [];
-      if (role === "workshop" || role === "customer") {
+      if (role === "workshop" || (role === "customer" && workshopPhone)) {
         const { data: duplicatePhone, error: duplicatePhoneError } = await db.from("users")
           .select("id").in("phone", phoneCandidates(workshopPhone)).in("role", ["workshop", "marketer", "customer"]).limit(1);
         if (duplicatePhoneError) {
@@ -161,7 +152,7 @@ export async function POST(req: Request) {
         const result = await db.from("users").insert({
           role,
           name: optionalName.length >= 2 ? optionalName : null,
-          phone: role === "workshop" || role === "customer" ? workshopPhone : null,
+          phone: role === "workshop" ? workshopPhone : role === "customer" && workshopPhone ? workshopPhone : null,
           password_hash: role === "customer" ? hashPassword(customerPassword) : null,
           license: role === "workshop" ? (optionalLicense || null) : null,
           license_verification_status: role === "workshop" && !optionalLicense ? "pending" : null,
@@ -171,8 +162,8 @@ export async function POST(req: Request) {
           referred_by_code: validatedReferralCode,
           tier: role === "customer" ? null : role === "workshop" ? "Standard" : undefined,
           is_active: role !== "workshop",
-          phone_verified_at: role === "customer" ? new Date().toISOString() : null,
-          phone_verification_required: role !== "customer",
+          phone_verified_at: null,
+          phone_verification_required: true,
           debt_limit: role === "customer" ? 0 : undefined,
           debt_balance: role === "customer" ? 0 : undefined,
           cashback_balance: role === "customer" ? 0 : undefined,
@@ -195,7 +186,6 @@ export async function POST(req: Request) {
         await db.from("users").delete().eq("id", created.id);
         return reply({ error: identityError.code === "23505" ? "طريقة الدخول مرتبطة بحساب آخر." : "تعذر حفظ هوية تسجيل الدخول" }, identityError.code === "23505" ? 409 : 500);
       }
-      otpSpent = role === "customer";
 
       if (validatedReferralCode) {
         await recordReferralSignup({ newUserId: String(created.id), newUserPhone: workshopPhone, referralCode: validatedReferralCode, ip });

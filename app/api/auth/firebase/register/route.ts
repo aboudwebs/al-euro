@@ -96,7 +96,7 @@ export async function POST(req: Request) {
       }
       if (linked) {
         const { data: existingUser, error } = await db.from("users")
-          .select("id, role, name, phone, my_ref_code, is_active").eq("id", linked.user_id).maybeSingle();
+          .select("id, role, name, phone, phone_verified_at, phone_verification_required, my_ref_code, is_active").eq("id", linked.user_id).maybeSingle();
         if (error || !existingUser) return reply({ error: "حساب EURO المرتبط غير موجود" }, 404);
         if (existingUser.role !== role) {
           return reply({ error: "طريقة Google مرتبطة مسبقاً بنوع حساب آخر. سجّل الدخول بنوع الحساب المرتبط." }, 409);
@@ -109,7 +109,7 @@ export async function POST(req: Request) {
           id: String(existingUser.id), role: existingUser.role, name: existingUser.name ?? "",
           phone: existingUser.phone ?? "", my_ref_code: existingUser.my_ref_code,
         });
-        return reply({ ok: true, accessToken, user: existingUser, phoneVerificationRequired: existingUser.role !== "customer" });
+        return reply({ ok: true, accessToken, user: existingUser, phoneVerificationRequired: Boolean(existingUser.phone_verification_required) });
       }
 
       const refCode = typeof body?.refCode === "string" ? body.refCode.trim().slice(0, 80) : "";

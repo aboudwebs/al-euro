@@ -260,16 +260,70 @@ export async function POST(req: Request) {
     const phone = phoneDigits(identity.phone);
     if (!phone || canonicalPhone(phone).length < 8) return reply({ error: "رقم الهاتف الموثّق غير صالح" }, 400);
 
-    const { data: existing, error: existingError } = await db.from("users")
-      .select("id")
+    const { data: existingUsers, error: existingError } = await db.from("users")
+      .select("id, role, name, phone, my_ref_code, is_active, password_hash")
       .in("phone", phoneCandidates(identity.phone))
       .in("role", ["workshop", "marketer", "customer"])
-      .limit(1);
+      .limit(2);
     if (existingError) {
       console.error("[api/auth/firebase/register] existing phone lookup:", existingError);
       return reply({ error: "تعذر التحقق من رقم الهاتف" }, 500);
     }
-    if (existing?.length) return reply({ error: "هذا الرقم مرتبط بحساب EURO موجود. استخدم تسجيل الدخول لربط هويتك." }, 409);
+    if ((existingUsers?.length ?? 0) > 1) {
+      return reply({ error: "يوجد أكثر من حساب مرتبط بهذا الرقم. تواصل مع الإدارة لربط Google بأمان." }, 409);
+    }
+    if (existingUsers?.length === 1) {
+      const existingUser = existingUsers[0];
+      if (existingUser.role !== role) {
+        return reply({ error: "نوع الحساب لا يطابق الحساب المرتبط برقم الهاتف." }, 409);
+      }
+      if (!existingUser.is_active) {
+        return reply({ pendingApproval: true, message: "حسابك قيد المراجعة من قِبل الإدارة." }, 403);
+      }
+      const { error: identityLinkError } = await db.from("user_auth_identities").insert({
+        user_id: existingUser.id,
+        provider: identity.provider,
+        provider_uid: identity.uid,
+        email: identity.email,
+        email_verified: identity.emailVerified,
+      });
+      if (identityLinkError) {
+        console.error("[api/auth/firebase/register] link Google identity:", identityLinkError);
+        return reply({ error: identityLinkError.code === "23505"
+          ? "هوية Google مرتبطة مسبقاً بحساب آخر."
+          : "تعذر ربط Google بالحساب الحالي." }, identityLinkError.code === "23505" ? 409 : 503);
+      }
+      const accountUpdate: Record<string, unknown> = {
+        phone_verified_at: new Date().toISOString(),
+        phone_verification_required: false,
+      };
+      if (!existingUser.password_hash) accountUpdate.password_hash = hashPassword(accountPassword);
+      const { error: accountUpdateError } = await db.from("users").update(accountUpdate).eq("id", existingUser.id);
+      if (accountUpdateError) {
+        console.error("[api/auth/firebase/register] linked account update:", accountUpdateError);
+        await db.from("user_auth_identities").delete().eq("provider", identity.provider).eq("provider_uid", identity.uid).eq("user_id", existingUser.id);
+        return reply({ error: "تم التحقق من الرقم لكن تعذر تحديث الحساب. حاول مجدداً." }, 503);
+      }
+      const accessToken = await mintAccessToken({
+        id: String(existingUser.id),
+        role: existingUser.role,
+        name: existingUser.name ?? "",
+        phone: existingUser.phone ?? "",
+        my_ref_code: existingUser.my_ref_code,
+      });
+      return reply({
+        ok: true,
+        accessToken,
+        user: {
+          id: existingUser.id,
+          role: existingUser.role,
+          name: existingUser.name ?? "",
+          phone: existingUser.phone ?? "",
+          my_ref_code: existingUser.my_ref_code,
+          is_active: existingUser.is_active,
+        },
+      });
+    }
 
     let validatedReferralCode: string | null = null;
     if (role === "workshop" && refCode) {

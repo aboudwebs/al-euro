@@ -44,8 +44,7 @@ export async function verifyFirebaseIdentityToken(idToken: string, whatsappVerif
     throw new Error("هوية تسجيل الدخول غير صالحة");
   }
 
-  const normalizedProvider = provider === "google.com" || provider === "apple.com" ||
-    provider === "phone" ? provider : "";
+  const normalizedProvider = provider === "google.com" || provider === "apple.com" ? provider : "";
   if (!normalizedProvider) throw new Error("طريقة تسجيل الدخول غير مدعومة");
 
   return {

@@ -16,7 +16,7 @@ export default function DeleteAccountPage() {
         <p className="mt-8 text-sm font-bold tracking-[0.18em] text-emerald-300">ACCOUNT DELETION</p>
         <h1 className="mt-3 text-3xl font-black sm:text-4xl">طلب حذف حساب EURO</h1>
         <p className="mt-4 max-w-2xl leading-8 text-white/65">
-          يمكنك طلب حذف حسابك من هذه الصفحة دون تسجيل الدخول إلى التطبيق. نتحقق من ملكية الحساب عبر رسالة SMS إلى رقم الهاتف المسجّل، أو عبر البريد الإلكتروني الموثّق المرتبط بالحساب إذا تعذّر إرسال الرسالة النصية.
+          يمكنك طلب حذف حسابك من هذه الصفحة دون تسجيل الدخول إلى التطبيق. نتحقق من ملكية الحساب حصراً عبر رمز SMS يُرسل إلى رقم الهاتف المسجّل. لا تتوفر وسيلة تحقق بديلة عبر البريد الإلكتروني.
         </p>
 
         <DeletionRequestForm />

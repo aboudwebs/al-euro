@@ -60,7 +60,6 @@ export async function POST(req: Request) {
     const verifiedPhone = typeof body?.phone === "string" ? body.phone.trim() : "";
     const contactPhone = typeof body?.contactPhone === "string" ? body.contactPhone.trim() : "";
 
-    if (!verifiedPhone) return reply({ error: "إنشاء الحساب يتطلب رقم هاتف موثّقاً برمز SMS عبر MsgPlus." }, 400);
 
     // OAuth registration stores a workshop contact number without treating it as phone-verified.
     // Phone verification remains a separate checkout requirement.
@@ -79,6 +78,9 @@ export async function POST(req: Request) {
       const role = body?.role;
       if (role !== "workshop" && role !== "marketer" && role !== "customer") {
         return reply({ error: "اختر نوع الحساب بشكل صحيح" }, 400);
+      }
+      if (role !== "customer") {
+        return reply({ error: "إنشاء حساب الورشة أو المسوّق يتطلب التحقق من رقم الهاتف عبر SMS باستخدام MsgPlus." }, 400);
       }
       const workshopPhone = phoneDigits(contactPhone);
       if (role === "workshop" && canonicalPhone(workshopPhone).length < 8) {

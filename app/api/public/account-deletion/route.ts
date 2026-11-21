@@ -1,4 +1,3 @@
-import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { DELETION_GRACE_DAYS } from "@/lib/account-deletion";
@@ -6,14 +5,10 @@ import { bumpTokenVersion, forgetAccountState } from "@/lib/session";
 import { BodyTooLargeError, clientIp, readJsonLimited } from "@/lib/http";
 import { claimRegistrationOtp, issueRegistrationOtp, type OtpClaim } from "@/lib/registration-otp";
 import { RULES, rateHit, rateKey, tooManyRequests } from "@/lib/rate-limit";
-import { hmacHex, timingSafeEqualHex } from "@/lib/keys";
 
 export const dynamic = "force-dynamic";
 const NO_STORE = { "Cache-Control": "no-store" };
 const FIELDS = "id, requested_at, due_at";
-const EMAIL_OTP_TTL_MS = 10 * 60 * 1000;
-const EMAIL_RESEND_WAIT_MS = 60 * 1000;
-const EMAIL_MAX_ATTEMPTS = 5;
 type AccountRole = "workshop" | "marketer" | "customer";
 
 function reply(body: unknown, status = 200) {
@@ -54,99 +49,6 @@ async function releaseOtp(claim: OtpClaim | null) {
   if (claim?.ok) await claim.release();
 }
 
-function deletionEmailHash(userId: string, code: string) {
-  return hmacHex("account-deletion-v1", `account-deletion:${userId}:${code}`);
-}
-function maskEmail(email: string) {
-  const [local, domain] = email.split("@");
-  if (!local || !domain) return "البريد الموثّق المرتبط بالحساب";
-  return `${local.slice(0, 1)}•••@${domain}`;
-}
-async function sendDeletionEmailCode(email: string, code: string) {
-  const key = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM;
-  if (!key || !from) return false;
-  try {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        from, to: [email], subject: "رمز تأكيد حذف حساب EURO",
-        html: `<div dir="rtl" style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:24px;color:#172033"><h2>تأكيد حذف حساب EURO</h2><p>استخدم الرمز التالي لتأكيد طلب حذف حسابك:</p><div style="font-size:32px;font-weight:bold;letter-spacing:8px;padding:18px;background:#f2f5f9;text-align:center;border-radius:12px">${code}</div><p>صلاحية الرمز 10 دقائق. إذا لم تطلب حذف الحساب، تجاهل هذه الرسالة.</p></div>`,
-      }),
-    });
-    if (!response.ok) console.error("[public account deletion] email provider rejected:", response.status);
-    return response.ok;
-  } catch (error) {
-    console.error("[public account deletion] email delivery failed:", error);
-    return false;
-  }
-}
-async function issueEmailFallback(phone: string, role: AccountRole, ip: string) {
-  const ipLimit = await rateHit(rateKey("public-deletion-email-ip", ip), RULES.otpPerIpHour);
-  if (!ipLimit.allowed) return { ok: false as const, reason: "throttled" as const, retryAfter: ipLimit.retryAfter };
-
-  const db = getSupabaseAdmin();
-  const { data: users, error: userError } = await db.from("users")
-    .select("id").in("phone", phoneLookupVariants(phone)).eq("role", role).limit(2);
-  if (userError) return { ok: false as const, reason: "unavailable" as const };
-  if (!users || users.length !== 1) return { ok: true as const, sent: false as const };
-
-  const userId = String(users[0].id);
-  const { data: identity, error: identityError } = await db.from("user_auth_identities")
-    .select("email").eq("user_id", userId).eq("email_verified", true)
-    .not("email", "is", null).limit(1).maybeSingle();
-  if (identityError) return { ok: false as const, reason: "unavailable" as const };
-  const email = typeof identity?.email === "string" ? identity.email.trim() : "";
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return { ok: true as const, sent: false as const };
-  }
-
-  const { data: previous, error: previousError } = await db.from("account_deletion_email_codes")
-    .select("resend_after").eq("user_id", userId).maybeSingle();
-  if (previousError) return { ok: false as const, reason: "unavailable" as const };
-  if (previous?.resend_after && new Date(previous.resend_after).getTime() > Date.now()) {
-    return { ok: false as const, reason: "throttled" as const, retryAfter: Math.ceil((new Date(previous.resend_after).getTime() - Date.now()) / 1000) };
-  }
-
-  const code = crypto.randomInt(100000, 1000000).toString();
-  const now = Date.now();
-  const { error: saveError } = await db.from("account_deletion_email_codes").upsert({
-    user_id: userId, code_hash: deletionEmailHash(userId, code),
-    expires_at: new Date(now + EMAIL_OTP_TTL_MS).toISOString(),
-    resend_after: new Date(now + EMAIL_RESEND_WAIT_MS).toISOString(),
-    attempts: 0, created_at: new Date(now).toISOString(),
-  }, { onConflict: "user_id" });
-  if (saveError) return { ok: false as const, reason: "unavailable" as const };
-  if (!await sendDeletionEmailCode(email, code)) {
-    await db.from("account_deletion_email_codes").delete().eq("user_id", userId);
-    return { ok: false as const, reason: "unavailable" as const };
-  }
-  return { ok: true as const, sent: true as const, maskedEmail: maskEmail(email) };
-}
-async function claimEmailFallback(db: ReturnType<typeof getSupabaseAdmin>, userId: string, code: string): Promise<OtpClaim> {
-  const { data: row, error } = await db.from("account_deletion_email_codes")
-    .select("code_hash, expires_at, attempts").eq("user_id", userId).maybeSingle();
-  if (error) return { ok: false, reason: "failed" };
-  if (!row || new Date(row.expires_at).getTime() <= Date.now() || Number(row.attempts) >= EMAIL_MAX_ATTEMPTS) {
-    return { ok: false, reason: "invalid" };
-  }
-  const attempts = Number(row.attempts);
-  const { data: burned, error: burnError } = await db.from("account_deletion_email_codes")
-    .update({ attempts: attempts + 1 }).eq("user_id", userId).eq("attempts", attempts)
-    .select("user_id").maybeSingle();
-  if (burnError) return { ok: false, reason: "failed" };
-  if (!burned) return { ok: false, reason: "invalid" };
-  if (!timingSafeEqualHex(String(row.code_hash), deletionEmailHash(userId, code))) {
-    return { ok: false, reason: "invalid" };
-  }
-  const { data: consumed, error: consumeError } = await db.from("account_deletion_email_codes")
-    .delete().eq("user_id", userId).eq("attempts", attempts + 1).select("user_id").maybeSingle();
-  if (consumeError) return { ok: false, reason: "failed" };
-  if (!consumed) return { ok: false, reason: "invalid" };
-  return { ok: true, release: async () => undefined };
-}
-
 /**
  * Public Google Play account-deletion flow.
  * The phone OTP is one-time, expires after 10 minutes and uses the shared MsgPlus rate limits.
@@ -179,30 +81,15 @@ export async function POST(req: Request) {
         message: "أرسلنا رمز تحقق برسالة SMS إلى الرقم المدخل. الرمز صالح لمدة 10 دقائق.",
       });
     }
-    if (issued.reason === "unconfigured" || issued.reason === "undelivered") {
-      const fallback = await issueEmailFallback(phone, role, ip);
-      if (!fallback.ok) {
-        if (fallback.reason === "throttled") return tooManyRequests(fallback.retryAfter ?? 60);
-        return reply({ error: "تعذر إرسال رمز التحقق. تواصل مع الدعم عبر واتساب لإتمام التحقق يدوياً." }, 503);
-      }
-      const message = fallback.sent
-        ? `تعذّر إرسال SMS؛ أرسلنا رمزاً إلى البريد الموثّق المرتبط بالحساب (${fallback.maskedEmail}).`
-        : "إذا كان الرقم مرتبطاً بحساب وله بريد موثّق، أرسلنا رمزاً إلى البريد المرتبط به. إذا لم يصلك، تواصل مع الدعم.";
-      return reply({ ok: true, channel: "email", otpToken: "", message });
-    }
+    if (issued.reason === "unconfigured" || issued.reason === "undelivered") return reply({ error: "تعذر إرسال رمز SMS حالياً. حاول لاحقاً أو تواصل مع الدعم." }, 503);
     if (issued.reason === "throttled") return tooManyRequests(issued.retryAfter ?? 60);
     return reply({ error: "خدمة التحقق غير متاحة حالياً. حاول لاحقاً أو تواصل مع الدعم." }, 503);
   }
 
-  if (action !== "confirm-code" || !validRole(role) || (body.channel !== "sms" && body.channel !== "email")) {
-    return reply({ error: "نوع الحساب أو العملية غير صالح." }, 400);
-  }
-  const channel = body.channel;
+  if (action !== "confirm-code" || !validRole(role)) return reply({ error: "نوع الحساب أو العملية غير صالح." }, 400);
   const code = typeof body.otpCode === "string" ? body.otpCode.trim() : "";
   const token = typeof body.otpToken === "string" ? body.otpToken.trim() : "";
-  if (!/^\d{6}$/.test(code) || (channel === "sms" && !token)) {
-    return reply({ error: "أدخل رمز التحقق المكوّن من 6 أرقام." }, 400);
-  }
+  if (!/^\d{6}$/.test(code) || !token) return reply({ error: "أدخل رمز SMS المكوّن من 6 أرقام." }, 400);
 
   const ipLimit = await rateHit(rateKey("deletion-otp-verify-ip", clientIp(req)), RULES.otpVerifyPerIp);
   if (!ipLimit.allowed) return tooManyRequests(ipLimit.retryAfter);
@@ -211,46 +98,18 @@ export async function POST(req: Request) {
   let claim: OtpClaim | null = null;
   let user: { id: string; role: string; debt_balance: number | null; cashback_balance: number | null };
 
-  if (channel === "sms") {
-    const smsClaim = await claimRegistrationOtp(phone, code, token);
-    if (!smsClaim.ok) {
-      return smsClaim.reason === "failed"
-        ? reply({ error: "تعذر التحقق من الرمز حالياً. حاول لاحقاً." }, 503)
-        : reply({ error: "رمز التحقق غير صحيح أو انتهت صلاحيته." }, 400);
-    }
-    claim = smsClaim;
-    const { data: users, error: userError } = await db.from("users")
-      .select("id, role, debt_balance, cashback_balance")
-      .in("phone", phoneLookupVariants(phone)).eq("role", role).limit(2);
-    if (userError) {
-      await releaseOtp(claim);
-      return reply({ error: "تعذر التحقق من الحساب. حاول لاحقاً." }, 503);
-    }
-    if (!users?.length) {
-      await releaseOtp(claim);
-      return reply({ error: "لم نعثر على حساب بهذا الرقم ونوع الحساب." }, 404);
-    }
-    if (users.length !== 1) {
-      await releaseOtp(claim);
-      return reply({ error: "يوجد أكثر من حساب من هذا النوع مرتبط بالرقم. تواصل مع الدعم لتحديد الحساب بأمان." }, 409);
-    }
-    user = users[0];
-  } else {
-    const { data: users, error: userError } = await db.from("users")
-      .select("id, role, debt_balance, cashback_balance")
-      .in("phone", phoneLookupVariants(phone)).eq("role", role).limit(2);
-    if (userError) return reply({ error: "تعذر التحقق من الحساب. حاول لاحقاً." }, 503);
-    if (!users?.length) return reply({ error: "رمز التحقق غير صحيح أو انتهت صلاحيته." }, 400);
-    if (users.length !== 1) return reply({ error: "يوجد أكثر من حساب من هذا النوع مرتبط بالرقم. تواصل مع الدعم." }, 409);
-    user = users[0];
-    const emailClaim = await claimEmailFallback(db, String(user.id), code);
-    if (!emailClaim.ok) {
-      return emailClaim.reason === "failed"
-        ? reply({ error: "تعذر التحقق من الرمز حالياً. حاول لاحقاً." }, 503)
-        : reply({ error: "رمز التحقق غير صحيح أو انتهت صلاحيته." }, 400);
-    }
-    claim = emailClaim;
-  }
+  const smsClaim = await claimRegistrationOtp(phone, code, token);
+  if (!smsClaim.ok) return smsClaim.reason === "failed"
+    ? reply({ error: "تعذر التحقق من الرمز حالياً. حاول لاحقاً." }, 503)
+    : reply({ error: "رمز SMS غير صحيح أو انتهت صلاحيته." }, 400);
+  claim = smsClaim;
+  const { data: users, error: userError } = await db.from("users")
+    .select("id, role, debt_balance, cashback_balance")
+    .in("phone", phoneLookupVariants(phone)).eq("role", role).limit(2);
+  if (userError) { await releaseOtp(claim); return reply({ error: "تعذر التحقق من الحساب. حاول لاحقاً." }, 503); }
+  if (!users?.length) { await releaseOtp(claim); return reply({ error: "لم نعثر على حساب بهذا الرقم ونوع الحساب." }, 404); }
+  if (users.length !== 1) { await releaseOtp(claim); return reply({ error: "يوجد أكثر من حساب من هذا النوع مرتبط بالرقم. تواصل مع الدعم لتحديد الحساب بأمان." }, 409); }
+  user = users[0];
 
   // Debts, cashback, commissions, payout requests and open commercial records are retained
   // for settlement and do not block removal of the user's personal identity.

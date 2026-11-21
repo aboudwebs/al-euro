@@ -60,6 +60,8 @@ export async function POST(req: Request) {
     const verifiedPhone = typeof body?.phone === "string" ? body.phone.trim() : "";
     const contactPhone = typeof body?.contactPhone === "string" ? body.contactPhone.trim() : "";
 
+    if (!verifiedPhone) return reply({ error: "إنشاء الحساب يتطلب رقم هاتف موثّقاً برمز SMS عبر MsgPlus." }, 400);
+
     // OAuth registration stores a workshop contact number without treating it as phone-verified.
     // Phone verification remains a separate checkout requirement.
     if (!verifiedPhone) {

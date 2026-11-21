@@ -234,7 +234,7 @@ export async function POST(req: Request) {
 
     const role = body?.role;
     const name = typeof body?.name === "string" ? body.name.trim() : "";
-    const customerPassword = typeof body?.password === "string" ? body.password : "";
+    const accountPassword = typeof body?.password === "string" ? body.password : "";
     const license = typeof body?.license === "string" ? body.license.trim() : "";
     const city = typeof body?.city === "string" ? body.city.trim() : "";
     const spec = typeof body?.spec === "string" ? body.spec.trim() : "";
@@ -246,10 +246,8 @@ export async function POST(req: Request) {
       return reply({ error: "اختر نوع الحساب بشكل صحيح" }, 400);
     }
     if (name.length < 2 || name.length > 100) return reply({ error: "الاسم يجب أن يكون بين حرفين و100 حرف" }, 400);
-    if (role === "customer") {
-      const passwordError = newPasswordError(customerPassword);
-      if (passwordError) return reply({ error: passwordError }, 400);
-    }
+    const passwordError = newPasswordError(accountPassword);
+    if (passwordError) return reply({ error: passwordError }, 400);
     if (role === "workshop" && ((!license && !manualVerification) || !city || !spec)) {
       return reply({ error: "أدخل الترخيص أو اختر التحقق اليدوي، وحدد المدينة والاختصاص" }, 400);
     }
@@ -296,7 +294,7 @@ export async function POST(req: Request) {
         role,
         name,
         phone,
-        password_hash: role === "customer" ? hashPassword(customerPassword) : hashPassword(crypto.randomBytes(32).toString("base64url")),
+        password_hash: hashPassword(accountPassword),
         license: role === "workshop" ? (license || null) : null,
         license_verification_status: role === "workshop" && !license ? "pending" : null,
         city: city || null,

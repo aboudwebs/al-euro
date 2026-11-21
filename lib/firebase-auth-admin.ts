@@ -45,7 +45,7 @@ export async function verifyFirebaseIdentityToken(idToken: string, whatsappVerif
   }
 
   const normalizedProvider = provider === "google.com" || provider === "apple.com" ||
-    provider === "phone" || provider === "password" ? provider : "";
+    provider === "phone" ? provider : "";
   if (!normalizedProvider) throw new Error("طريقة تسجيل الدخول غير مدعومة");
 
   return {

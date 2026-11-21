@@ -13,7 +13,6 @@ export default function DeletionRequestForm() {
   const [phone, setPhone] = useState("");
   const [role, setRole] = useState<Role>("workshop");
   const [otpToken, setOtpToken] = useState("");
-  const [channel, setChannel] = useState<"sms" | "email">("sms");
   const [code, setCode] = useState("");
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -32,7 +31,6 @@ export default function DeletionRequestForm() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "تعذر إرسال رمز التحقق.");
       setOtpToken(data.otpToken || "");
-      setChannel(data.channel === "email" ? "email" : "sms");
       setSent(true);
       setNotice(data.message || "إذا كان الرقم مرتبطاً بحساب، سيصلك رمز التحقق.");
     } catch (err) {
@@ -46,7 +44,7 @@ export default function DeletionRequestForm() {
     try {
       const response = await fetch("/api/public/account-deletion", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "confirm-code", phone: phone.trim(), role, channel, otpCode: code.trim(), otpToken }),
+        body: JSON.stringify({ action: "confirm-code", phone: phone.trim(), role, otpCode: code.trim(), otpToken }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "تعذر تسجيل طلب الحذف.");
@@ -79,7 +77,7 @@ export default function DeletionRequestForm() {
               <select value={role} onChange={e => setRole(e.target.value as Role)} className="mt-2 w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400">
                 <option value="workshop">ورشة</option>
                 <option value="marketer">مسوّق</option>
-                 <option value="customer">زبون مستقل</option>
+                 <option value="customer">عميل</option>
               </select>
             </label>
             <label className="block text-sm font-semibold">
@@ -90,7 +88,7 @@ export default function DeletionRequestForm() {
           <button disabled={busy} className="w-full rounded-xl bg-emerald-500 px-4 py-3 font-bold text-slate-950 transition hover:bg-emerald-400 disabled:opacity-50">
             {busy ? "جارٍ الإرسال…" : "إرسال رمز التحقق"}
           </button>
-          <p className="text-xs leading-6 text-white/50">نرسل رمزاً عبر SMS، أو إلى البريد الإلكتروني الموثّق المرتبط بالحساب إذا تعذّر إرسال الرسالة النصية.</p>
+          <p className="text-xs leading-6 text-white/50">نرسل رمز تحقق لمرة واحدة عبر رسالة SMS إلى رقم الهاتف المسجّل بالحساب.</p>
         </form>
       ) : (
         <form onSubmit={confirmCode} className="space-y-4">
@@ -98,7 +96,7 @@ export default function DeletionRequestForm() {
             رمز التحقق
               <input value={code} onChange={e => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))} required inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="••••••" className="mt-2 w-full rounded-xl border border-white/15 bg-black/25 px-4 py-3 text-center text-xl tracking-[0.35em] outline-none focus:border-emerald-400" dir="ltr" />
             </label>
-          <p className="text-xs leading-6 text-white/50">أدخل الرمز الذي وصلك عبر وسيلة التحقق الموضحة أعلاه.</p>
+          <p className="text-xs leading-6 text-white/50">أدخل رمز SMS الذي وصلك إلى رقم الهاتف المسجّل.</p>
           <div className="flex flex-col gap-2 sm:flex-row">
             <button disabled={busy} className="flex-1 rounded-xl bg-emerald-500 px-4 py-3 font-bold text-slate-950 hover:bg-emerald-400 disabled:opacity-50">
               {busy ? "جارٍ التحقق…" : "تأكيد وتسجيل طلب الحذف"}

@@ -17,7 +17,7 @@ import { finalizeDueDeletion } from "@/lib/account-deletion";
 import { notifyUser } from "@/lib/push";
 import { RULES, rateHit, rateKey, rateReset, tooManyRequests } from "@/lib/rate-limit";
 import { BodyTooLargeError, clientIp, readJsonLimited } from "@/lib/http";
-import { claimRegistrationOtp, issueRegistrationOtp, registrationOtpEnabled, type OtpClaim } from "@/lib/registration-otp";
+import { claimRegistrationOtp, issueRegistrationOtp, type OtpClaim } from "@/lib/registration-otp";
 import { checkSecondFactor } from "@/lib/admin-2fa";
 import { verifyReferralSignature } from "@/lib/referral-signature";
 import { MAX_PASSWORD, MIN_NEW_PASSWORD } from "@/lib/password-policy";
@@ -154,9 +154,7 @@ export async function POST(req: Request) {
     const allowedRoles = mode === "login" ? (isMobileClient ? ["workshop", "marketer", "customer"] : ["workshop", "marketer", "customer", "admin", "worker"]) : ["workshop", "marketer", "customer"];
 
     if (mode === "send-otp") {
-      // Independent customers must always prove phone ownership during registration.
-      const otpRequired = registrationOtpEnabled() || requestedRole === "customer";
-      if (!otpRequired) return json({ ok: true, otpRequired: false });
+      // Every mobile account must prove phone ownership with MsgPlus SMS before registration.
       if (!phone || String(phone).trim().length < 8) {
         return json({ error: "يرجى إدخال رقم موبايل صالح" }, 400);
       }
@@ -290,7 +288,7 @@ export async function POST(req: Request) {
       return json({ error: `كلمة المرور يجب أن تكون ${MIN_NEW_PASSWORD} أحرف على الأقل` }, 400);
     }
 
-    if (registrationOtpEnabled() || role === "customer") {
+    {
       if (!otpCode || !otpToken) {
         return json({ error: "يرجى إدخال رمز التحقق المرسل برسالة نصية" }, 400);
       }
@@ -364,8 +362,8 @@ export async function POST(req: Request) {
         referred_by_code: validatedReferralCode,
         tier: role === "customer" ? null : role === "workshop" ? "Standard" : undefined,
         is_active: role !== "workshop",
-        phone_verified_at: role === "customer" ? new Date().toISOString() : undefined,
-        phone_verification_required: role === "customer" ? false : undefined,
+        phone_verified_at: new Date().toISOString(),
+        phone_verification_required: false,
         debt_limit: role === "customer" ? 0 : undefined,
         debt_balance: role === "customer" ? 0 : undefined,
         cashback_balance: role === "customer" ? 0 : undefined,

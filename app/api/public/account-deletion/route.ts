@@ -100,8 +100,8 @@ export async function POST(req: Request) {
 
   const smsClaim = await claimRegistrationOtp(phone, code, token);
   if (!smsClaim.ok) return smsClaim.reason === "failed"
-    ? reply({ error: "تعذر التحقق من الرمز حالياً. حاول لاحقاً." }, 503)
-    : reply({ error: "رمز SMS غير صحيح أو انتهت صلاحيته." }, 400);
+    ? reply(req, { error: "تعذر التحقق من الرمز حالياً. حاول لاحقاً." }, 503)
+    : reply(req, { error: "رمز SMS غير صحيح أو انتهت صلاحيته." }, 400);
   claim = smsClaim;
   const { data: users, error: userError } = await db.from("users")
     .select("id, role, debt_balance, cashback_balance")

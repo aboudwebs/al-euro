@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { cookies, headers } from "next/headers";
+import type { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { tokenMatchesAccount, type AccountState } from "@/lib/session-rules";
 
@@ -257,4 +258,17 @@ export async function issueClientSession(
   client: unknown,
 ): Promise<string> {
   return client === "web" ? setSession(session) : mintAccessToken(session);
+}
+
+
+/** Attach a browser session to the exact response returned by a Route Handler. */
+export function attachSessionCookie(response: NextResponse, token: string): NextResponse {
+  response.cookies.set(COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: SESSION_AGE,
+  });
+  return response;
 }

@@ -113,7 +113,7 @@ export async function POST(req: Request) {
           id: String(existingUser.id), role: existingUser.role, name: existingUser.name ?? "",
           phone: existingUser.phone ?? "", my_ref_code: existingUser.my_ref_code,
         }, body?.client);
-        return reply({ ok: true, accessToken, user: existingUser, phoneVerificationRequired: Boolean(existingUser.phone_verification_required) });
+        return reply({ ok: true, ...(body?.client !== "web" ? { accessToken } : {}), user: existingUser, phoneVerificationRequired: Boolean(existingUser.phone_verification_required) });
       }
 
       const refCode = typeof body?.refCode === "string" ? body.refCode.trim().slice(0, 80) : "";
@@ -214,7 +214,7 @@ export async function POST(req: Request) {
         id: String(created.id), role: created.role, name: created.name ?? "",
         phone: created.phone ?? "", my_ref_code: created.my_ref_code,
       }, body?.client);
-      return reply({ ok: true, accessToken, user: role === "customer" ? { id: created.id, role: created.role, name: created.name, phone: created.phone, is_active: created.is_active, created_at: created.created_at } : created, phoneVerificationRequired: role !== "customer" });
+      return reply({ ok: true, ...(body?.client !== "web" ? { accessToken } : {}), user: role === "customer" ? { id: created.id, role: created.role, name: created.name, phone: created.phone, is_active: created.is_active, created_at: created.created_at } : created, phoneVerificationRequired: role !== "customer" });
     }
 
     const otpLimited = await rateHit(rateKey("otp-verify-ip", ip), RULES.otpVerifyPerIp);
@@ -313,7 +313,7 @@ export async function POST(req: Request) {
       }, body?.client);
       return reply({
         ok: true,
-        accessToken,
+        ...(body?.client !== "web" ? { accessToken } : {}),
         user: {
           id: existingUser.id,
           role: existingUser.role,
@@ -432,7 +432,7 @@ export async function POST(req: Request) {
       phone: created.phone,
       my_ref_code: created.my_ref_code,
     }, body?.client);
-    return reply({ ok: true, accessToken, user: role === "customer" ? { id: created.id, role: created.role, name: created.name, phone: created.phone, is_active: created.is_active, created_at: created.created_at } : created });
+    return reply({ ok: true, ...(body?.client !== "web" ? { accessToken } : {}), user: role === "customer" ? { id: created.id, role: created.role, name: created.name, phone: created.phone, is_active: created.is_active, created_at: created.created_at } : created });
   } catch (error) {
     console.error("[api/auth/firebase/register] POST:", error);
     return reply({ error: "حدث خطأ غير متوقع في الخادم" }, 500);

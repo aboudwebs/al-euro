@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { issueClientSession } from "@/lib/session";
+import { attachSessionCookie, issueClientSession } from "@/lib/session";
 import { verifyFirebaseIdentityToken } from "@/lib/firebase-auth-admin";
 import { claimRegistrationOtp, type OtpClaim } from "@/lib/registration-otp";
 import { RULES, rateHit, rateKey, tooManyRequests } from "@/lib/rate-limit";
@@ -164,7 +164,8 @@ export async function POST(req: Request) {
       phone: updated.phone ?? "",
       my_ref_code: updated.my_ref_code,
     }, body?.client);
-    return reply({ ok: true, ...(body?.client !== "web" ? { accessToken } : {}), user: updated });
+    const response = reply({ ok: true, ...(body?.client !== "web" ? { accessToken } : {}), user: updated });
+    return body?.client === "web" ? attachSessionCookie(response, accessToken) : response;
   } catch (error) {
     // Internal error text (database, provider) is logged, never returned to the caller.
     console.error("[api/auth/firebase/complete-profile] POST:", error);

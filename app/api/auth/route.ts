@@ -151,7 +151,9 @@ export async function POST(req: Request) {
     let role = requestedRole as string | undefined;
     const isMobileClient = client === "mobile";
 
-    const allowedRoles = mode === "login" ? (isMobileClient ? ["workshop", "marketer", "customer"] : ["workshop", "marketer", "customer", "admin", "worker"]) : ["workshop", "marketer", "customer"];
+    const allowedRoles = mode === "login"
+      ? (isMobileClient || client === "web" ? ["workshop", "marketer", "customer"] : ["workshop", "marketer", "customer", "admin", "worker"])
+      : ["workshop", "marketer", "customer"];
 
     if (mode === "send-otp") {
       // Every mobile account must prove phone ownership with MsgPlus SMS before registration.

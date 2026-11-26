@@ -164,7 +164,7 @@ export async function POST(req: Request) {
       phone: updated.phone ?? "",
       my_ref_code: updated.my_ref_code,
     }, body?.client);
-    return reply({ ok: true, accessToken, user: updated });
+    return reply({ ok: true, ...(body?.client !== "web" ? { accessToken } : {}), user: updated });
   } catch (error) {
     // Internal error text (database, provider) is logged, never returned to the caller.
     console.error("[api/auth/firebase/complete-profile] POST:", error);

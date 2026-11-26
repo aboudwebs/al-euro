@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { mintAccessToken, hashPassword } from "@/lib/session";
+import { issueClientSession, hashPassword } from "@/lib/session";
 import { verifyFirebaseIdentityToken } from "@/lib/firebase-auth-admin";
 import { claimRegistrationOtp, type OtpClaim } from "@/lib/registration-otp";
 import { notifyUser } from "@/lib/push";
@@ -109,10 +109,10 @@ export async function POST(req: Request) {
           return reply({ error: "حساب Google مرتبط برقم هاتف مختلف. استخدم تسجيل الدخول أو تواصل مع الدعم لتغيير الرقم." }, 409);
         }
         if (!existingUser.is_active) return reply({ pendingApproval: true, message: "حسابك قيد المراجعة من قِبل الإدارة." }, 403);
-        const accessToken = await mintAccessToken({
+        const accessToken = await issueClientSession({
           id: String(existingUser.id), role: existingUser.role, name: existingUser.name ?? "",
           phone: existingUser.phone ?? "", my_ref_code: existingUser.my_ref_code,
-        });
+        }, body?.client);
         return reply({ ok: true, accessToken, user: existingUser, phoneVerificationRequired: Boolean(existingUser.phone_verification_required) });
       }
 
@@ -210,10 +210,10 @@ export async function POST(req: Request) {
       if (role === "workshop") {
         return reply({ ok: true, pendingApproval: true, message: "تم إنشاء الحساب وإرسال طلب الورشة للمراجعة. أكمل توثيق الهاتف عند أول شراء." });
       }
-      const accessToken = await mintAccessToken({
+      const accessToken = await issueClientSession({
         id: String(created.id), role: created.role, name: created.name ?? "",
         phone: created.phone ?? "", my_ref_code: created.my_ref_code,
-      });
+      }, body?.client);
       return reply({ ok: true, accessToken, user: role === "customer" ? { id: created.id, role: created.role, name: created.name, phone: created.phone, is_active: created.is_active, created_at: created.created_at } : created, phoneVerificationRequired: role !== "customer" });
     }
 
@@ -304,13 +304,13 @@ export async function POST(req: Request) {
         await db.from("user_auth_identities").delete().eq("provider", identity.provider).eq("provider_uid", identity.uid).eq("user_id", existingUser.id);
         return reply({ error: "تم التحقق من الرقم لكن تعذر تحديث الحساب. حاول مجدداً." }, 503);
       }
-      const accessToken = await mintAccessToken({
+      const accessToken = await issueClientSession({
         id: String(existingUser.id),
         role: existingUser.role,
         name: existingUser.name ?? "",
         phone: existingUser.phone ?? "",
         my_ref_code: existingUser.my_ref_code,
-      });
+      }, body?.client);
       return reply({
         ok: true,
         accessToken,
@@ -425,13 +425,13 @@ export async function POST(req: Request) {
       });
     }
 
-    const accessToken = await mintAccessToken({
+    const accessToken = await issueClientSession({
       id: String(created.id),
       role: created.role,
       name: created.name,
       phone: created.phone,
       my_ref_code: created.my_ref_code,
-    });
+    }, body?.client);
     return reply({ ok: true, accessToken, user: role === "customer" ? { id: created.id, role: created.role, name: created.name, phone: created.phone, is_active: created.is_active, created_at: created.created_at } : created });
   } catch (error) {
     console.error("[api/auth/firebase/register] POST:", error);

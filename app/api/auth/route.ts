@@ -6,6 +6,7 @@ import {
   COOKIE_NAME,
   SESSION_AGE,
   bumpTokenVersion,
+  attachSessionCookie,
   clearSession,
   getSession,
   hashPassword,
@@ -417,7 +418,9 @@ export async function POST(req: Request) {
       phone: newUser.phone,
       my_ref_code: newUser.my_ref_code,
     });
-    return json({ ok: true, user: publicAccount(newUser), ...(isMobileClient ? { accessToken } : {}) });
+    const response = json({ ok: true, user: publicAccount(newUser), ...(isMobileClient ? { accessToken } : {}) });
+    // Attach the web cookie to the exact response returned to the browser.
+    return client === "web" ? attachSessionCookie(response, accessToken) : response;
   } catch (err) {
     return serverError("POST", err);
   } finally {

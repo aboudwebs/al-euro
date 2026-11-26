@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { issueClientSession } from "@/lib/session";
+import { attachSessionCookie, issueClientSession } from "@/lib/session";
 import { verifyFirebaseIdentityToken } from "@/lib/firebase-auth-admin";
 import { claimRegistrationOtp, type OtpClaim } from "@/lib/registration-otp";
 import { RULES, rateHit, rateKey, tooManyRequests } from "@/lib/rate-limit";
@@ -190,7 +190,7 @@ export async function POST(req: Request) {
       phone: user.phone ?? "",
       my_ref_code: user.my_ref_code,
     }, body?.client);
-    return reply({
+    const response = reply({
       ok: true,
       ...(body?.client !== "web" ? { accessToken } : {}),
       user: {
@@ -202,6 +202,7 @@ export async function POST(req: Request) {
         is_active: user.is_active,
       },
     });
+    return body?.client === "web" ? attachSessionCookie(response, accessToken) : response;
   } catch (error) {
     console.error("[api/auth/firebase] POST:", error);
     return reply({ error: "حدث خطأ غير متوقع في الخادم" }, 500);

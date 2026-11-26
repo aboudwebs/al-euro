@@ -249,3 +249,12 @@ export async function clearSession() {
   const cookieStore = await cookies();
   cookieStore.delete(COOKIE_NAME);
 }
+
+
+/** Issues a native Bearer token by default, or also sets the HttpOnly browser cookie for explicit web clients. */
+export async function issueClientSession(
+  session: Omit<Session, "iat" | "v">,
+  client: unknown,
+): Promise<string> {
+  return client === "web" ? setSession(session) : mintAccessToken(session);
+}

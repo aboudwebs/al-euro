@@ -192,7 +192,7 @@ export async function POST(req: Request) {
     }, body?.client);
     return reply({
       ok: true,
-      accessToken,
+      ...(body?.client !== "web" ? { accessToken } : {}),
       user: {
         id: user.id,
         role: user.role,

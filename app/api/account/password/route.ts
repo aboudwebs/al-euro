@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { bumpTokenVersion, hashPassword, setSession, verifyPassword } from "@/lib/session";
+import { attachSessionCookie, bumpTokenVersion, hashPassword, setSession, verifyPassword } from "@/lib/session";
 import { isMissingTable, readBody, reply, requireUser } from "@/lib/account-api";
 import { newPasswordError } from "@/lib/password-policy";
 import { RULES, rateHit, rateKey, rateReset, smsDailyBudget, tooManyRequests } from "@/lib/rate-limit";
@@ -113,5 +113,7 @@ async function finish(
     console.error("[api/account/password] revoke sessions:", err);
   }
   const accessToken = await setSession({ id: user.id, role: user.role, name: user.name ?? "", phone: user.phone ?? "" });
-  return reply({ ok: true, accessToken, has_password: true });
+  const isWebClient = req.headers.get("x-euro-client") === "web";
+  const response = reply({ ok: true, ...(!isWebClient ? { accessToken } : {}), has_password: true });
+  return isWebClient ? attachSessionCookie(response, accessToken) : response;
 }

@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { bumpTokenVersion, setSession, verifyPassword } from "@/lib/session";
+import { attachSessionCookie, bumpTokenVersion, setSession, verifyPassword } from "@/lib/session";
 import { RULES, rateHit, rateKey, rateReset, smsDailyBudget, tooManyRequests } from "@/lib/rate-limit";
 import { accountFlags } from "@/lib/account-flags";
 import { cleanPhone, dbError, isUndefinedColumn, readBody, reply, requireUser } from "@/lib/account-api";
@@ -102,7 +102,9 @@ export async function POST(req: Request) {
     }
     const accessToken = await setSession({ id: String(user.id), role: user.role, name: user.name, phone: user.phone, my_ref_code: user.my_ref_code });
     const flags = accountFlags({ phone: user.phone, password_hash: auth.user.password_hash, phone_verification_required: false });
-    return reply({ ok: true, user: { ...user, ...flags }, accessToken });
+    const isWebClient = req.headers.get("x-euro-client") === "web";
+    const response = reply({ ok: true, user: { ...user, ...flags }, ...(!isWebClient ? { accessToken } : {}) });
+    return isWebClient ? attachSessionCookie(response, accessToken) : response;
   }
 
   return reply({ error: "نوع العملية غير صالح" }, 400);

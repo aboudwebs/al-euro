@@ -513,7 +513,13 @@ export async function PUT(req: Request) {
       phone: user.phone ?? "",
       my_ref_code: user.my_ref_code,
     });
-    return json({ ok: true, user: publicAccount(user), ...(changingPassword ? { accessToken } : {}) });
+    const isWebClient = req.headers.get("x-euro-client") === "web";
+    const response = json({
+      ok: true,
+      user: publicAccount(user),
+      ...(!isWebClient && changingPassword ? { accessToken } : {}),
+    });
+    return isWebClient ? attachSessionCookie(response, accessToken) : response;
   } catch (err) {
     return serverError("PUT", err, "حدث خطأ أثناء تحديث البيانات");
   }

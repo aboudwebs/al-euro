@@ -68,14 +68,14 @@ export async function POST(req: Request) {
     const result = await consumeOtp(auth.user.id, "password_reset", phone, code);
     if (result === "failed") return reply({ error: "حدث خطأ غير متوقع في الخادم" }, 500);
     if (result !== "ok") return reply({ error: BAD_CODE }, 400);
-    return finish(auth.user, hashPassword(next), null);
+    return finish(auth.user, hashPassword(next), null, req);
   }
 
   if (mode !== "change") return reply({ error: "نوع العملية غير صالح" }, 400);
   if (policyError) return reply({ error: policyError }, 400);
 
   // First password of an account that has none: nothing to check; the update only applies while it is still empty.
-  if (!auth.user.password_hash) return finish(auth.user, hashPassword(next), "first");
+  if (!auth.user.password_hash) return finish(auth.user, hashPassword(next), "first", req);
 
   const current = typeof body?.currentPassword === "string" ? body.currentPassword : "";
   if (!current) return reply({ error: "أدخل كلمة المرور الحالية" }, 400);
@@ -95,6 +95,7 @@ async function finish(
   user: { id: string; role: "workshop" | "marketer" | "customer" | "admin"; name: string; phone: string },
   hash: string,
   only: "first" | null,
+  req: Request,
 ) {
   let query = getSupabaseAdmin().from("users").update({ password_hash: hash }).eq("id", user.id);
   // "first": a second request that raced this one must not overwrite the password that was just set.

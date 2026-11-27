@@ -87,7 +87,7 @@ export async function POST(req: Request) {
     return after.allowed ? reply({ error: "كلمة المرور الحالية غير صحيحة" }, 403) : tooManyRequests(after.retryAfter);
   }
   await rateReset(key);
-  return finish(auth.user, hashPassword(next), null);
+  return finish(auth.user, hashPassword(next), null, req);
 }
 
 /** Stores the new hash, ends every other session and gives this device a new token. */
